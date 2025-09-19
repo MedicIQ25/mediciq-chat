@@ -1,37 +1,54 @@
-const log = document.getElementById('log');
-const msg = document.getElementById('msg');
-const btn = document.getElementById('send');
+const sendBtn = document.getElementById("send");
+const input = document.getElementById("msg");
+const chatLog = document.getElementById("log");
 
-function add(role, text){
-  const div = document.createElement('div');
-  div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
-  div.textContent = text;
-  log.appendChild(div);
-  log.scrollTop = log.scrollHeight;
+// Nachricht in den Chat hängen (User oder KI)
+function addMessage(role, content) {
+  const msg = document.createElement("div");
+  msg.className = role;
+
+  if (role === "assistant" && window.marked) {
+    // KI-Antwort als Markdown rendern
+    msg.innerHTML = marked.parse(content);
+  } else {
+    // User-Eingaben als Plaintext
+    msg.textContent = content;
+  }
+
+  chatLog.appendChild(msg);
+  chatLog.scrollTop = chatLog.scrollHeight; // autoscroll
 }
 
-async function send(){
-  const q = (msg.value || '').trim();
-  if (!q) return;
-  add('user', q);
-  msg.value = '';
-  btn.disabled = true;
+// Nachricht an die Netlify-Funktion schicken
+async function sendMessage() {
+  const message = input.value.trim();
+  if (!message) return;
 
-  try{
-    const r = await fetch('/.netlify/functions/chat', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ message: q })
+  addMessage("user", message);
+  input.value = "";
+
+  try {
+    const res = await fetch("/.netlify/functions/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
     });
-    const data = await r.json();
-    add('bot', data.reply || '(keine Antwort)');
-  }catch(e){
-    add('bot', 'Fehler: ' + e.message);
-  }finally{
-    btn.disabled = false;
-    msg.focus();
+
+    const data = await res.json();
+
+    if (data.reply) {
+      addMessage("assistant", data.reply);
+    } else {
+      addMessage("assistant", "⚠️ Keine Antwort erhalten.");
+    }
+  } catch (err) {
+    console.error(err);
+    addMessage("assistant", "⚠️ Fehler bei der Anfrage.");
   }
 }
 
-btn.addEventListener('click', send);
-msg.addEventListener('keydown', e => { if(e.key === 'Enter') send(); });
+// Klick & Enter
+sendBtn.addEventListener("click", sendMessage);
+input.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") sendMessage();
+});
