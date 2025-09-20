@@ -5,6 +5,7 @@ export async function handler(event) {
     'https://www.mediciq.de',
     'https://mediciq.de',
     'https://mediciq.webflow.io',
+    'https://ornate-chimera-b77016.netlify.app/', 
     // 'https://DEIN-NETLIFY-SITE.netlify.app', // optional
   ];
 
