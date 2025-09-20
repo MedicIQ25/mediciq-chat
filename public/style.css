@@ -133,3 +133,10 @@ body{
   background: #dfe6ee;
   border-radius: 6px;
 }
+.chat-title {
+  text-align: center;
+  margin: 0 0 14px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+}
