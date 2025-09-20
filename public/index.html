@@ -1,64 +1,35 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>medicIQ KI-Lernhilfe</title>
   <link rel="stylesheet" href="./style.css" />
+
+  <!-- Markdown-Renderer (CDN) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script defer src="./app.js"></script>
 </head>
 <body>
-  <div class="wrap">
-    <h1>medicIQ KI-Lernhilfe</h1>
+  <main class="page">
+    <section class="chat-container">
+      <div id="chat-box" class="chat-box" aria-live="polite" aria-label="Chat-Verlauf"></div>
 
-    <!-- WICHTIG: wieder die alten, erwarteten IDs -->
-    <div id="chat-box">
-      <div id="log"></div>
-
-      <div class="row">
-        <input id="user-input" type="text" placeholder="Frage eingeben …" />
-        <button id="send">Senden</button>
+      <div class="input-row">
+        <input
+          id="msg"
+          type="text"
+          placeholder="Frage eingeben …"
+          autocomplete="off"
+          aria-label="Frage eingeben" />
+        <button id="send" class="btn">Senden</button>
       </div>
-    </div>
+    </section>
 
-    <p class="footer-note">
-  Hinweis: Antworten generiert eine KI. Keine medizinische Beratung.<br>
-  <span class="dim">Beachte: Unterschiedliche Rettungsdienstschulen haben eigene Lehraussagen – diese haben stets Vorrang.</span>
-</p>
-  </div>
-
-  <!-- Markdown Renderer (für schöne Absätze, Listen etc.) -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
-  <!-- Fallback-Bridge: Falls dein JS die neueren IDs erwartet, setzen wir sie dynamisch -->
-  <script>
-    (function () {
-      const input = document.getElementById('user-input');
-      const sendBtn = document.getElementById('send');
-      const log = document.getElementById('log');
-
-      // Falls dein Script nach #msg sucht, mappe darauf
-      if (input && !document.getElementById('msg')) {
-        input.setAttribute('id', 'msg');
-        // Zusätzlich eine data-id belassen, falls alte CSS auf #user-input stylen:
-        input.setAttribute('data-legacy-id', 'user-input');
-      }
-
-      // Falls dein Script nach #send-btn sucht (oder anders), kann man hier erweitern;
-      // aktuell mappen wir nur auf #send (Standard in deinem bisherigen Code).
-      if (sendBtn && !document.getElementById('send')) {
-        sendBtn.setAttribute('id', 'send');
-      }
-
-      // Falls dein Script nach #chat statt #chat-box fragt, könntest du das hier ergänzen:
-      const chatBox = document.getElementById('chat-box');
-      if (chatBox && !document.getElementById('chat')) {
-        chatBox.setAttribute('data-duplicate-id', 'chat'); // keine doppelten IDs setzen
-      }
-    })();
-  </script>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
-  <!-- Dein Chat-Script -->
-  <script type="module" src="./app.js"></script>
+    <p class="legal">
+      Hinweis: Antworten generiert eine KI. Keine medizinische Beratung.<br>
+      Beachte: Unterschiedliche Rettungsdienstschulen haben eigene Lehraussagen – diese haben stets Vorrang.
+    </p>
+  </main>
 </body>
 </html>

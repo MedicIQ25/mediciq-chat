@@ -1,118 +1,135 @@
-/* ==============================
-   medicIQ – Retro v1 (wie vorher)
-   einfache, breite Karte mit Verlauf + Eingabe in der Karte
-   Kompatibel mit #chat-box, #log, #user-input, #send, .row
-============================== */
-
 :root{
   --bg: #f6f7fb;
-  --ink: #0b1320;
-  --muted: #667085;
+  --card: #ffffff;
   --brand: #0f766e;
-  --brand-hover:#0b5f59;
-  --border:#e6e9ef;
-  --shadow: 0 24px 60px rgba(16,24,40,.12);
+  --text: #0f172a;
+  --muted:#6b7280;
+  --bubble-user: #dcf5f2;    /* grünlich */
+  --bubble-ai:   #eaf0ff;    /* bläulich */
+  --ring: rgba(15,118,110,.25);
+  --shadow: 0 10px 30px rgba(0,0,0,.08);
 }
 
-*{ box-sizing:border-box }
-html,body{ height:100%; margin:0; }
-
+*{ box-sizing: border-box; }
+html,body{ height:100%; }
 body{
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-  color: var(--ink);
+  margin:0;
   background:
-    radial-gradient(120% 70% at 50% -10%, #eef2ff 0, rgba(238,242,255,0) 55%),
+    radial-gradient(1200px 600px at 50% -10%, #eaf2ff, transparent 60%),
+    radial-gradient(1000px 600px at 120% -20%, #eefcf7, transparent 60%),
     var(--bg);
-  line-height: 1.6;
+  color:var(--text);
+  font: 16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
-/* ---------- Headline ---------- */
-h1{
-  text-align:center;
-  font-size: clamp(30px, 3.8vw, 44px);
-  font-weight: 800;
-  letter-spacing: .2px;
-  margin: 34px 0 26px;
+/* Seite */
+
+.page{
+  max-width: 980px;
+  margin: 40px auto;
+  padding: 0 16px 40px;
 }
 
-/* ---------- Karte (wie vorher) ---------- */
-#chat-box{
-  max-width: 1200px;
-  margin: 0 auto 28px;
-  background: #fff;
-  border-radius: 18px;
+/* Chat-Card */
+
+.chat-container{
+  background: var(--card);
+  border-radius: 16px;
   box-shadow: var(--shadow);
-  padding: 24px 28px;
+  padding: 16px;
 }
 
-/* Verlauf – sichtbar, auch wenn leer */
-#log{
-  min-height: 140px;               /* ← sorgt dafür, dass die Karte nicht zusammenfällt */
-  max-height: min(60vh, 520px);
-  overflow-y: auto;
-  margin-bottom: 14px;
-  padding: 6px 4px;
+.chat-box{
+  height: 460px;               /* sichtbarer Verlauf */
+  overflow: auto;
   border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #eef2f7;
 }
 
-/* simple Scrollbar */
-#log::-webkit-scrollbar{ width:10px }
-#log::-webkit-scrollbar-thumb{
-  background: #e9edf5;
-  border-radius: 999px;
-  border: 2px solid #fff;
+/* Nachrichten */
+
+.msg{
+  max-width: 78%;
+  width: fit-content;
+  padding: 12px 14px;
+  margin: 10px 0;
+  border-radius: 12px;
+  line-height: 1.45;
+  box-shadow: 0 2px 6px rgba(0,0,0,.04);
+  word-wrap: break-word;
+}
+.msg p{ margin:.5em 0; }
+.msg p:first-child{ margin-top:0; }
+.msg p:last-child { margin-bottom:0; }
+.msg ul, .msg ol{ padding-left: 1.2rem; margin:.5em 0; }
+.msg code{
+  background: #f6f7fb;
+  border: 1px solid #eceff3;
+  border-radius: 6px;
+  padding: .15em .4em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .92em;
 }
 
-/* ---------- Eingabezeile in der Karte ---------- */
-.row{
+/* User/Ai Bubbles */
+
+.msg.user{
+  margin-left: auto;
+  background: var(--bubble-user);
+  border-top-right-radius: 6px;
+}
+.msg.ai{
+  margin-right: auto;
+  background: var(--bubble-ai);
+  border-top-left-radius: 6px;
+}
+
+/* Eingabezeile */
+
+.input-row{
   display:flex;
   gap:12px;
+  margin-top: 14px;
 }
-
-#user-input{
+#msg{
   flex:1;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  font-size: 16px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid #d8dee6;
   outline: none;
-  transition: box-shadow .12s ease, border-color .12s ease;
-  background:#fff;
+  font-size: 16px;
 }
-#user-input:focus{
-  border-color:#cbd5e1;
-  box-shadow: 0 0 0 4px rgba(15,118,110,.12);
+#msg:focus{
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px var(--ring);
 }
-
-#send{
-  padding: 12px 18px;
-  border: none;
-  border-radius: 12px;
+.btn{
   background: var(--brand);
-  color: #fff;
+  color:#fff;
+  border:none;
+  height:46px;
+  padding: 0 18px;
+  border-radius: 10px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform .06s ease, filter .06s ease, opacity .2s ease;
-  white-space: nowrap;
 }
-#send:hover{ background: var(--brand-hover); filter: brightness(.99) }
-#send:active{ transform: translateY(1px) }
-#send:disabled{ opacity:.6; cursor:not-allowed; transform:none }
+.btn[disabled]{ opacity:.6; cursor: not-allowed; }
 
-/* ---------- Hinweis (Footer) ---------- */
-.footer-note{
-  max-width: 1200px;
-  margin: 10px auto 40px;
-  padding: 0 20px;
+/* Hinweis */
+
+.legal{
+  margin: 14px 6px 0;
   color: var(--muted);
+  text-align: left;
   font-size: .95rem;
 }
-.footer-note .dim{ color:#8a93a4 }
 
-/* ---------- Responsiv ---------- */
-@media (max-width: 820px){
-  #chat-box{ padding: 18px }
-  .row{ gap:10px }
-  #send{ padding: 12px 16px }
-  h1{ font-size: clamp(24px, 4.6vw, 36px); margin: 26px 0 16px; }
+/* Scrollbar dezent */
+.chat-box::-webkit-scrollbar{ width:10px; }
+.chat-box::-webkit-scrollbar-thumb{
+  background: #dfe6ee;
+  border-radius: 6px;
 }

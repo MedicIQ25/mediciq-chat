@@ -1,59 +1,59 @@
-// Wir nutzen "marked" über CDN für Markdown → füge dies in index.html ein:
-// <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+// Pfad zur Netlify Function
+const API = '/.netlify/functions/chat';
 
-// DOM-Elemente
-const log = document.getElementById("log");
-const msgInput = document.getElementById("msg");
-const sendBtn = document.getElementById("send");
+const box  = document.getElementById('chat-box');
+const send = document.getElementById('send');
+const msg  = document.getElementById('msg');
 
-// Scroll zum letzten Eintrag
-function scrollToBottom() {
-  log.scrollTop = log.scrollHeight;
-}
+// kleine Begrüßung
+addMsg('wie geht es dir?', 'user');
+addMsg('Mir geht es gut, danke! Und dir?', 'ai');
 
-// Nachricht ins Log schreiben
-function appendMessage(text, type = "ai") {
-  const div = document.createElement("div");
-  div.classList.add(type);
-
-  if (type === "ai") {
-    // Markdown rendern
-    div.innerHTML = marked.parse(text);
-  } else {
-    // Plain Text für User
-    div.textContent = text;
-  }
-
-  log.appendChild(div);
-  scrollToBottom();
-}
-
-// Anfrage an Netlify-Function
-async function sendMessage() {
-  const message = msgInput.value.trim();
-  if (!message) return;
-
-  // User anzeigen
-  appendMessage(message, "user");
-  msgInput.value = "";
-
+// Utility: Nachricht als Bubble anhängen (Markdown → HTML)
+function addMsg(text, role = 'ai'){
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
+  // Markdown rendern (falls vorhanden)
   try {
-    const response = await fetch("/.netlify/functions/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message })
-    });
+    el.innerHTML = window.marked ? marked.parse(text) : text;
+  } catch {
+    el.textContent = text;
+  }
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
 
-    const data = await response.json();
-    appendMessage(data.reply, "ai");
-  } catch (err) {
-    appendMessage("⚠️ Fehler beim Abrufen der Antwort.", "ai");
+// Senden-Handler
+async function handleSend(){
+  const q = msg.value.trim();
+  if(!q) return;
+  addMsg(q, 'user');
+  msg.value = '';
+  msg.focus();
+
+  send.disabled = true;
+  try{
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ message: q })
+    });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error(t || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    addMsg(data.reply || 'Es kam keine Antwort zurück.', 'ai');
+  }catch(err){
     console.error(err);
+    addMsg('⚠️ Es ist ein Fehler aufgetreten. Bitte später erneut versuchen.', 'ai');
+  }finally{
+    send.disabled = false;
   }
 }
 
-// Event-Listener
-sendBtn.addEventListener("click", sendMessage);
-msgInput.addEventListener("keydown", e => {
-  if (e.key === "Enter") sendMessage();
+// Events
+send.addEventListener('click', handleSend);
+msg.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') handleSend();
 });
