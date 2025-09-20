@@ -1,57 +1,32 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>medicIQ Tutor</title>
-  <link rel="stylesheet" href="./style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>medicIQ KI-Lernhilfe</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <div class="page">
-    <header class="site-header">
-      <h1 class="brand">medicIQ <span class="tutor">Tutor</span></h1>
-      <p class="subtitle">Fragen & Erklären – speziell für Auszubildende im Rettungsdienst</p>
-    </header>
+  <div class="wrap">
+    <h1>medicIQ Lernhilfe</h1>
 
-    <main class="chat-container">
-      <section class="card chat-card">
-        <!-- Eingabe oben als “Prompt-Bar” -->
-        <div class="prompt-bar">
-          <input
-            id="prompt-top"
-            class="prompt-input"
-            type="text"
-            placeholder="z. B. Erkläre mir den Aufbau der Lunge"
-            onkeydown="if(event.key==='Enter'){document.getElementById('msg').value=this.value; document.getElementById('send').click(); this.value='';}"
-            aria-label="Beispielfrage"
-          />
-        </div>
+    <div id="chat">
+      <div id="log"></div>
+      <div class="row">
+        <input id="msg" type="text" placeholder="Frage eingeben …">
+        <button id="send">Senden</button>
+      </div>
+    </div>
 
-        <!-- Verlauf -->
-        <div id="log" class="log" aria-live="polite" aria-label="Chat-Verlauf"></div>
-
-        <!-- Eingabe unten -->
-        <div class="input-row">
-          <input
-            id="msg"
-            class="message-input"
-            type="text"
-            placeholder="Frage eingeben …"
-            aria-label="Deine Frage"
-          />
-          <button id="send" class="btn-primary" aria-label="Senden">Senden</button>
-        </div>
-
-        <!-- Hinweis -->
-        <p class="hint">
-          Hinweis: Antworten werden von einer KI generiert und ersetzen keine medizinische Beratung.
-          Unterschiedliche Rettungsdienstschulen können eigene Lehraussagen haben – diese haben stets Vorrang.
-        </p>
-      </section>
-    </main>
+    <p class="hint">
+      Hinweis: Antworten generiert eine KI. Keine medizinische Beratung. <br>
+      Beachte: Unterschiedliche Rettungsdienstschulen haben eigene Lehraussagen – diese haben stets Vorrang.
+    </p>
   </div>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- Dein bestehendes Skript (unverändert) -->
+
+  <!-- Markdown Renderer -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Dein Chat Script -->
   <script src="./app.js" type="module"></script>
 </body>
 </html>
