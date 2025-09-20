@@ -1,40 +1,212 @@
+/* =============================
+   Grund-Design & Variablen
+   ============================= */
 :root{
-  --bg:#0f172a; --card:#ffffff; --muted:#64748b; --brand:#0f766e;
-}
-*{box-sizing:border-box}
-body{margin:0;background:#f7f8fb;font:16px/1.4 system-ui,Segoe UI,Roboto,Arial}
-.wrap{max-width:800px;margin:40px auto;padding:0 16px}
-h1{font-weight:800;color:#0f172a}
-#chat{background:var(--card);border:1px solid #e5e7eb;border-radius:14px;padding:16px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
-#log{height:420px;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#fafafa}
-.msg{margin:8px 0;padding:10px 12px;border-radius:10px;max-width:80%}
-.msg.user{background:#dbf4f1;margin-left:auto}
-.msg.bot{background:#eef2ff}
-.row{display:flex;gap:8px;margin-top:12px}
-input{flex:1;padding:12px;border:1px solid #e5e7eb;border-radius:10px}
-button{padding:12px 16px;border:0;background:var(--brand);color:#fff;border-radius:10px;font-weight:700;cursor:pointer}
-button:disabled{opacity:.6;cursor:not-allowed}
-.hint{color:var(--muted);font-size:.9rem;margin-top:8px}
-#log .assistant {
-  background: #eef3ff;
-  padding: 10px 12px;
-  margin: 10px 0;
-  border-radius: 10px;
-  line-height: 1.5;
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --brand: #0f766e;          /* Petrol/Teal */
+  --brand-strong:#0a5e57;
+  --border:#e5e7eb;
+  --shadow: 0 8px 30px rgba(0,0,0,.06);
+
+  --user-bubble: #e7f6f4;
+  --ai-bubble:   #f3f4f6;
+
+  --radius: 16px;
 }
 
-#log .user {
-  background: #dfffe2;
-  padding: 10px 12px;
-  margin: 10px 0;
-  border-radius: 10px;
-  text-align: right;
-  line-height: 1.5;
+/* System-Schrift & Reset */
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+body{
+  margin:0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
 }
 
-/* Markdown-Listen & Abstände */
-#log .assistant ul { margin: 8px 0 8px 20px; }
-#log .assistant p { margin: 8px 0; }
-#log .assistant h1, 
-#log .assistant h2, 
-#log .assistant h3 { margin: 10px 0 6px; }
+/* Seite */
+.page{
+  max-width: 980px;
+  margin: 24px auto 48px;
+  padding: 0 16px;
+}
+
+/* =============================
+   Kopfbereich
+   ============================= */
+.site-header{ margin-bottom: 16px; }
+.brand{
+  margin:0;
+  font-weight: 800;
+  letter-spacing: .2px;
+  font-size: clamp(1.6rem, 2.5vw, 2.1rem);
+}
+.brand .tutor{
+  color: var(--brand);
+  font-weight: 800;
+}
+.subtitle{
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: .95rem;
+}
+
+/* =============================
+   Karten & Chat-Container
+   ============================= */
+.card{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.chat-container{ }
+.chat-card{
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Prompt-Bar (oben) */
+.prompt-bar{
+  padding: 14px 14px 0 14px;
+}
+.prompt-input{
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  outline: none;
+  font-size: .98rem;
+  background: #f7fbfb;
+}
+.prompt-input:focus{
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(15,118,110,.15);
+}
+
+/* Verlauf */
+.log{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  height: min(62vh, 520px);
+  overflow: auto;
+  scroll-behavior: smooth;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+}
+
+/* Scrollbar dezent */
+.log::-webkit-scrollbar{ width: 10px; }
+.log::-webkit-scrollbar-thumb{
+  background: #e7e9ee;
+  border-radius: 8px;
+}
+.log::-webkit-scrollbar-track{ background: transparent; }
+
+/* Generische Bubbles
+   (falls dein JS Klassen .user/.ai vergibt, werden die Farben aktiv;
+    ansonsten sehen auch neutrale Blöcke elegant aus) */
+.log > *{
+  background: var(--ai-bubble);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  max-width: 88%;
+  box-shadow: 0 3px 10px rgba(0,0,0,.03);
+}
+
+/* User-Nachricht (rechts) */
+.log .user{
+  margin-left: auto;
+  background: var(--user-bubble);
+  border-color: #cfe9e6;
+}
+
+/* KI-Nachricht (links) */
+.log .ai{
+  margin-right: auto;
+  background: var(--ai-bubble);
+}
+
+/* Markdown/Typografie in Antworten */
+.log .ai h1,.log .ai h2,.log .ai h3{
+  margin: .2rem 0 .4rem;
+}
+.log .ai p{ margin:.35rem 0; }
+.log .ai strong{ font-weight:700; }
+.log .ai ul,.log .ai ol{
+  padding-left: 1.2rem;
+  margin:.35rem 0;
+}
+.log .ai li{ margin: .18rem 0; }
+.log .ai code{
+  background: #eef2f7;
+  padding: .1rem .35rem;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .9em;
+}
+.log .ai pre{
+  background: #0f172a;
+  color: #e5e7eb;
+  padding: .8rem;
+  border-radius: 10px;
+  overflow:auto;
+}
+
+/* Eingabe unten */
+.input-row{
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.message-input{
+  flex: 1 1 auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  outline: none;
+  font-size: 1rem;
+  transition: box-shadow .15s, border-color .15s;
+}
+.message-input:focus{
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(15,118,110,.15);
+}
+
+/* Button */
+.btn-primary{
+  appearance: none;
+  border: 0;
+  background: var(--brand);
+  color:#fff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s, transform .02s;
+}
+.btn-primary:hover{ background: var(--brand-strong); }
+.btn-primary:active{ transform: translateY(1px); }
+
+/* Hinweis */
+.hint{
+  margin: 6px 14px 16px 14px;
+  color: var(--muted);
+  text-align: center;
+  font-size: .9rem;
+  line-height: 1.4;
+}
+
+/* Kleinere Screens */
+@media (max-width: 640px){
+  .page{ margin-top: 16px; }
+  .log{ height: 56vh; }
+}
