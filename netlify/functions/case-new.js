@@ -1,6 +1,6 @@
 // netlify/functions/case-new.js
 export async function handler(event) {
-  // ===== 1) CORS =====
+  // ===== CORS =====
   const ALLOWED_ORIGINS = [
     'https://www.mediciq.de',
     'https://mediciq.de',
@@ -12,186 +12,149 @@ export async function handler(event) {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Vary': 'Origin',
-    'Content-Type': 'application/json'
+    'Vary': 'Origin'
   };
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers, body: '' };
   }
 
-  
   try {
-    // ===== 2) Input =====
+    
     const { specialty = 'internistisch', difficulty = 'mittel', role = 'RS' } = JSON.parse(event.body || '{}');
-
+   
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'OPENAI_API_KEY fehlt' }) };
-    }
+    if (!apiKey) return { statusCode: 500, headers, body: JSON.stringify({ error: 'OPENAI_API_KEY fehlt' }) };
 
-    // ===== 3) Scope-Definition =====
-    const SCOPE_MAP = {
-      RS: {
-        role: 'RS',
-        allowed_actions: [
-          "Eigenschutz und Umfeld sichern",
-          "Patientenansprache, Bewusstsein prüfen (AVPU/GCS)",
-          "ABCDE-Assessment",
-          "Monitoring: RR, SpO2, Puls, AF, BZ",
-          "Lagerung (z. B. Oberkörper hoch, stabile Seitenlage je nach Zustand)",
-          "Wärmeerhalt, psychologische Betreuung",
-          "O2-Gabe (bei Indikation, z. B. SpO2 < 90%)",
-          "NA nachfordern (bei Bedarf), Übergabe",
-          "Vitalzeichenkontrolle: Atmung, Bewusstsein, Kreislauf",
-          "Puls- und Blutdruckmessung (manuell/automatisch)",
-          "Rekapillarisierungszeit prüfen",
-          "Pupillenreaktion prüfen",
-          "Blutzuckermessung (Kapillarblut)",
-          "Pulsoxymetrie (SpO₂)",
-          "Temperaturmessung",
-          "3- bis 6-Kanal-EKG zur Rhythmusüberwachung (Monitoring)",
-          "Mund-Rachen-Inspektion",
-          "Entfernen von Fremdkörpern (manuell, Absaugen, Magill-Zange)",
-          "Kopf überstrecken, Esmarch-Handgriff, Kreuzgriff",
-          "stabile Seitenlage",
-          "Anwendung von Guedel- oder Wendl-Tubus",
-          "Beutel-Masken-Beatmung (assistiert/kontrolliert)",
-          "supraglottische Atemwegshilfen (Larynxtubus, Larynxmaske – je nach Landesrecht)",
-          "Sauerstoffgabe über Maske oder Brille",
-          "Berechnung Flascheninhalt/Flow",
-          "Erkennen von Kreislaufstillstand (Bewusstsein, Atmung, Puls)",
-          "Durchführung kardiopulmonaler Reanimation (Thoraxkompressionen, Beatmung)",
-          "Einsatz AED/Defibrillator",
-          "Schockeinschätzung nach ABCDE / C-ABCDE",
-          "Schocklagerung (sofern keine Kontraindikation)",
-          "Wärmeerhalt (Rettungsdecke, Heizung im RTW, Kleidung)",
-          "Blutstillung durch direkten Druck",
-          "Anlage von Druckverband",
-          "Tourniquet bei starken Blutungen",
-          "Sterile Wundabdeckung, Verbandstechniken",
-          "DMS-Kontrolle nach Verband oder Schienung",
-          "Feuchte Abdeckung bei vorgefallenen Organen",
-          "Helmabnahme mit zweitem Helfer",
-          "Rautek-Rettungsgriff",
-          "Heimlich-Manöver bei Atemwegsverlegung",
-          "Schocklage, Oberkörperhochlagerung, Bauchdeckenschonende Lagerung, Linksseitenlage bei Schwangeren",
-          "Immobilisation von Frakturen und Luxationen (Vakuumschienen, Sam-Splint, Dreiecktuch, Beckenschlinge, Vakuummatratze, KED-System)",
-          "Kontrolle und Dokumentation von Durchblutung, Motorik und Sensibilität vor/nach Immobilisation",
-          "Schonende Rettungstechniken anwenden, Eigenschutz beachten",
-          "Patientengerechte Lagerung je nach Notfallbild (z. B. Oberkörperhoch bei Atemnot, stabile Seitenlage bei Bewusstlosigkeit)",
-          "Betreuung und psychische Stabilisierung des Patienten, auch Angehörige einbeziehen (v. a. bei Kindern, Schwangeren)",
-          "Blutzuckermessung bei Bewusstseinsstörungen und metabolischen Notfällen",
-          "Basiskühlung bei Hyperthermie (Hitzeerschöpfung, Hitzschlag: kühle Umgebung, feuchte Tücher, Kleidung öffnen)",
-          "Passives Erwärmen bei Hypothermie (Decken, Wärmeerhalt, beheizter RTW)",
-          "Rettung aus Wasser bei Ertrinkungsunfällen unter Beachtung Eigenschutz",
-          "Atemwegssicherung, Beatmung und ggf. Reanimation bei Ertrinkungsopfern",
-          "Wärmeerhalt und Transport in geeignete Klinik bei Ertrinkungs- oder Tauchunfällen",
-          "Regelmäßige Kontrolle und Dokumentation aller Vitalwerte",
-          "Übergabe mit vollständiger Dokumentation an Notarzt oder Klinikpersonal"
-        ],
-        disallowed_examples: [
-          "i.v.-Zugang legen",
-          "Medikamentengabe (außer lokal explizit erlaubt)",
-          "Intubation/RSI",
-          "Analgesie mit Opioiden",
-          "Katecholamine"
-        ]
-      },
-      NotSan: {
-        role: 'NotSan',
-        allowed_actions: [
-          "Alles aus RS",
-          "i.v.-Zugang legen",
-          "erweiterte Maßnahmen/Medikamente gemäß lokalem SOP",
-          "erweiterte Atemwegssicherung (ohne RSI)"
-        ],
-        disallowed_examples: [
-          "Arztpflichtige Maßnahmen (RSI, Narkose, invasive Prozeduren mit ärztlicher Aufsichtspflicht)"
-        ]
-      }
-    };
-    const SCOPE = role === 'NotSan' ? SCOPE_MAP.NotSan : SCOPE_MAP.RS;
+    // ===== Systemprompt mit REICHEM Befund-Schema =====
+    const system = `
+Du erzeugst kompakte, trainingsgeeignete Fälle für den Rettungsdienst.
+Antwort AUSSCHLIESSLICH als VALIDE JSON ohne Erklärtext.
+Allgemeinwissen, keine lokalen SOPs/Lizenzen; keine marken-/leitliniengeschützten Texte.
 
-    // ===== 4) Prompt =====
-    const systemMsg = `Du erstellst einen prägnanten Rettungsdienst-Fall für Training.
-Gib ausschließlich VALIDE JSON-Antwort (keine Erklärtexte, keine Codefences).
-Felder:
+Felder (Schema):
 {
   "id": "<zufällige kurze id>",
-  "specialty": "<internistisch|trauma|neurologie|päd etc.>",
+  "specialty": "<internistisch|trauma|neurologie|päd|kardio|pulmo|...>",
   "difficulty": "<leicht|mittel|schwer>",
   "role": "<RS|NotSan>",
-  "story": "1-3 Sätze, Einsatzbild/Anamnese",
-  "initial_vitals": { "RR": "120/80", "SpO2": 96, "AF": 14, "Puls": 80, "BZ": 100, "Temp": 36.8, "GCS": 15 },
+
+  "story": "1-3 Sätze Einsatzbild/Anamnese in natürlicher Sprache",
+
+  "initial_vitals": {
+    "RR": "120/80",
+    "SpO2": 96,
+    "AF": 14,
+    "Puls": 80,
+    "BZ": 100,
+    "Temp": 36.8,
+    "GCS": 15
+  },
+
   "key_findings": ["kurze Stichpunkte"],
   "red_flags": ["kurze Stichpunkte"],
-  "target_outcome": "Was grob erreicht werden soll",
-  "evaluation_policy": "Ein Satz: bewerten anhand erlaubter Maßnahmen; außerhalb Kompetenz -> als outside_scope kennzeichnen"
-}`;
+  "target_outcome": "1 Satz (Zielrichtung)",
+  "evaluation_policy": "1 Satz wie bewertet wird",
 
-    const userMsg = `Erzeuge einen neuen Fall.
-Fachrichtung: ${specialty}. Schwierigkeit: ${difficulty}. Rolle: ${SCOPE.role}.
-Behalte zulässige Maßnahmen im Hinterkopf (allowed_actions).`;
+  "exam": {
+    "airway_mouth": "Mund/Rachen-Befund (Fremdkörper? Schwellung? Speichel? Geruch?)",
+    "breathing_auscultation": "Auskultation Lunge beidseits (Rasselgeräusche? Giemen? Abschwächung?)",
+    "breathing_percussion": "Perkussion Thorax (sonor/dämpfung, asymmetrisch?)",
+    "heart_auscultation": "Herzgeräusche, Rhythmus, Systolen/Diastolen-Bemerkungen",
+    "jvd": "Halsvenenstatus (normal/gestaut)",
+    "edema": "Ödeme (keine/Knöchel/Generalisiert)",
+    "cap_refill": "Kapillarfüllungszeit (Sekunden, Stelle)",
+    "skin_color_temp": "Hautfarbe & Temperatur (blass/warm/clammy etc.)",
+    "peripheral_pulses": "Periphere Pulse (radial/dorsalis pedis etc.) fühlbar?, Qualität",
+    "central_pulse": "Carotis/femoralis, Qualität",
 
-    // ===== 5) OpenAI-Aufruf =====
+    "neuro_pupils": "Isokor? Lichtreaktion prompt? Größe?",
+    "neuro_gcs_detail": "E M V aufgeschlüsselt",
+    "neuro_orientation": "orientiert zu Person/Ort/Zeit/Situation?",
+    "neuro_motor_sens": "Motorik/Sensibilität kurz, Seitenvergleich",
+    "stroke_screen": "FAST/BE-FAST (Befund/negativ)",
+
+    "abdomen_inspection": "Inspektion (aufgetrieben/Narben etc.)",
+    "abdomen_auscultation": "Darmgeräusche (normal/reduziert/erhöht)",
+    "abdomen_palpation": "lokale/Diffuse Druckschmerzhaftigkeit? Abwehrspannung?",
+    "back_exam": "Rücken/Nierenlager, Wirbelsäule, Dekubitus",
+    "extremities_exam": "Durchblutung/Motorik/Sensibilität (DMS), Deformitäten",
+
+    "fluids_hydration": "Dehydratations-Zeichen (Hautturgor, Schleimhäute)",
+    "pain_score_comment": "NRS 0-10 / kurze Einordnung",
+
+    "history_opqrst": "OPQRST-Schmerz-Anamnese in 2-3 Sätzen",
+    "history_sample": {
+      "S": "Symptome/Leitsymptom kurz",
+      "A": "Allergien (falls bekannt)",
+      "M": "Medikamente (wichtigste, ggf. Antikoagulation/Insulin)",
+      "P": "Vorgeschichte/Erkrankungen/OPs",
+      "L": "Letzte Mahlzeit/Trinken",
+      "E": "Ereignis/Trigger/Exposition"
+    },
+
+    "urine_output_hint": "Urinmenge/Harndrang/auffällig ja/nein",
+    "pregnancy_hint": "Bei Frauen im Alter: ggf. Schwangerschaftstest-Info/Hinweis"
+  },
+
+  "labs": {
+    "glucose": 100,
+    "lactate_hint": "hoch/norm, kurzer Hinweis",
+    "ketones_hint": "ja/nein/Hinweis",
+    "troponin_hint": "nicht gemessen/verdächtig/normbereich (nur Hinweis)"
+  },
+
+  "monitor_rhythm_summary": "Monitoring-Rhythmus-Kurztext",
+  "ekg_12lead_summary": "12-Kanal-EKG-Befund (sofern sinnvoll, z. B. ST-T-Veränderungen)",
+  "cxr_hint": "Röntgen-Thorax-Hinweis (nur falls thematisch passend, sonst weglassen)"
+}
+
+Regeln:
+- Werte plausibel & konsistent.
+- Keine konkreten Klinikdiagnosen, nur Hinweise/Befunde.
+- exam-Felder mit sinnvollen, kurzen Texten füllen (keine 'unbekannt'/keine leeren Strings).
+`;
+
+    const user = `Erzeuge einen neuen Fall.
+Fachrichtung: ${specialty}. Schwierigkeit: ${difficulty}. Rolle: ${role}.
+Fokus: realistische, rettungsdienstnahe Situationen.`;
+
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         temperature: 0.4,
         messages: [
-          { role: 'system', content: systemMsg },
-          { role: 'user', content: userMsg }
+          { role: 'system', content: system },
+          { role: 'user', content: user }
         ]
       })
     });
 
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => '');
-      return { statusCode: resp.status, headers, body: JSON.stringify({ error: errText || 'OpenAI-Fehler' }) };
+    const raw = await resp.text();
+    if (!resp.ok) return { statusCode: resp.status, headers, body: JSON.stringify({ error: raw || 'OpenAI-Fehler' }) };
+
+    let data;
+    try { data = JSON.parse(raw); } catch {
+      const s = raw.indexOf('{'); const e = raw.lastIndexOf('}');
+      data = JSON.parse(raw.slice(s, e + 1));
     }
 
-    // ===== 6) content extrahieren (der JSON-String liegt hier!)
-    const openai = await resp.json();
-    let content = openai?.choices?.[0]?.message?.content || '';
+    // Minimal-Fallbacks
+    data.specialty ??= specialty;
+    data.difficulty ??= difficulty;
+    data.role ??= role;
+    data.exam ??= {};
+    data.labs ??= {};
+    data.initial_vitals ??= { RR: '120/80', SpO2: 97, AF: 14, Puls: 80, BZ: 100, Temp: 36.8, GCS: 15 };
+    data.monitor_rhythm_summary ??= 'Sinusrhythmus';
+    data.ekg_12lead_summary ??= 'Sinusrhythmus, keine eindeutige Ischämiezeichen';
 
-    // mögliche Codefences entfernen
-    content = content.trim();
-    if (content.startsWith('```')) {
-      content = content.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-    }
+    // Frontend-Hilfsfelder
+    data.steps_done = []; // für ABCDE/„gesehen“
+    data.score = 0;
 
-    // JSON-Block isolieren (falls das Modell doch noch etwas drumherum schreibt)
-    const start = content.indexOf('{');
-    const end   = content.lastIndexOf('}');
-    if (start === -1 || end === -1) {
-      return { statusCode: 200, headers, body: JSON.stringify({ error: 'JSON fehlerhaft', raw: content }) };
-    }
-
-    let caseObj;
-    try {
-      caseObj = JSON.parse(content.slice(start, end + 1));
-    } catch (e) {
-      return { statusCode: 200, headers, body: JSON.stringify({ error: 'JSON fehlerhaft', raw: content, parseError: e.message }) };
-    }
-
-    // minimale Validierung & Defaults
-    if (!caseObj.id) caseObj.id = `case_${Date.now().toString(36)}`;
-    if (!caseObj.initial_vitals) {
-      caseObj.initial_vitals = { RR: "120/80", SpO2: 96, AF: 14, Puls: 80, BZ: 100, Temp: 36.8, GCS: 15 };
-    }
-
-    // ===== 7) Scope anhängen & Startzustand
-    caseObj.scope = SCOPE;
-    caseObj.steps_done = [];
-    caseObj.score = 0;
-
-    return { statusCode: 200, headers, body: JSON.stringify(caseObj) };
-
+    return { statusCode: 200, headers, body: JSON.stringify(data) };
   } catch (e) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
   }

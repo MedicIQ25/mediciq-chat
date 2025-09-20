@@ -1,6 +1,6 @@
 // netlify/functions/case-step.js
 export async function handler(event) {
-  // ===== 1) CORS =====
+  // ===== CORS =====
   const ALLOWED_ORIGINS = [
     'https://www.mediciq.de',
     'https://mediciq.de',
@@ -18,32 +18,14 @@ export async function handler(event) {
     return { statusCode: 204, headers, body: '' };
   }
 
-  
   try {
-    // ===== 2) Input =====
+    
     const { case_state, user_action, role = 'RS' } = JSON.parse(event.body || '{}');
     if (!case_state || !user_action) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'case_state oder user_action fehlt' }) };
     }
 
-    // ===== 3) Normalisieren =====
-    const ua = String(user_action).toLowerCase().trim();
-
-    // Vitalwerte vorsichtig in Zahlen wandeln (wenn möglich)
-    const v = { ...(case_state.initial_vitals || {}) };
-    const num = (x) => (typeof x === 'number' ? x : (parseFloat(String(x).replace(',', '.')) || 0));
-    const vitals = {
-      RR: v.RR ?? '120/80',
-      SpO2: num(v.SpO2 || 96),
-      AF: num(v.AF || 14),
-      Puls: num(v.Puls || 80),
-      BZ: num(v.BZ || 100),
-      Temp: num(v.Temp || 36.8),
-      GCS: num(v.GCS || 15),
-    };
-
-    // ===== 4) Ergebnis-Grundgerüst =====
-    let result = {
+    const result = {
       accepted: false,
       outside_scope: false,
       unsafe: false,
@@ -51,166 +33,212 @@ export async function handler(event) {
       rationale: '',
       next_hint: '',
       updated_vitals: null,
+      updated_case_state: null,
+      observation: '',
       done: false
     };
 
-    // ===== 5) Hilfsfunktionen =====
-    const includesAny = (str, arr) => arr.some(k => str.includes(k));
-    const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+    const ua = (user_action || '').toLowerCase();
+    const t = (s) => (s || '').toString().trim();
+    const ex = case_state.exam || {};
+    const labs = case_state.labs || {};
+    const vit = { ...(case_state.initial_vitals || {}) };
 
-    const accept = (why, next = '', delta = 1, updateVitals = null) => {
+    // ===== Schutz: Maßnahmen außerhalb Kompetenz (für RS) =====
+    if (role === 'RS') {
+      const forbidden = /(iv|i\.v\.|zugang legen|venflon|intubation|rs[i]|ketamin|opioid|katecholamin|adrenalin(?!.*aed))/i;
+      if (forbidden.test(ua)) {
+        result.outside_scope = true;
+        result.accepted = false;
+        result.rationale = 'Maßnahme erfordert ärztliche/erweiterte Kompetenz.';
+        result.next_hint = 'Notarzt nachfordern, Monitoring/ABCDE fortsetzen.';
+        return { statusCode: 200, headers, body: JSON.stringify(result) };
+      }
+    }
+
+    // ===== ABCDE-Makro =====
+    if (/(abcde|ich arbeite abcde ab|primary survey|primärcheck)/i.test(ua)) {
+      const seen = case_state.steps_done ? [...case_state.steps_done] : [];
+      const ordered = [
+        { flag: 'A_mouth',  text: ex.airway_mouth,           label: 'A – Mund/Rachen' },
+        { flag: 'B_ausc',   text: ex.breathing_auscultation, label: 'B – Auskultation' },
+        { flag: 'B_perc',   text: ex.breathing_percussion,   label: 'B – Perkussion' },
+        { flag: 'C_skin',   text: ex.skin_color_temp,        label: 'C – Haut/Kreislauf' },
+        { flag: 'C_pulse',  text: ex.peripheral_pulses,      label: 'C – Periphere Pulse' },
+        { flag: 'C_jvd',    text: ex.jvd,                    label: 'C – Halsvenen' },
+        { flag: 'C_edema',  text: ex.edema,                  label: 'C – Ödeme' },
+        { flag: 'D_pupils', text: ex.neuro_pupils,           label: 'D – Pupillen' },
+        { flag: 'D_gcs',    text: ex.neuro_gcs_detail,       label: 'D – GCS' },
+        { flag: 'D_orient', text: ex.neuro_orientation,      label: 'D – Orientierung' },
+        { flag: 'E_abd',    text: ex.abdomen_palpation,      label: 'E – Abdomen' },
+        { flag: 'E_back',   text: ex.back_exam,              label: 'E – Rücken' },
+        { flag: 'E_ext',    text: ex.extremities_exam,       label: 'E – Extremitäten/DMS' }
+      ];
+      const next = ordered.find(o => t(o.text) && !seen.includes(o.flag));
+      if (next) {
+        seen.push(next.flag);
+        result.accepted = true;
+        result.score_delta = 1;
+        result.rationale = 'ABCDE: nächster Untersuchungsschritt durchgeführt.';
+        result.observation = `${next.label}: ${t(next.text)}`;
+        result.next_hint = 'Weiter ABCDE oder gezielt untersuchen (Pupillen, Auskultation, Abdomen usw.).';
+        result.updated_case_state = { steps_done: seen };
+        return { statusCode: 200, headers, body: JSON.stringify(result) };
+      }
+      // alles gesehen
       result.accepted = true;
-      result.score_delta = delta;
-      result.rationale = why;
-      result.next_hint = next;
-      if (updateVitals) result.updated_vitals = updateVitals;
-    };
-    const decline = (why, next = '', delta = 0) => {
-      result.accepted = false;
-      result.score_delta = delta;
-      result.rationale = why;
-      result.next_hint = next;
-    };
-    const outOfScope = (why, next = '') => {
-      result.accepted = false;
-      result.outside_scope = true;
-      result.score_delta = 0;
-      result.rationale = why;
-      result.next_hint = next || 'Bitte im Rahmen der Kompetenz bleiben oder Notarzt hinzuziehen.';
-    };
-    const unsafe = (why, next = '') => {
-      result.accepted = false;
-      result.unsafe = true;
-      result.score_delta = -1;
-      result.rationale = why;
-      result.next_hint = next || 'Sichere Vorgehensweise wählen.';
-    };
-
-    // ===== 6) Maßnahmen-Heuristiken =====
-    // (Reihenfolge: spezifisch → generisch)
-
-    // --- Eigenschutz / Lagebild ---
-    if (includesAny(ua, ['eigenschutz', 'umfeld sichern', 'einsatzstelle sichern', 'lagesicherung'])) {
-      accept('Eigenschutz und Umfeldsicherung haben Priorität.', 'ABCDE-Assessment beginnen.');
+      result.rationale = 'ABCDE vollständig.';
+      result.next_hint = 'Gezielt Diagnostik vertiefen (z. B. EKG, Stroke-Screen, Laborhinweise, Anamnese).';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- ABCDE / Bewusstsein / Atemkontrolle ---
-    else if (includesAny(ua, ['abcde', 'bewusstsein prüfen', 'avpu', 'gcs prüfen', 'atmen prüfen', 'atmung prüfen'])) {
-      accept('ABCDE/Primärcheck ist sinnvoll.', 'Atemwege sichern, Monitoring und Anamnese.');
+    // ===== Vital-Messungen =====
+    const vitalMap = [
+      { re: /(blutdruck|rr|druck messen|druck)/i,        key: 'RR',    label: 'RR' },
+      { re: /(puls( |$)|herzfrequenz|hf|herzschlag)/i,   key: 'Puls',  label: 'Puls' },
+      { re: /(spo2|sättigung|sauerstoffsättigung)/i,     key: 'SpO2',  label: 'SpO₂' },
+      { re: /(atemfrequenz|af|atemzug)/i,                key: 'AF',    label: 'AF' },
+      { re: /(temperatur|fieber)/i,                      key: 'Temp',  label: 'Temperatur' },
+      { re: /(bz|blutzucker|glukose|glucose)/i,          key: 'BZ',    label: 'BZ' }
+    ];
+    const vm = vitalMap.find(v => v.re.test(ua));
+    if (vm) {
+      const v = vit[vm.key];
+      result.accepted = true;
+      result.score_delta = 1;
+      result.rationale = 'Vitalwert erhoben.';
+      if (vm.key === 'Puls' && t(case_state.monitor_rhythm_summary)) {
+        result.observation = `${vm.label}: ${v} – Monitoring: ${t(case_state.monitor_rhythm_summary)}.`;
+      } else {
+        result.observation = `${vm.label}: ${v}`;
+      }
+      result.next_hint = 'ABCDE/Monitoring fortführen; bei Abweichungen reevaluieren.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Atemwege freimachen / Esmarch / Absaugen / Guedel/Wendl ---
-    else if (includesAny(ua, ['atemweg', 'atemwege sichern', 'freimachen', 'absaugen', 'magill', 'esmarch', 'kopf überstrecken'])) {
-      accept('Atemwege sichern ist indiziert.', 'O2-Gabe je nach SpO₂, Monitoring fortsetzen.');
-    }
-    else if (includesAny(ua, ['guedel', 'wendl', 'nasenweg', 'oropharyngeal'])) {
-      accept('Atemwegshilfen können bei Bewusstseinsstörung sinnvoll sein.', 'Überwachung und O₂ je nach SpO₂.');
+    // ===== Standard-Diagnostik-Intents =====
+    const intents = [
+      { re: /(mund|rachen|mundraum|airway|zunge|öffnung)/i,      text: ex.airway_mouth,           label: 'Mund/Rachen' },
+      { re: /(auskultier|abhören|vesikulär|giemen|rassel|lunge)/i, text: ex.breathing_auscultation, label: 'Lunge – Auskultation' },
+      { re: /(perkussion|perkutier|klopfen.*thorax)/i,           text: ex.breathing_percussion,   label: 'Thorax – Perkussion' },
+      { re: /(herz.*abhören|herzgeräusch|kardiak.*auskult)/i,    text: ex.heart_auscultation,     label: 'Herz – Auskultation' },
+      { re: /(halsvene|jvd)/i,                                   text: ex.jvd,                    label: 'Halsvenen' },
+      { re: /(ödem|ödeme|beine geschwollen|knöchel)/i,           text: ex.edema,                  label: 'Ödeme' },
+      { re: /(kapillar|capillary|rekapill)/i,                    text: ex.cap_refill,             label: 'Kapillarfüllung' },
+      { re: /(haut(?!.*(schnitt|wunde))|hauttemperatur|clammy|blass|cyanotisch)/i, text: ex.skin_color_temp, label: 'Haut' },
+      { re: /(peripher.*puls|radial|fußpuls|dorsalis)/i,         text: ex.peripheral_pulses,      label: 'Periphere Pulse' },
+      { re: /(zentraler puls|carotis|femoralis)/i,               text: ex.central_pulse,          label: 'Zentraler Puls' },
+
+      { re: /(pupill|isokor|lichtreaktion)/i,                    text: ex.neuro_pupils,           label: 'Pupillen' },
+      { re: /(gcs|glasgow)/i,                                    text: ex.neuro_gcs_detail,       label: 'GCS' },
+      { re: /(orientier|person.*ort.*zeit|situation)/i,          text: ex.neuro_orientation,      label: 'Orientierung' },
+      { re: /(motorik|sensibilit|seitenvergleich|pares)/i,       text: ex.neuro_motor_sens,       label: 'Motorik/Sensibilität' },
+      { re: /(fast|be-fast|stroke|schlaganfalltest)/i,           text: ex.stroke_screen,          label: 'Stroke-Screen' },
+
+      { re: /(abdomen.*(palp|drück|schmerz)|bauchschmerz)/i,     text: ex.abdomen_palpation,      label: 'Abdomen – Palpation' },
+      { re: /(abdomen.*auskult|darmgeräusch)/i,                  text: ex.abdomen_auscultation,   label: 'Abdomen – Auskultation' },
+      { re: /(abdomen.*inspek|bauch.*ansehen)/i,                 text: ex.abdomen_inspection,     label: 'Abdomen – Inspektion' },
+      { re: /(rücken|wirbelsäule|nierenlager|dekubitus)/i,       text: ex.back_exam,              label: 'Rücken' },
+      { re: /(extremität|dms|durchblutung.*motorik.*sens)/i,     text: ex.extremities_exam,       label: 'Extremitäten/DMS' },
+
+      { re: /(turgor|dehydrat|schleimhaut)/i,                    text: ex.fluids_hydration,       label: 'Hydration' },
+      { re: /(schmerzskala|nrs|schmerz.*(0|1|2|3|4|5|6|7|8|9|10))/i, text: ex.pain_score_comment, label: 'Schmerzskala (NRS)' },
+
+      { re: /(opqrst|schmerz-anamnese)/i,                        text: ex.history_opqrst,         label: 'OPQRST' },
+      { re: /(sample|anamnese|allerg|medikament|vorgeschicht|ereignis|letzte mahlzeit)/i,
+        text: (() => {
+          const s = ex.history_sample || {};
+          return `S:${t(s.S)} | A:${t(s.A)} | M:${t(s.M)} | P:${t(s.P)} | L:${t(s.L)} | E:${t(s.E)}`;
+        })(), label: 'SAMPLE' },
+
+      { re: /(urin|harndrang|diurese)/i,                         text: ex.urine_output_hint,      label: 'Urin/Diurese' },
+      { re: /(schwanger|pregnancy)/i,                            text: ex.pregnancy_hint,         label: 'Schwangerschaftshinweis' }
+    ];
+
+    const intent = intents.find(i => i.re.test(ua));
+    if (intent) {
+      const out = t(typeof intent.text === 'function' ? intent.text() : intent.text);
+      result.accepted = true;
+      result.score_delta = 1;
+      result.rationale = 'Befund erhoben.';
+      result.observation = `${intent.label}: ${out || 'unauffällig.'}`;
+      result.next_hint = 'Gezielt weitere Bereiche prüfen oder Therapie beginnen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Beutel-Masken-Beatmung ---
-    else if (includesAny(ua, ['beutel-masken', 'beutelmasken', 'bvm', 'beatmung'])) {
-      accept('Beutel-Masken-Beatmung ist bei Hypoventilation/Atemstillstand korrekt.', 'Monitoring und Vorbereitung Transport.');
-      result.updated_vitals = { ...vitals, SpO2: clamp(vitals.SpO2 + 3, 0, 100), AF: clamp(vitals.AF + 2, 0, 60) };
+    // ===== EKG / Monitoring =====
+    if (/(12.?kanal|ekg|rhythmusstreifen|monitoring)/i.test(ua)) {
+      if (/(12.?kanal|ekg)/i.test(ua)) {
+        result.accepted = true;
+        result.score_delta = 1;
+        result.rationale = '12-Kanal-EKG abgeleitet.';
+        result.observation = `EKG (12-Kanal): ${t(case_state.ekg_12lead_summary)}`;
+        result.next_hint = 'Monitoring fortführen, ST-Strecke & Rhythmus beurteilen.';
+        return { statusCode: 200, headers, body: JSON.stringify(result) };
+      } else {
+        result.accepted = true;
+        result.score_delta = 1;
+        result.rationale = 'Monitoring angelegt.';
+        result.observation = `Monitoring: ${t(case_state.monitor_rhythm_summary)}`;
+        result.next_hint = 'Bei Auffälligkeiten 12-Kanal-EKG ergänzen.';
+        return { statusCode: 200, headers, body: JSON.stringify(result) };
+      }
     }
 
-    // --- O₂-Gabe ---
-    else if (includesAny(ua, ['o2', 'sauerstoff'])) {
-      const newSpO2 = clamp(vitals.SpO2 + 2, 0, 100);
-      accept('Sauerstoffgabe ist in dieser Situation indiziert.', 'Monitoring und EKG durchführen.', 1,
-        { ...vitals, SpO2: newSpO2 });
+    // ===== Labor-/POC-Hinweise =====
+    if (/(laktat|lactate)/i.test(ua)) {
+      result.accepted = true;
+      result.score_delta = 1;
+      result.rationale = 'POC-Hinweis abgerufen.';
+      result.observation = `Laktat: ${t(labs.lactate_hint) || 'kein Hinweis'}.`;
+      result.next_hint = 'Klinische Gesamtschau, ggf. Reevaluation.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+    if (/(keton|ketone)/i.test(ua)) {
+      result.accepted = true;
+      result.score_delta = 1;
+      result.observation = `Ketone: ${t(labs.ketones_hint) || 'kein Hinweis'}.`;
+      result.rationale = 'POC-Hinweis abgerufen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+    if (/(troponin)/i.test(ua)) {
+      result.accepted = true;
+      result.score_delta = 1;
+      result.observation = `Troponin: ${t(labs.troponin_hint) || 'nicht gemessen'}.`;
+      result.rationale = 'Laborhinweis (nur Information).';
+      result.next_hint = 'Transportziel & Prioritäten abwägen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Lagerung ---
-    else if (includesAny(ua, ['oberkörper hoch', 'ok-hoch', 'oberkörperhoch'])) {
-      accept('Oberkörperhochlagerung kann Dyspnoe entlasten.', 'Monitoring fortsetzen.');
-    }
-    else if (includesAny(ua, ['stabile seitenlage'])) {
-      accept('Stabile Seitenlage ist bei Bewusstlosigkeit mit erhaltener Atmung sinnvoll.', 'Monitoring, O₂ je nach SpO₂.');
-    }
-    else if (includesAny(ua, ['schocklage'])) {
-      // Vorsicht – kann bei ACS/Trauma kontraindiziert sein → neutral/leicht positiv
-      accept('Schocklage kann kurzfristig sinnvoll sein, Kontraindikationen beachten.', 'Ursache adressieren, Monitoring.', 0);
-    }
-    else if (includesAny(ua, ['wärmeerhalt', 'wärme erhalten', 'decken', 'rettungsdecke'])) {
-      accept('Wärmeerhalt ist sinnvoll.', 'Vitalwerte regelmäßig kontrollieren.');
+    // ===== „Reevaluiere/zeige aktuelle Vitalwerte“ =====
+    if (/(reeval|reevaluiere|kontrolliere vital|neue vitalwerte|nochmal messen)/i.test(ua)) {
+      result.accepted = true;
+      result.score_delta = 1;
+      result.rationale = 'Reevaluation durchgeführt.';
+      result.observation = `Aktuelle Vitalwerte → RR: ${vit.RR}, SpO₂: ${vit.SpO2}%, AF: ${vit.AF}/min, Puls: ${vit.Puls}/min, BZ: ${vit.BZ} mg/dl, Temp: ${vit.Temp}°C, GCS: ${vit.GCS}.`;
+      result.next_hint = 'Weiter mit ABCDE/Diagnostik oder Therapie.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Monitoring / EKG / Vitalwerte ---
-    else if (includesAny(ua, ['monitoring', 'überwachung', 'rr messen', 'blutdruck', 'puls messen', 'spo2 messen', 'sättigung messen'])) {
-      accept('Monitoring/Vitalzeichenkontrolle ist korrekt.', 'EKG, Anamnese, Schmerzskala/FAST je nach Lage.');
-    }
-    else if (includesAny(ua, ['ekg'])) {
-      accept('EKG ist in dieser Situation sinnvoll.', 'Schmerzskala/Anamnese und Monitoring fortsetzen.');
-    }
-    else if (includesAny(ua, ['bz', 'blutzucker'])) {
-      accept('BZ-Messung ist sinnvoll (z. B. bei Bewusstseinsstörung, ACS).', 'Weitere Diagnostik/Monitoring fortsetzen.');
-    }
-    else if (includesAny(ua, ['temperatur', 'temp messen', 'fieber'])) {
-      accept('Temperaturmessung ist sinnvoll.', 'Weitere ABCDE-Schritte und Monitoring.');
-    }
-    else if (includesAny(ua, ['pupillen', 'rekap', 'rekapillarisierung'])) {
-      accept('Pupillen-/Durchblutungskontrolle ist sinnvoll.', 'Monitoring/Vitalwerte fortführen.');
-    }
-    else if (includesAny(ua, ['schmerzskala', 'nrs', 'schmerz einschätzen'])) {
-      accept('Schmerzskala/NRS erheben ist sinnvoll.', 'Monitoring und EKG fortsetzen.');
-    }
-    else if (includesAny(ua, ['fast', 'stroke check'])) {
-      accept('FAST (Stroke-Screening) ist sinnvoll bei neurologischen Symptomen.', 'Monitoring und zeitkritischen Transport planen.');
-    }
-    else if (includesAny(ua, ['gcs'])) {
-      accept('GCS-Bewertung ist sinnvoll.', 'Monitoring und ABCDE fortführen.');
+    // ===== Beispiel-Maßnahme: Sauerstoffgabe =====
+    if (/(o2|sauerstoff).*gabe|sauerstoff anlegen|oxygen/i.test(ua)) {
+      const updated = { ...vit };
+      if (typeof updated.SpO2 === 'number') {
+        updated.SpO2 = Math.min(99, updated.SpO2 + (updated.SpO2 < 95 ? 3 : 1));
+      }
+      result.accepted = true;
+      result.score_delta = 1;
+      result.rationale = 'Sauerstoffgabe in dieser Situation plausibel.';
+      result.updated_vitals = updated;
+      result.observation = `SpO₂ verbessert ggf. auf ~${updated.SpO2}%.`;
+      result.next_hint = 'Monitoring & erneute Auskultation/Beurteilung.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Blutung / Wunde / Immobilisation ---
-    else if (includesAny(ua, ['druckverband', 'blutung stillen', 'blutstillung'])) {
-      accept('Direkte Blutstillung/Druckverband ist korrekt.', 'DMS kontrollieren, Monitoring.');
-    }
-    else if (includesAny(ua, ['tourniquet', 'abbinden'])) {
-      accept('Tourniquet bei starker Blutung ist korrekt.', 'Zeit dokumentieren, Monitoring.', 1);
-    }
-    else if (includesAny(ua, ['wundabdeckung', 'steril abdecken', 'feuchte abdeckung'])) {
-      accept('Sterile Wundabdeckung ist korrekt.', 'Schmerzmanagement/Monitoring.');
-    }
-    else if (includesAny(ua, ['immobilisation', 'schiene', 'vakuumschiene', 'becken', 'beckenschlinge', 'ked', 'vakuummatratze'])) {
-      accept('Schonende Immobilisation/Beckenschlinge ist korrekt.', 'DMS kontrollieren, Monitoring.');
-    }
-
-    // --- Notarzt / Übergabe ---
-    else if (includesAny(ua, ['notarzt', 'na nachfordern'])) {
-      accept('Notarzt anfordern kann sinnvoll sein.', 'Bis zum Eintreffen Monitoring und Maßnahmen fortsetzen.', 0);
-    }
-    else if (includesAny(ua, ['übergabe', 'handover', 'sbarr', 'isbar'])) {
-      accept('Strukturierte Übergabe ist wichtig.', 'Transport/weitere Versorgung.', 0);
-    }
-
-    // --- Reanimation / AED ---
-    else if (includesAny(ua, ['reanimation', 'cpr', 'herzdruckmassage', 'drücken'])) {
-      accept('Kardiopulmonale Reanimation bei Kreislaufstillstand korrekt.', 'AED/Defi einsetzen, Atemweg/O₂ sicherstellen.');
-      result.updated_vitals = { ...vitals, Puls: 0, AF: 0, SpO2: clamp(vitals.SpO2 - 2, 0, 100) };
-    }
-    else if (includesAny(ua, ['aed', 'defibrillator', 'defi'])) {
-      accept('AED/Defibrillator gemäß Algorithmus anwenden.', 'Reanimations-Ablauf beachten.', 1);
-    }
-
-    // --- Rolle-basierte Grenzen (RS) ---
-    else if (includesAny(ua, ['i.v', 'iv-zugang', 'venenzugang'])) {
-      if (role.toLowerCase() === 'rs') outOfScope('i.v.-Zugang liegt außerhalb der RS-Kompetenz.', 'NotSan/NA einbeziehen.');
-      else accept('i.v.-Zugang kann je nach SOP sinnvoll sein.', 'Monitoring und indizierte Medikation.');
-    }
-    else if (includesAny(ua, ['intubation', 'rsi', 'tubus'])) {
-      outOfScope('Intubation/RSI ist arztpflichtig bzw. außerhalb RS-Kompetenz.', 'Notarzt einbeziehen.');
-    }
-    else if (includesAny(ua, ['medikament', 'gabe', 'analgesie', 'opioid', 'nitro', 'heparin', 'katecholamin'])) {
-      if (role.toLowerCase() === 'rs') outOfScope('Medikamentengabe außerhalb RS-Kompetenz.', 'Notarzt/NotSan nach SOP.');
-      else accept('Medikamentengabe ggf. nach SOP/Indikation.', 'Monitoring & Reevaluation.');
-    }
-
-    // --- Generischer Fallback ---
-    else {
-      decline('Maßnahme nicht eindeutig bewertbar.', 'ABCDE fortführen, Monitoring/Anamnese und geeignete nächste Schritte planen.');
-    }
-
-    // ===== 7) Rückgabe =====
+    // ===== Fallback =====
+    result.accepted = false;
+    result.rationale = 'Aktion nicht eindeutig bewertbar/erkannt.';
+    result.next_hint = 'Beispiele: „ich arbeite ABCDE ab“, „Pupillen prüfen“, „Lunge auskultieren“, „BZ messen“, „12-Kanal-EKG“, „OPQRST“, „SAMPLE“, „Stroke-Screen“, „Kapillarfüllung“, „Abdomen palpieren“ …';
     return { statusCode: 200, headers, body: JSON.stringify(result) };
 
   } catch (e) {
