@@ -2,7 +2,6 @@
 // medicIQ – Fallgenerator (case-new.js)
 // ================================================================
 export async function handler(event) {
-  
   // ----- CORS -----
   const ALLOWED_ORIGINS = [
     "https://www.mediciq.de",
@@ -49,9 +48,7 @@ export async function handler(event) {
         "Sauerstoffgabe (bei Indikation)",
         "NA nachfordern", "Transport einleiten", "Übergabe"
       ],
-      disallowed_examples: [
-        "i.v.-Zugang", "RSI/Intubation", "Medikamentengabe (arztpflichtig)"
-      ]
+      disallowed_examples: ["i.v.-Zugang", "RSI/Intubation", "arztpflichtige Medikamente"]
     };
     const scopeNotSan = {
       role: "NotSan",
@@ -60,14 +57,20 @@ export async function handler(event) {
     };
     const SCOPE = role === "NotSan" ? scopeNotSan : scopeRS;
 
-    // ----- Specialty Map -----
+    // ----- Specialty Map (robust) -----
     const MAP = {
+      // Internistisch
       internistisch: "internistisch", internal: "internistisch", innere: "internistisch",
       medizinisch: "internistisch", "innere medizin": "internistisch",
+      // Neurologisch
       neurologisch: "neurologisch", neurologie: "neurologisch",
-      trauma: "trauma", unfall: "trauma", unfallchirurgie: "trauma",
-      pädiatrisch: "paediatrisch", paediatrisch: "paediatrisch",
-      kinder: "paediatrisch", kinderheilkunde: "paediatrisch", pediatrisch: "paediatrisch"
+      // Trauma
+      trauma: "trauma", traumatologie: "trauma", unfall: "trauma", unfallchirurgie: "trauma",
+      // Pädiatrisch
+      paediatrisch: "paediatrisch", "pädiatrisch": "paediatrisch",
+      paediatrie: "paediatrisch", "pädiatrie": "paediatrisch",
+      kinder: "paediatrisch", kinderheilkunde: "paediatrisch",
+      pediatrisch: "paediatrisch", pediatric: "paediatrisch", child: "paediatrisch"
     };
     const normalized = MAP[(specialty || "").toString().trim().toLowerCase()] || "internistisch";
 
@@ -82,7 +85,7 @@ export async function handler(event) {
       sozial         : over.sozial || {}
     });
 
-    // ===== INTERNISTISCH (Auswahl) =====
+    // ===== INTERNISTISCH =====
     const int_genACS = () => {
       const bpS=jitter(125,12), bpD=jitter(80,8), spo2=jitter(88,3), af=jitter(20,3),
             puls=jitter(100,8), bz=jitter(110,10), temp=36.8;
@@ -116,31 +119,6 @@ export async function handler(event) {
       };
     };
 
-    const int_genPneumonia = () => {
-      const bpS=jitter(130,10), bpD=jitter(80,8), spo2=jitter(90,3), af=jitter(26,4),
-            puls=jitter(105,10), bz=jitter(120,10), temp=38.6;
-      return {
-        diagnosis:"Pneumonie mit Hypoxie",
-        story:"72-jährige Patientin mit Husten, Fieber, zunehmender Atemnot seit 2 Tagen.",
-        key_findings:["Fieber","basale feuchte RG","Hypoxie"],
-        red_flags:["Tachypnoe + Hypoxie"],
-        target_outcome:"O2 nach Indikation, Monitoring, Klinik.",
-        patient:{ name:"Frau S.", age:72, sex:"w" },
-        anamnesis: mkAnam({
-          SAMPLER:{ S:"Husten, Fieber, Atemnot", A:"Penicillin: Ausschlag",
-            M:"Amlodipin", P:"COPD leicht, HTN", L:"Suppe vor 3h",
-            E:"seit Infektverschlechterung", R:"Alter, COPD" },
-          OPQRST:{ O:"seit 48 h, zunehmend", P:"Sitzen erleichtert etwas",
-            Q:"Atemnot", R:"beidseitig", S:"7/10 (Atemnot)", T:"progredient" },
-          vorerkrankungen:["COPD leicht","Hypertonie"], medikation:["Amlodipin"], allergien:["Penicillin"]
-        }),
-        patho:{ tag:["infektiös","obstruktiv"], severity:2, hypoxia_sensitivity:2, dehydration:1, baseline_deterioration:1 },
-        hidden:{ vitals_baseline:vitals(bpS,bpD,spo2,af,puls,bz,temp), pupils:"isokor", mouth:"mukopurulentes Sekret",
-          lung:"basal feuchte RG rechts>links", abdomen:"weich",
-          ekg3:`Sinus ${puls}/min`, ekg12:"Sinus", befast:null, neuro:null }
-      };
-    };
-
     const int_genHF = () => {
       const v = vitals(jitter(135,12),jitter(85,8),jitter(90,4),jitter(24,4),jitter(108,10),jitter(120,10),36.9);
       return {
@@ -160,23 +138,6 @@ export async function handler(event) {
       };
     };
 
-    const int_genAsthmaCOPD = () => {
-      const v = vitals(jitter(130,10),jitter(80,8),jitter(90,4),jitter(28,5),jitter(104,10),110,36.8);
-      return {
-        diagnosis:"Akute obstruktive Exazerbation (Asthma/COPD)",
-        story:"Bekannter Asthmatiker/COPD mit Giemen und verlängertem Exspirium.",
-        key_findings:["Giemen"," verlängertes Exspirium","Dyspnoe"],
-        red_flags:["Erschöpfung","Zyanose"],
-        target_outcome:"Atemerleichternde Lagerung, O2 vorsichtig titriert, Monitoring.",
-        patient:{ name:"Frau R.", age:66, sex:"w" },
-        anamnesis: mkAnam({ SAMPLER:{ S:"Atemnot, pfeifende Atmung", A:"keine",
-          M:"SABA bei Bedarf", P:"COPD/Asthma", L:"—", E:"Kälte/Infekt", R:"Raucherin" } }),
-        patho:{ tag:["obstruktiv"], severity:2, hypoxia_sensitivity:3, dehydration:0, baseline_deterioration:1 },
-        hidden:{ vitals_baseline:v, pupils:"isokor", mouth:"trocken", lung:"Giemen, exspiratorisch",
-          abdomen:"weich", ekg3:`Sinus ${v.Puls}/min`, ekg12:"Sinus" }
-      };
-    };
-
     const int_genPE = () => {
       const v = vitals(jitter(120,10),jitter(75,8),jitter(90,4),jitter(24,4),jitter(108,12),110,37.0);
       return {
@@ -187,7 +148,7 @@ export async function handler(event) {
         target_outcome:"Monitoring, O2, Transport mit PE-Verdacht.",
         patient:{ name:"Herr D.", age:58, sex:"m" },
         anamnesis: mkAnam({ SAMPLER:{ S:"plötzliche Atemnot, Thoraxschmerz",
-          A:"keine", M:"—", P:"TVT vor 1 Jahr", L:"—", E:"nach langer Autofahrt", R:"Rauchen, Immobilisation" } }),
+          A:"keine", M:"—", P:"TVT vor 1 Jahr", L:"—", E:"lange Autofahrt", R:"Rauchen, Immobilisation" } }),
         patho:{ tag:["vaskulär"], severity:2, hypoxia_sensitivity:2, baseline_deterioration:1 },
         hidden:{ vitals_baseline:v, pupils:"isokor", mouth:"trocken", lung:"evtl. verminderte Atemgeräusche rechts",
           abdomen:"weich", ekg3:`Sinus ${v.Puls}/min`, ekg12:"Sinus" }
@@ -235,38 +196,107 @@ export async function handler(event) {
       };
     };
 
-    // … weitere internistische: Sepsis, Hypertensive Krise, Anaphylaxie, GI-Blutung (aus Platzgründen ausgelassen – wie zuvor aufgebaut) …
-
-    // ===== NEUROLOGISCH (Auswahl) =====
-    const neuro_genStrokeRight = () => {
-      const v = vitals(jitter(160,12),jitter(95,8),jitter(96,2),jitter(18,3),jitter(84,6),110,36.8);
+    // ===== TRAUMA =====
+    const tr_genSpineTrauma = () => {
+      const v = vitals(jitter(125,12),jitter(80,8),98,22,108,110,36.8,15);
       return {
-        diagnosis:"ischämischer Schlaganfall (rechtshemisphärisch)",
-        story:"akute Hemiparese links, Fazialisparese, Sprachstörung.",
-        key_findings:["BEFAST+","RR↑"],
-        red_flags:["Zeitfenster!"],
-        target_outcome:"FAST/BEFAST, Monitoring, Stroke-Unit.",
-        patient:{ name:"Frau N.", age:74, sex:"w" },
-        anamnesis: mkAnam({ SAMPLER:{ S:"Schwäche links, Sprachprobleme",
-          P:"Hypertonie, Vorhofflimmern", M:"Marcumar?/NOAK", L:"—", E:"plötzlich", R:"Alter, HTN, VHF" } }),
-        patho:{ tag:["neurologisch","ischämie"], severity:2, baseline_deterioration:1 },
-        hidden:{ vitals_baseline:v, pupils:"isokor", lung:"unauff.",
-          ekg3:`Vorhofflimmern ${v.Puls}/min`, ekg12:"VHF", befast:"positiv (links)", neuro:"Links-Arm/Bein schwach" }
+        diagnosis:"Wirbelsäulentrauma (BWS/LWS)",
+        story:"Sturz vom Pferd, Rückenschmerz, DMS erhalten.",
+        key_findings:["Rückenschmerz","DMS prüfen"],
+        red_flags:["neurologische Ausfälle","starke Schmerzen"],
+        target_outcome:"Immobilisation nach Standard, DMS, Monitoring.",
+        patient:{ name:"Manuela D.", age:25, sex:"w" },
+        anamnesis: mkAnam({ SAMPLER:{ S:"Rückenschmerz mit Ausstrahlung in Beine", A:"keine", M:"keine", P:"-", L:"Frühstück", E:"vom Pferd gestürzt", R:"-" },
+                             OPQRST:{ O:"vor 10 min", P:"Bewegung verstärkt", Q:"dumpf", R:"BWS/LWS", S:"4 in Ruhe / 7 bei Bewegung", T:"gleichbleibend" } }),
+        patho:{ tag:["trauma"], severity:2, baseline_deterioration:0 },
+        hidden:{ vitals_baseline:v, neuro:"DMS Beine o.B." }
       };
     };
 
-    // … weitere neurologische/traumatologische Generatoren wie zuvor (gekürzt) …
+    const tr_genRibFractures = () => {
+      const v=vitals(jitter(130,10),jitter(80,8),96,22,105,110,36.9);
+      return {
+        diagnosis:"Rippenfrakturen",
+        story:"Stumpfes Thoraxtrauma, atemabhängiger Schmerz.",
+        key_findings:["lokaler Druckschmerz","Schonatmung"],
+        red_flags:["Pneumothorax?"],
+        target_outcome:"Schmerzreduktion (Kälte), Monitoring.",
+        patient:{ name:"—", age:45, sex:"m" },
+        anamnesis: mkAnam({ OPQRST:{ O:"seit 30 min", P:"Atem/Bewegung", Q:"stechend", R:"rechts lateral", S:"6/10", T:"gleichbleibend" } }),
+        patho:{ tag:["trauma"], severity:1, baseline_deterioration:0 },
+        hidden:{ vitals_baseline:v, lung:"rechts atemabhängiger Druckschmerz" }
+      };
+    };
+
+    const tr_genPneumothorax = () => {
+      const v=vitals(jitter(120,10),jitter(75,8),92,26,110,110,36.8);
+      return {
+        diagnosis:"(Spannungs-)Pneumothorax?",
+        story:"Stumpfes Thoraxtrauma, plötzliche Dyspnoe, einseitig abgeschwächtes AG.",
+        key_findings:["einseitig leiser","Hypoxie"],
+        red_flags:["Verschlechterung → NA"],
+        target_outcome:"O2, Monitoring, NA.",
+        patho:{ tag:["trauma","obstruktiv"], severity:3, hypoxia_sensitivity:3, baseline_deterioration:2 },
+        hidden:{ vitals_baseline:v, lung:"links abgeschwächt", ekg3:`Sinus ${v.Puls}/min` }
+      };
+    };
+
+    // ===== PÄDIATRISCH =====
+    const ped_genAsthma = () => {
+      const v=vitals(110,70,92,32,118,100,37.6,15);
+      return {
+        diagnosis:"Asthma-Exazerbation (Kind)",
+        story:"8-jähriges Kind mit pfeifender Atmung, Atemnot nach Infekt.",
+        key_findings:["Giemen","verlängertes Exspirium","Einziehungen"],
+        red_flags:["Erschöpfung","Zyanose"],
+        target_outcome:"Atemerleichterung, O2 vorsichtig, Monitoring.",
+        patient:{ name:"Ben", age:8, sex:"m" },
+        anamnesis: mkAnam({ SAMPLER:{ S:"Atemnot, Giemen", A:"keine", M:"SABA Spray", P:"Asthma", L:"—", E:"Infekt", R:"—" } }),
+        patho:{ tag:["obstruktiv","pädiatrisch"], severity:2, hypoxia_sensitivity:3, baseline_deterioration:1 },
+        hidden:{ vitals_baseline:v, lung:"giemend, exspiratorisch", mouth:"—" }
+      };
+    };
+
+    const ped_genFieberkrampf = () => {
+      const v=vitals(105,65,97,24,110,110,39.4,14);
+      return {
+        diagnosis:"Fieberkrampf (Kind)",
+        story:"2-jähriges Kind, kurzer generalisierter Krampfanfall, jetzt schläfrig.",
+        key_findings:["Fieber","postiktal"],
+        red_flags:["langer Anfall","Aspiration"],
+        target_outcome:"Schutz, Seitenlage bei Bedarf, Monitoring.",
+        patient:{ name:"Mia", age:2, sex:"w" },
+        anamnesis: mkAnam({ SAMPLER:{ S:"Krampf ~1–2 min, jetzt müde", A:"—", M:"—", P:"—", L:"—", E:"seit heute Fieber", R:"—" } }),
+        patho:{ tag:["neurologisch","pädiatrisch"], severity:1, baseline_deterioration:0 },
+        hidden:{ vitals_baseline:v, mouth:"Zungenbiss?", lung:"schnarchend", befast:"—" }
+      };
+    };
+
+    const ped_genGastroDehyd = () => {
+      const v=vitals(95,60,97,26,130,90,38.2);
+      return {
+        diagnosis:"Gastroenteritis mit Dehydratation (Kind)",
+        story:"4-jähriges Kind mit Erbrechen/Durchfall, wenig getrunken.",
+        key_findings:["trockene Schleimhäute","stehende Hautfalte"],
+        red_flags:["Apathie","Schock"],
+        target_outcome:"Wärmeerhalt, Monitoring, zügiger Transport.",
+        patient:{ name:"Luca", age:4, sex:"m" },
+        anamnesis: mkAnam({ SAMPLER:{ S:"Erbrechen/Durchfall, kaum Trinkmenge", A:"—", M:"—", P:"—", L:"—", E:"seit 1–2 Tagen", R:"—" } }),
+        patho:{ tag:["pädiatrisch","dehydratation"], severity:2, baseline_deterioration:1 },
+        hidden:{ vitals_baseline:v, mouth:"trocken", abdomen:"weich" }
+      };
+    };
 
     // ----- Pools -----
     const POOLS = {
-      internistisch: [int_genACS, int_genPneumonia, int_genHF, int_genAsthmaCOPD, int_genPE, int_genHypogly, int_genDKA],
-      neurologisch:  [neuro_genStrokeRight],
-      trauma:        []
+      internistisch: [int_genACS, int_genHF, int_genPE, int_genHypogly, int_genDKA],
+      neurologisch:  [],            // (bei Bedarf ergänzen)
+      trauma:        [tr_genSpineTrauma, tr_genRibFractures, tr_genPneumothorax],
+      paediatrisch:  [ped_genAsthma, ped_genFieberkrampf, ped_genGastroDehyd]
     };
 
     const pool    = (POOLS[normalized] && POOLS[normalized].length) ? POOLS[normalized] : POOLS.internistisch;
-    const gen     = pick(pool);
-    const scen    = gen();
+    const scen    = pick(pool)();
 
     const caseData = {
       id: newId(),

@@ -45,18 +45,21 @@ export async function handler(event) {
 
     // ----- State -----
     const state   = { ...case_state };
-    state.steps_done     = Array.isArray(state.steps_done) ? state.steps_done : [];
-    state.current_vitals = state.current_vitals || {};
-    const hidden         = state.hidden || {};
-    const base           = hidden.vitals_baseline || null;
+    state.steps_done      = Array.isArray(state.steps_done) ? state.steps_done : [];
+    state.current_vitals  = state.current_vitals || {};         // NUR für UI
+    state.engine          = state.engine || { vitals: {} };     // intern
+    const hidden          = state.hidden || {};
+    const base            = hidden.vitals_baseline || null;
 
     // ----- Regex matcher -----
     const R_DIAG   = /(diagnose|arbeitsdiagnose|verdacht|was hat der patient|was hat die patientin|was ist los)/i;
 
     const R_O2     = /(o2|sauerstoff|oxygen)/i;
     const R_MESSEN = /(messen|prufen|pruefen|kontrollieren|erheben|bestimmen)/i;
-    const R_EKG3   = /(ekg.*(3|drei)|monitoring\b(?!.*12))/i;
+
     const R_EKG12  = /(12.?kanal|zwolf.?kanal|12.?ableitung|12.*ekg|ekg.*12)/i;
+    // alles „ekg“/„monitoring“, sofern nicht 12-kanalig
+    const R_EKG3   = /\b(ekg(?!.*12)|monitoring|telemetrie|3\\s*(kanal|ableitung)|5\\s*(kanal|ableitung)|6\\s*(kanal|ableitung))\b/i;
 
     const R_RR     = /\b(rr|blutdruck)\b/i;
     const R_SPO2   = /\b(spo2|sauerstoffsatt|sattigung|pulsoxi)\b/i;
@@ -106,61 +109,61 @@ export async function handler(event) {
     const num   = (x,d)=>isFinite(+x)?+x:d;
     const clamp = (v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 
-    const getCurrentVitals = () => {
+    const getIV = () => {
       const baseRR = (base?.RR || "120/80").split("/");
-      const RR = state.current_vitals.RR || `${num(baseRR[0],120)}/${num(baseRR[1],80)}`;
+      const iv = state.engine?.vitals || {};
       return {
-        RR,
-        SpO2: num(state.current_vitals.SpO2, num(base?.SpO2, 96)),
-        AF:   num(state.current_vitals.AF,   num(base?.AF,   16)),
-        Puls: num(state.current_vitals.Puls, num(base?.Puls, 80)),
-        BZ:   num(state.current_vitals.BZ,   num(base?.BZ,  110)),
-        Temp: num(state.current_vitals.Temp, num(base?.Temp, 36.8)),
-        GCS:  num(state.current_vitals.GCS,  num(base?.GCS,  15))
+        RR:   iv.RR   || `${num(baseRR[0],120)}/${num(baseRR[1],80)}`,
+        SpO2: num(iv.SpO2, num(base?.SpO2, 96)),
+        AF:   num(iv.AF,   num(base?.AF,   16)),
+        Puls: num(iv.Puls, num(base?.Puls, 80)),
+        BZ:   num(iv.BZ,   num(base?.BZ,  110)),
+        Temp: num(iv.Temp, num(base?.Temp, 36.8)),
+        GCS:  num(iv.GCS,  num(base?.GCS,  15))
       };
     };
-
-    // wichtig: „Expose“ = UI aktualisieren; „Silent“ = nur State/kein UI
-    const setVitalsExpose = (v) => {
-      reply.updated_vitals = { ...(reply.updated_vitals||{}), ...v };
-      state.current_vitals = { ...(state.current_vitals||{}), ...v };
+    const setIV = (patch) => {
+      state.engine = { ...(state.engine || {}), vitals: { ...(state.engine?.vitals || {}), ...patch } };
     };
-    const setVitalsSilent = (v) => {
-      state.current_vitals = { ...(state.current_vitals||{}), ...v };
+    const exposeMeasured = (key) => {
+      const iv = getIV();
+      const value = iv[key];
+      const patch = { [key]: value };
+      reply.updated_vitals = { ...(reply.updated_vitals || {}), ...patch };
+      state.current_vitals = { ...(state.current_vitals || {}), ...patch };
     };
 
     const naturalProgression = () => {
       const p = state.patho || {};
-      const v = getCurrentVitals();
+      const v = getIV();
       const w = num(p.baseline_deterioration, 0);
       if (w>0) {
         const AF = clamp(v.AF + (w>=2? 1:0), 6, 40);
         const SpO2 = clamp(v.SpO2 - (w>=2? 1:0), 70, 100);
         const Puls = clamp(v.Puls + (w>=2? 2:1), 40, 180);
-        // keine UI-Aktualisierung ohne Messung:
-        setVitalsSilent({ AF, SpO2, Puls });
+        setIV({ AF, SpO2, Puls });
       }
     };
 
-    // ----- Effekt-Engine -----
+    // ----- Effekte (nur intern) -----
     const EFFECTS = {
       O2: () => {
-        const v = getCurrentVitals();
+        const v = getIV();
         const tag = state.patho?.tag || [];
         let inc = v.SpO2 < 88 ? 4 : v.SpO2 < 92 ? 3 : 2;
         if (tag.includes("obstruktiv")) inc = Math.max(1, inc-1);
-        setVitalsSilent({ SpO2: clamp(v.SpO2 + inc, 90, 99), AF: clamp(v.AF - 1, 6, 40), Puls: clamp(v.Puls - 1, 40, 180) });
+        setIV({ SpO2: clamp(v.SpO2 + inc, 90, 99), AF: clamp(v.AF - 1, 6, 40), Puls: clamp(v.Puls - 1, 40, 180) });
       },
-      LAGERUNG_OKH: () => { const v=getCurrentVitals(); setVitalsSilent({ AF: clamp(v.AF-1,6,40), SpO2: clamp(v.SpO2+1,70,100) }); },
-      LAGERUNG_SITZ: () => { const v=getCurrentVitals(); setVitalsSilent({ AF: clamp(v.AF-2,6,40), SpO2: clamp(v.SpO2+1,70,100) }); },
-      LAGERUNG_SSL:  () => { const v=getCurrentVitals(); const bonus = v.GCS < 15 ? 1:0; setVitalsSilent({ SpO2: clamp(v.SpO2+bonus,70,100) }); },
-      LAGERUNG_SCHOCK: () => { const v=getCurrentVitals(); if ((state.patho?.tag||[]).includes("ACS")) { setVitalsSilent({ AF: clamp(v.AF+1,6,40), Puls: clamp(v.Puls+2,40,180) }); } else { setVitalsSilent({ Puls: clamp(v.Puls-1,40,180) }); } },
-      ABSAUGEN: () => { const v=getCurrentVitals(); setVitalsSilent({ SpO2: clamp(v.SpO2+1,70,100), AF: clamp(v.AF-1,6,40) }); },
-      WARME: () => { const v=getCurrentVitals(); setVitalsSilent({ Puls: clamp(v.Puls-1,40,180) }); },
-      KUEHLEN: () => { const v=getCurrentVitals(); setVitalsSilent({ Puls: clamp(v.Puls-1,40,180) }); }
+      LAGERUNG_OKH: () => { const v=getIV(); setIV({ AF: clamp(v.AF-1,6,40), SpO2: clamp(v.SpO2+1,70,100) }); },
+      LAGERUNG_SITZ: () => { const v=getIV(); setIV({ AF: clamp(v.AF-2,6,40), SpO2: clamp(v.SpO2+1,70,100) }); },
+      LAGERUNG_SSL:  () => { const v=getIV(); const bonus = v.GCS < 15 ? 1:0; setIV({ SpO2: clamp(v.SpO2+bonus,70,100) }); },
+      LAGERUNG_SCHOCK: () => { const v=getIV(); if ((state.patho?.tag||[]).includes("ACS")) { setIV({ AF: clamp(v.AF+1,6,40), Puls: clamp(v.Puls+2,40,180) }); } else { setIV({ Puls: clamp(v.Puls-1,40,180) }); } },
+      ABSAUGEN: () => { const v=getIV(); setIV({ SpO2: clamp(v.SpO2+1,70,100), AF: clamp(v.AF-1,6,40) }); },
+      WARME: () => { const v=getIV(); setIV({ Puls: clamp(v.Puls-1,40,180) }); },
+      KUEHLEN: () => { const v=getIV(); setIV({ Puls: clamp(v.Puls-1,40,180) }); }
     };
 
-    // ----- Anamnese-Antwort -----
+    // ----- Anamnese-Formatter -----
     const answerAnamnesis = (key,label) => {
       const a = state.anamnesis || {};
       const val = a[key];
@@ -177,11 +180,7 @@ export async function handler(event) {
     const a = state.anamnesis || {};
 
     // Diagnose
-    if (R_DIAG.test(ua)) {
-      accept("Arbeitsdiagnose benannt.");
-      const dx = state.solution?.diagnosis || "Die Daten sprechen für eine internistische Ursache.";
-      setFinding(`Arbeitsdiagnose: ${dx}`);
-    }
+    if (R_DIAG.test(ua)) { accept("Arbeitsdiagnose benannt."); setFinding(`Arbeitsdiagnose: ${state.solution?.diagnosis || "—"}`); }
     // Anamnese
     else if (R_SAMPLER.test(ua)) { accept("SAMPLER erfragt."); setFinding(answerAnamnesis("SAMPLER","SAMPLER")); hint("Ergänze OPQRST oder gezielte Risikofaktoren."); }
     else if (R_OPQRST.test(ua))  { accept("OPQRST erfragt.");  setFinding(answerAnamnesis("OPQRST","OPQRST")); }
@@ -192,16 +191,16 @@ export async function handler(event) {
     else if (R_SOZIAL.test(ua))  { accept("Sozialanamnese erfragt."); setFinding(answerAnamnesis("sozial","Sozialanamnese")); }
     else if (R_LMEAL.test(ua))   { accept("Letzte Nahrungsaufnahme erfragt."); setFinding(a?.SAMPLER?.L ? `Letzte Nahrungsaufnahme: ${a.SAMPLER.L}` : "Keine Angabe zur letzten Nahrungsaufnahme."); }
 
-    // Monitoring / Befunde (→ UI gezielt updaten)
-    else if (R_EKG12.test(ua)) { accept("12-Kanal-EKG abgeleitet."); setFinding(`12-Kanal-EKG: ${hidden.ekg12 || "Sinusrhythmus"}`); }
-    else if (R_EKG3.test(ua))  { accept("Monitoring / 3-Kanal-EKG angelegt."); setFinding(hidden.ekg3 || "Monitoring läuft."); }
-    else if (R_RR.test(ua))    { accept("RR gemessen.");   const v=getCurrentVitals(); setFinding(`RR: ${v.RR} mmHg`); setVitalsExpose({ RR: v.RR }); }
-    else if (R_SPO2.test(ua))  { accept("SpO₂ gemessen."); const v=getCurrentVitals(); setFinding(`SpO₂: ${v.SpO2} %`); setVitalsExpose({ SpO2: v.SpO2 }); }
-    else if (R_AF.test(ua))    { accept("AF gezählt.");    const v=getCurrentVitals(); setFinding(`AF: ${v.AF} /min`); setVitalsExpose({ AF: v.AF }); }
-    else if (R_PULS.test(ua))  { accept("Puls gezählt.");  const v=getCurrentVitals(); setFinding(`Puls: ${v.Puls} /min`); setVitalsExpose({ Puls: v.Puls }); }
-    else if (R_BZ.test(ua))    { accept("BZ gemessen.");   const v=getCurrentVitals(); setFinding(`BZ: ${v.BZ} mg/dL`); setVitalsExpose({ BZ: v.BZ }); }
-    else if (R_TEMP.test(ua))  { accept("Temperatur gemessen."); const v=getCurrentVitals(); setFinding(`Temp: ${v.Temp} °C`); setVitalsExpose({ Temp: v.Temp }); }
-    else if (R_GCS.test(ua))   { accept("GCS erhoben.");   const v=getCurrentVitals(); setFinding(`GCS: ${v.GCS}`); setVitalsExpose({ GCS: v.GCS }); }
+    // Monitoring / Befunde (→ UI nur Einzelwert updaten)
+    else if (R_EKG12.test(ua)) { accept("12-Kanal-EKG abgeleitet."); setFinding(`12-Kanal-EKG: ${hidden.ekg12 || "Sinus"}`); }
+    else if (R_EKG3.test(ua))  { accept("Monitoring / Nicht-12-Kanal-EKG angelegt."); setFinding(hidden.ekg3 || "Monitoring läuft."); }
+    else if (R_RR.test(ua))    { accept("RR gemessen.");   exposeMeasured("RR");   setFinding(`RR: ${getIV().RR} mmHg`); }
+    else if (R_SPO2.test(ua))  { accept("SpO₂ gemessen."); exposeMeasured("SpO2"); setFinding(`SpO₂: ${getIV().SpO2} %`); }
+    else if (R_AF.test(ua))    { accept("AF gezählt.");    exposeMeasured("AF");   setFinding(`AF: ${getIV().AF} /min`); }
+    else if (R_PULS.test(ua))  { accept("Puls gezählt.");  exposeMeasured("Puls"); setFinding(`Puls: ${getIV().Puls} /min`); }
+    else if (R_BZ.test(ua))    { accept("BZ gemessen.");   exposeMeasured("BZ");   setFinding(`BZ: ${getIV().BZ} mg/dL`); }
+    else if (R_TEMP.test(ua))  { accept("Temperatur gemessen."); exposeMeasured("Temp"); setFinding(`Temp: ${getIV().Temp} °C`); }
+    else if (R_GCS.test(ua))   { accept("GCS erhoben.");   exposeMeasured("GCS"); setFinding(`GCS: ${getIV().GCS}`); }
 
     else if (R_MUND.test(ua))  { accept("Mundraum inspiziert."); setFinding(`Mundraum: ${hidden.mouth || "unauffällig"}`); }
     else if (R_PUPIL.test(ua)) { accept("Pupillen geprüft."); setFinding(`Pupillen: ${hidden.pupils || "isokor, prompt"}`); }
@@ -212,7 +211,7 @@ export async function handler(event) {
     else if (R_BEDM.test(ua))  { accept("DMS/Perfusion geprüft."); setFinding(hidden.neuro || "DMS/Perfusion o.B."); }
     else if (R_BEFAST.test(ua) || R_NEURO.test(ua)) { accept("Neurologischer Status."); setFinding(hidden.befast || hidden.neuro || "BEFAST unauffällig."); }
 
-    // Maßnahmen (wirken auf Vitalwerte, UI erst nach Messung)
+    // Maßnahmen (nur intern wirken; UI erst nach Messung)
     else if (R_O2.test(ua) && !R_MESSEN.test(ua)) { accept("Sauerstoffgabe durchgeführt."); EFFECTS.O2(); setFinding("O₂ gegeben (titriert nach Indikation)."); hint("Reevaluation: SpO₂/AF/Puls erneut prüfen, EKG/12-Kanal erwägen."); }
     else if (R_LAG_OKH.test(ua))   { accept("Oberkörper hoch gelagert."); EFFECTS.LAGERUNG_OKH(); setFinding("Lagerung: Oberkörper hoch."); }
     else if (R_LAG_SITZ.test(ua))  { accept("Sitzlagerung durchgeführt."); EFFECTS.LAGERUNG_SITZ(); setFinding("Lagerung: sitzend/atemerleichternd."); }
@@ -231,16 +230,15 @@ export async function handler(event) {
 
     // Unklare Eingabe
     else {
-      hint("Ich habe dich nicht ganz verstanden. Versuche: 'SAMPLER', 'OPQRST', 'SpO₂ messen', 'O₂ geben', '12-Kanal-EKG', 'Oberkörper hoch', 'Transport einleiten', 'NA nachfordern', 'Übergabe' …");
+      hint("Versuche: 'SAMPLER', 'OPQRST', 'SpO₂ messen', 'O₂ geben', '12-Kanal-EKG', 'ekg' (Monitoring), 'Oberkörper hoch', 'Transport einleiten', 'NA nachfordern', 'Übergabe' …");
     }
 
     // ----- Verlauf anwenden -----
     naturalProgression();
 
-    // ----- Zielprüfung (optional Beispiel) -----
-    const v = getCurrentVitals();
-    if (v.SpO2 >= 94 && state.target_outcome) {
-      // bewusst nicht automatisch „done“, erst bei Übergabe/Transport
+    // ----- Zielprüfung (optional) -----
+    const iv = getIV();
+    if (iv.SpO2 >= 94 && state.target_outcome) {
       reply.done = reply.done || false;
     }
 
