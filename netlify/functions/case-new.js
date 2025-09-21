@@ -506,7 +506,7 @@ export async function handler(event) {
       const v = vitals(95,55,92,30,140,110,37.5,15);
       return {
         diagnosis:"Anaphylaxie (Kind, leicht–mittel)",
-        story:"Erdnusskontakt; Urtikaria, Husten, Dyspnoe.",
+        story:"2 Jahre Erdnusskontakt; Urtikaria, Husten, Dyspnoe.",
         key_findings:["Urtikaria","Atembeschwerden"],
         red_flags:["Hypotonie/Atemwegsödem"],
         target_outcome:"Lagerung, O₂, zügiger Transport (Medikation ärztl./SOP).",
@@ -520,7 +520,7 @@ export async function handler(event) {
       const v = vitals(100,60,98,22,110,45,36.3,14);
       return {
         diagnosis:"Hypoglykämie (Kleinkind, Nüchternheit)",
-        story:"Müde, blass, reizbar; wenig gegessen.",
+        story:"1 Jahr Müde, blass, reizbar; wenig gegessen.",
         key_findings:["niedriger BZ","blass","müde"],
         red_flags:["Krampfanfall möglich"],
         target_outcome:"BZ anheben (NotSan), Monitoring, Transport.",

@@ -1,17 +1,16 @@
 // ================================================================
 /* medicIQ – Step-Engine (case-step.js)
    XABCDE-Schema vollständig + Maßnahmen:
-   - X: Priorisierung massiver Blutung, Hämostyptika
+   - X: Blutstillung, Hämostyptika, Tourniquet
    - A: Esmarch, Absaugen, OPA/NPA, BVM, (NotSan) Larynxtubus
-   - B: Thorax-Inspektion/Palpation/Perkussion/Auskultation, Symmetrie,
-        (NotSan) Entlastungspunktion bei Spannungspneu
+   - B: Thorax-Inspektion/Palpation/Perkussion/Auskultation,
+        (NotSan) Entlastungspunktion
    - C: Pulsqualität, Rekap-Zeit, RR, EKG, (NotSan) i.v./i.o. + Volumen
    - D: GCS/AVPU, Pupillen, BZ, (NotSan) Glukosegabe
    - E: Entkleiden/Bodycheck, Temp, Wärmeerhalt
-   - Trauma: sichtbare Verletzungen, DMS vor/nach, Druckverband/TQ/Beckenschlinge,
-             Schienung, Halskrause/Stiffneck (NEXUS)
+   - Trauma: sichtbare Verletzungen, **DMS vor/nach** (auch ohne Fraktur),
+             Beckenschlinge, Schienung, Halskrause, NEXUS
    - Einzelwert-Messungen → updated_vitals nur für den angefragten Wert
-   - Verlaufslogik: Blutung ↑ → RR↓/Puls↑ ; Hypoxie → AF/Puls leicht ↑
 */
 // ================================================================
 export async function handler(event) {
@@ -67,7 +66,7 @@ export async function handler(event) {
 
     // Injuries / DMS store
     const injuries = Array.isArray(hidden.injuries) ? hidden.injuries : [];
-    state.engine.dms_log = state.engine.dms_log || []; // [{when:'vor/nach', text}]
+    state.engine.dms_log = state.engine.dms_log || []; // [{when:'vor/nach/jetzt', text}]
 
     // ----- Regex matcher (Stichworte) -----
     const R_DIAG   = /(diagnose|arbeitsdiagnose|verdacht|was hat der patient|was hat die patientin|was ist los)/i;
@@ -126,7 +125,7 @@ export async function handler(event) {
     const R_AUSK   = /(auskultation|abhorchen|lungengerau?sch|giemen|rassel|stridor)/i;
     const R_HAUT   = /(haut|blasse|zyanose|schweiss|schweissig|kaltschweiss)/i;
     const R_SCHMERZ= /(schmerzskala|nrs|schmerzscore)/i;
-    const R_BEFAST = /\b(befast)\b/i;
+    const R_BEFAST = /\bbefast\b/i;
     const R_NEURO  = /(neurolog|status)/i;
 
     // Trauma – Sichtbefunde & Maßnahmen
@@ -145,7 +144,12 @@ export async function handler(event) {
     const R_SPINEBOARD  = /(spineboard|schaufeltrage|sked)/i;
     const R_COLLAR      = /(halskrause|stiff.?neck|c.?collar|cervical.*stuetze|cervical.*stütze|hws.*immobil)/i;
     const R_SPLINT      = /(schiene|schienen|vakuumschiene|sam.?splint|kramer.?schiene)(.*(an|am)\s+([a-zäöüß\s]+))?/i;
-    const R_NEXUS       = /(nexus|c.?spine).*kriter|hws.*kriter|cervical.*kriter/i;
+    // **NEXUS – jetzt tolerant (mit/ohne "Kriterien"/"prüfen")**
+    const R_NEXUS       = /\b(nexus|c.?spine|hws)\b.*(pruf|prüf|check|kriter|criteria)?/i;
+
+    // **DMS – neu: mit Ort + vor/nach**
+    const R_DMS_AT      = /(dms|durchblutung.*motorik.*sensibilit[aä]t|durchblutung|motorik|sensibilit[aä]t)\s*(vor|nach)?\s*(schienung|anlage)?\s*(?:an|am|im|der|des)?\s*([a-zäöüß\s\-]+)$/i;
+    const R_DMS_SIMPLE  = /\b(dms|durchblutung.*motorik.*sensibilit[aä]t|durchblutung|motorik|sensibilit[aä]t)\b/i;
 
     // ----- Tools / vitals -----
     const num   = (x,d)=>isFinite(+x)?+x:d;
@@ -189,6 +193,42 @@ export async function handler(event) {
       return (scored[0]?.s>0) ? scored[0].it : list[0] || null;
     };
 
+    // ----- DMS helpers -----
+    const normWhere = (txt) => {
+      const t = (txt||"").toLowerCase().trim();
+      if (!t) return "";
+      if (/bein|beine|untere|fuss|fuß|fuesse|füße|sprunggelenk|osg|usg/.test(t)) return "Beine";
+      if (/arm|arme|hand|unterarm|oberarm|handgelenk|finger/.test(t)) return "Arme";
+      if (/links|li\b/.test(t)) return "links";
+      if (/rechts|re\b/.test(t)) return "rechts";
+      return t;
+    };
+    const dmsText = (d) => `Perfusion: ${d.perfusion}, Motorik: ${d.motor?"ja":"nein"}, Sensibilität: ${d.sensory?"ja":"nein"}`;
+
+    // DMS Ausgabe – auch wenn keine Frakturmodelle vorhanden sind
+    const checkDMS = (whereText) => {
+      const fxList = ofKind("fracture");
+      const pelvis = ofKind("pelvis");
+      // 1) Mit Fraktur(en): echte, fallabhängige DMS
+      if (fxList.length) {
+        const target = whereText ? findByText(whereText, "fracture") : null;
+        if (target) return `${target.location} – ${dmsText(target.dms)}`;
+        return fxList.map(f => `${f.location} – ${dmsText(f.dms)}`).join(" • ");
+      }
+      // 2) Kein Frakturmodell: generische DMS, ggf. differenziert
+      const w = normWhere(whereText||"");
+      if (w==="links" || w==="rechts") return `Bein ${w}: Perfusion gut, Motorik ja, Sensibilität ja`;
+      if (w==="beine") return "Beide Beine – Perfusion gut, Motorik ja, Sensibilität ja";
+      if (w==="arme")  return "Beide Arme – Perfusion gut, Motorik ja, Sensibilität ja";
+      if (pelvis.length) return "Beine – Perfusion gut, Motorik ja, Sensibilität ja (trotz Beckenschlinge regelmäßig kontrollieren).";
+      return "Perfusion/Motorik/Sensibilität distal o.B.";
+    };
+    const logDMS = (when, whereText) => {
+      const txt = checkDMS(whereText);
+      state.engine.dms_log.push({ when, text: txt });
+      return txt;
+    };
+
     // ----- Progression -----
     const bleedingLoad = () => {
       let load = 0;
@@ -204,7 +244,7 @@ export async function handler(event) {
       if (v.SpO2 < 92) setIV({ Puls: clamp(v.Puls + 1, 40, 190), AF: clamp(v.AF + 1, 6, 40) });
     };
 
-    // ----- Effekte & DMS -----
+    // ----- Effekte & Interventionen -----
     const EFFECTS = {
       // Airway/Breathing/Circulation basics
       O2: () => { const v=getIV(); setIV({ SpO2: clamp(v.SpO2 + (v.SpO2<90?4:2), 90, 99), AF: clamp(v.AF-1,6,40) }); },
@@ -277,21 +317,6 @@ export async function handler(event) {
 
       // D-Maßnahme
       GLUCOSE: ()=>{ const v=getIV(); if (v.BZ<70) { setIV({ BZ:100, GCS: Math.max(v.GCS, 14) }); return "Glukosegabe: BZ steigt, Vigilanz bessert sich."; } return "Glukosegabe ohne klare Indikation (BZ nicht niedrig)."; }
-    };
-
-    // ----- DMS-Tools -----
-    const dmsText = (d) => `Perfusion: ${d.perfusion}, Motorik: ${d.motor?"ja":"nein"}, Sensibilität: ${d.sensory?"ja":"nein"}`;
-    const checkDMS = (whereText) => {
-      const fxList = ofKind("fracture");
-      if (!fxList.length) return "Keine betroffenen Extremitäten – DMS distal o.B.";
-      const target = whereText ? findByText(whereText, "fracture") : null;
-      if (target) return `${target.location} – ${dmsText(target.dms)}`;
-      return fxList.map(f => `${f.location} – ${dmsText(f.dms)}`).join(" • ");
-    };
-    const logDMS = (when, whereText) => {
-      const txt = checkDMS(whereText);
-      state.engine.dms_log.push({ when, text: txt });
-      return txt;
     };
 
     // ----- Status-Helfer für XABCDE -----
@@ -433,11 +458,12 @@ export async function handler(event) {
     else if (R_HEMOSTAT.test(ua))   { const t=findByText(ua,"bleeding"); accept("Hämostyptikum angewendet."); setFinding(EFFECTS.HEMOSTAT(t)); }
     else if (R_TOURNIQUET.test(ua)) { const t=findByText(ua,"bleeding"); accept("Tourniquet angelegt.");    setFinding(EFFECTS.TOURNIQUET(t)); hint("DMS distal erneut prüfen."); }
     else if (R_BECKENSL.test(ua))   { const p=ofKind("pelvis")[0];       accept("Beckenschlinge angelegt."); setFinding(EFFECTS.BECKENSLINGE(p)); }
+
     else if (R_VACUUM.test(ua))     { accept("Vakuummatratze verwendet."); setFinding(EFFECTS.VACUUM()); for (const f of ofKind("fracture")) f.immobilized=true; hint("DMS nach Immobilisation prüfen."); }
     else if (R_SPINEBOARD.test(ua)) { accept("Spineboard/Schaufeltrage verwendet."); setFinding(EFFECTS.SPINEBOARD()); hint("DMS nach Fixierung prüfen."); }
     else if (R_SPLINT.test(ua))     { const t=findByText(ua,"fracture"); accept("Schienung durchgeführt."); setFinding(EFFECTS.SPLINT(t)); hint("DMS nach Schienung prüfen."); }
 
-    // HWS / NEXUS
+    // HWS / NEXUS (tolerant)
     else if (R_NEXUS.test(ua)) {
       accept("NEXUS-Kriterien geprüft.");
       const nx = state.hidden?.spine?.nexus || { midlineTenderness:false, neuroDeficit:false, altered:false, intox:false, distracting:false };
@@ -450,6 +476,15 @@ export async function handler(event) {
       const indicated = !!(nx.midlineTenderness || nx.neuroDeficit || nx.altered || nx.intox || nx.distracting);
       state.engine.immobilization.collar = true;
       accept("HWS immobilisiert."); setFinding(EFFECTS.COLLAR(indicated));
+    }
+
+    // ----- **DMS prüfen** (neu)
+    else if (R_DMS_AT.test(ua) || R_DMS_SIMPLE.test(ua)) {
+      const m = R_DMS_AT.exec(ua);
+      const when = /nach/.test(ua) ? "nach" : (/vor/.test(ua) ? "vor" : "jetzt");
+      const where = m ? m[4] : ""; // Ortsteil aus Regex
+      accept("DMS geprüft.");
+      setFinding(logDMS(when, where));
     }
 
     // ----- Sonstige Maßnahmen / Shortcuts -----
@@ -467,7 +502,7 @@ export async function handler(event) {
 
     // Unklare Eingabe
     else {
-      hint("Beispiele: 'XABCDE', 'A', 'B', 'C', 'D', 'E', 'Verletzungen sichtbar?', 'DMS prüfen', 'Schiene an Unterschenkel links', 'Druckverband am Unterarm rechts', 'Hämostyptika in Oberschenkel links', 'Tourniquet am Oberschenkel links', 'Becken prüfen', 'Beckenschlinge anlegen', 'NEXUS prüfen', 'Halskrause anlegen', 'Entlastungspunktion', 'i.v. Zugang', 'Volumen', 'Glukose geben', 'SpO₂ messen', 'RR messen' …");
+      hint("Beispiele: 'XABCDE', 'A', 'B', 'C', 'D', 'E', 'Verletzungen sichtbar?', 'DMS prüfen', 'DMS Beine', 'Schiene an Unterschenkel links', 'Druckverband am Unterarm rechts', 'Hämostyptika in Oberschenkel links', 'Tourniquet am Oberschenkel links', 'Becken prüfen', 'Beckenschlinge anlegen', 'NEXUS prüfen', 'Halskrause anlegen', 'Entlastungspunktion', 'i.v. Zugang', 'Volumen', 'Glukose geben', 'SpO2 messen', 'RR messen' …");
     }
 
     // ----- Verlauf anwenden -----
