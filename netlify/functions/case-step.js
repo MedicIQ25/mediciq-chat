@@ -1,12 +1,12 @@
 // netlify/functions/case-step.js
 export async function handler(event) {
-  
+  // ===== 1) CORS =====
   const ALLOWED_ORIGINS = [
     'https://www.mediciq.de',
     'https://mediciq.de',
     'https://mediciq.webflow.io'
   ];
-  const reqOrigin  = event.headers.origin || event.headers.Origin || '';
+  const reqOrigin = event.headers.origin || event.headers.Origin || '';
   const allowOrigin = ALLOWED_ORIGINS.includes(reqOrigin) ? reqOrigin : ALLOWED_ORIGINS[0];
   const headers = {
     'Access-Control-Allow-Origin': allowOrigin,
@@ -19,156 +19,288 @@ export async function handler(event) {
   }
 
   try {
-    const { case_state, user_action = '', role = 'RS' } = JSON.parse(event.body || '{}');
-    if (!case_state || !user_action) {
+    const body = JSON.parse(event.body || '{}');
+    const case_state = body.case_state || null;
+    const role       = (body.role || case_state?.role || 'RS').toString();
+    let   ua         = (body.user_action || '').toString();
+
+    if (!case_state || !ua) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'case_state oder user_action fehlt' }) };
     }
 
-    const txt = String(user_action).toLowerCase();
-    const hidden = case_state.hidden || {};
-    const updated_vitals = {};
-    let evaluation = '';
-    let finding = '';
-    let next_hint = '';
+    // ===== 2) Normalisierung der Eingabe =====
+    ua = ua
+      .normalize('NFKD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
 
-    // ==== Vitalwerte messen ====
-    const give = (k, val) => { if (val != null) updated_vitals[k] = val; };
-
-    if (/\b(rr|blutdruck)\b.*(messen|prüfen)|\brr\b/.test(txt)) {
-      give('RR', hidden.vitals_baseline?.RR || '—');
-      evaluation = 'Blutdruck gemessen.';
-      finding    = `RR: ${updated_vitals.RR}`;
-      next_hint  = 'Weiter: SpO₂, AF, Puls, BZ, Temp, GCS erheben.';
-    }
-    else if (/sp[oö]2|sättigung|sauerstoffsättigung/.test(txt)) {
-      give('SpO2', hidden.vitals_baseline?.SpO2 ?? '—');
-      evaluation = 'SpO₂ gemessen.';
-      finding    = `SpO₂: ${updated_vitals.SpO2}%`;
-      next_hint  = 'AF und Puls zählen, BZ messen, Temp prüfen.';
-    }
-    else if (/\b(af|atemfrequenz)\b.*(messen|zählen)|\baf\b/.test(txt)) {
-      give('AF', hidden.vitals_baseline?.AF ?? '—');
-      evaluation = 'Atemfrequenz erhoben.';
-      finding    = `AF: ${updated_vitals.AF}/min`;
-      next_hint  = 'Puls zählen, BZ messen, Temp prüfen.';
-    }
-    else if (/\b(puls)\b.*(messen|zählen)|\bpuls\b/.test(txt)) {
-      give('Puls', hidden.vitals_baseline?.Puls ?? '—');
-      evaluation = 'Puls erhoben.';
-      finding    = `Puls: ${updated_vitals.Puls}/min`;
-      next_hint  = 'BZ messen, Temp prüfen.';
-    }
-    else if (/\b(bz|blutzucker)\b.*(messen)|\bbz\b/.test(txt)) {
-      give('BZ', hidden.vitals_baseline?.BZ ?? '—');
-      evaluation = 'Blutzucker gemessen.';
-      finding    = `BZ: ${updated_vitals.BZ} mg/dl`;
-      next_hint  = 'Temperatur und GCS prüfen.';
-    }
-    else if (/\b(temp|temperatur)\b.*(messen)|\btemp\b/.test(txt)) {
-      give('Temp', hidden.vitals_baseline?.Temp ?? '—');
-      evaluation = 'Körpertemperatur erhoben.';
-      finding    = `Temp: ${updated_vitals.Temp} °C`;
-      next_hint  = 'GCS prüfen.';
-    }
-    else if (/\b(gcs|bewusstsein|avpu)\b.*(messen|prüfen)|\bgcs\b/.test(txt)) {
-      give('GCS', hidden.vitals_baseline?.GCS ?? '—');
-      evaluation = 'GCS/Bewusstsein erhoben.';
-      finding    = `GCS: ${updated_vitals.GCS}`;
-      next_hint  = 'EKG ableiten oder weiterführende Diagnostik.';
-    }
-
-    // ==== Spezifische Befunde ====
-    else if (/mundraum|mundraum inspizieren|mundraum anschauen|atemweg/.test(txt)) {
-      evaluation = 'Befund erhoben.';
-      finding    = hidden.mouth || 'Mundraum unauffällig, keine Aspiration, Schleimhäute rosig.';
-      next_hint  = 'Weiter mit Pupillen, Auskultation, EKG, ggf. BZ/BEFAST.';
-    }
-    else if (/pupillen? (prüfen|checken|kontrollieren)|\bpupillen\b/.test(txt)) {
-      evaluation = 'Befund erhoben.';
-      finding    = hidden.pupils || 'Pupillen isokor, prompt lichtreagibel.';
-      next_hint  = 'Auskultation und EKG sinnvoll.';
-    }
-    else if (/(auskultation|thorax auskultieren|lungen auskultieren|auskultieren)/.test(txt)) {
-      evaluation = 'Thorax auskultiert.';
-      finding    = hidden.lung || 'Seitengleiches Atemgeräusch, keine RGs, ggf. leichte Tachypnoe.';
-      next_hint  = 'Perkussion/Inspektion und EKG prüfen.';
-    }
-    else if (/thorax(-|\s)?perkussion|perkussion (thorax|brustkorb)/.test(txt)) {
-      evaluation = 'Thorax perkutiert.';
-      finding    = 'Sonorer Klopfschall beidseits, keine Dämpfung/Hypersonorität.';
-      next_hint  = 'In Kombination mit Auskultationsbefund bewerten.';
-    }
-    else if (/abdomen (inspizieren|palpieren|perkutieren)|bauch (anschauen|abtasten)/.test(txt)) {
-      evaluation = 'Abdomen untersucht.';
-      finding    = hidden.abdomen || 'Weiches Abdomen, keine Abwehrspannung/';
-      next_hint  = 'Bei Schmerz/Übelkeit weiter differenzieren.';
-    }
-    else if (/haut( prüf(en)?| ansehen| checken)|blässe|zyanose|schweiß/.test(txt)) {
-      evaluation = 'Hautbefund erhoben.';
-      finding    = 'Haut warm/rosig; Kapilläre Füllung < 2 s; ggf. Kaltschweißigkeit abhängig von Fall.';
-      next_hint  = 'Perfusion/DMS (Extremitäten) prüfen.';
-    }
-    else if (/(ödeme|perfusion|dms) (prüfen|checken)|dms\b/.test(txt)) {
-      evaluation = 'Perfusion/DMS geprüft.';
-      finding    = 'Periphere Perfusion intakt, DMS unauffällig, keine Ödeme.';
-      next_hint  = 'EKG/NIT/Transport nach Algorithmus.';
-    }
-
-    // ==== EKG ====
-    else if (/\b(ekg|3-kanal|3 kanal)\b/.test(txt)) {
-      evaluation = '3-Kanal-EKG abgeleitet.';
-      finding    = hidden.ekg3 || 'Sinusrhythmus, Frequenz ~90/min, keine eindeutigen ST-Hebungen.';
-      next_hint  = 'Bei ACS-Verdacht → 12-Kanal-EKG.';
-    }
-    else if (/\b(12-kanal|zwölf kanal|12 kanal)\b/.test(txt)) {
-      evaluation = '12-Kanal-EKG abgeleitet.';
-      finding    = hidden.ekg12 || 'Sinusrhythmus, keine ST-Streckenhebung.';
-      if (hidden.ekg12?.toLowerCase().includes('st-heb')) {
-        next_hint = 'ACS/STEMI wahrscheinlich – ACS-Versorgung/Transport zügig einleiten.';
-      } else {
-        next_hint = 'Ischämiezeichen beachten, Reevaluation/Monitoring fortsetzen.';
-      }
-    }
-
-    // ==== Neurologisch ====
-    else if (/\bbefast\b|neurolog(isch|ie) (checken|prüfen|status)/.test(txt)) {
-      evaluation = 'Neurologischer Status/BEFAST erhoben.';
-      if (hidden.befast) {
-        finding = Object.entries(hidden.befast).map(([k,v]) => `${k}: ${v}`).join(' • ');
-      } else if (hidden.neuro) {
-        finding = hidden.neuro;
-      } else {
-        finding = 'Neurologisch unauffällig.';
-      }
-      next_hint = 'Bei Schlaganfallverdacht: Stroke-Unit, Zeitfenster beachten, BZ ausschließen.';
-    }
-
-    // ==== Fallback ====
-    else {
-      evaluation = 'Aktion nicht eindeutig zuordenbar.';
-      finding    = 'Nutze klare, kurze Aktions-/Befund-Statements (z. B. „Mundraum schauen“, „Pupillen prüfen“, „EKG schreiben“, „RR messen“).';
-      next_hint  = 'Vorschlag: Vitalzeichen komplettieren, Auskultation/Perkussion, EKG, ggf. BEFAST.';
-    }
-
-    // Case-State zurückgeben (optional anreichern)
-    const new_state = { ...case_state };
-    if (Object.keys(updated_vitals).length) {
-      new_state.current_vitals = { ...(case_state.current_vitals || {}), ...updated_vitals };
-    }
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        accepted      : true,
-        evaluation,
-        finding,        // <— wird im Frontend als „Befund:“ angezeigt
-        next_hint,
-        updated_vitals,
-        case_state    : new_state
-      })
+    // ===== 3) Antwort-Skelett =====
+    const reply = {
+      accepted: false,
+      outside_scope: false,
+      unsafe: false,
+      score_delta: 0,
+      evaluation: '',
+      found: '',
+      next_hint: '',
+      updated_vitals: null,
+      done: false,
+      case_state: null
     };
+    const accept = (t) => { reply.accepted = true; if (t) reply.evaluation = t; if (reply.score_delta < 1) reply.score_delta = 1; };
+    const reject = (t) => { reply.accepted = false; if (t) reply.evaluation = t; };
+    const found  = (t) => { if (t) reply.found = t; };
+    const hint   = (t) => { if (t) reply.next_hint = t; };
+    const vitals = (v) => { reply.updated_vitals = { ...(reply.updated_vitals || {}), ...v }; };
 
+    // ===== 4) State / Hidden =====
+    const state  = { ...case_state };
+    state.steps_done     = Array.isArray(state.steps_done) ? state.steps_done : [];
+    state.current_vitals = state.current_vitals || {};
+    const hidden = state.hidden || {};
+    const base   = hidden.vitals_baseline || null;
+
+    // ===== 5) Matcher =====
+    const has = (...w) => w.some(x => new RegExp(x, 'i').test(ua));
+
+    // Maßnahmen
+    const R_O2      = /(o2|sauerstoff|oxygen)/i;
+    const R_MESSEN  = /(messen|prufen|pruefen|kontrollieren|erheben|bestimmen)/i;
+    const R_EKG3    = /(ekg.*(3|drei)|monitoring\b(?!.*12))/i;
+    const R_EKG12   = /(12.?kanal|zwolf.?kanal|12.?ableitung|12.*ekg|ekg.*12)/i;
+    const R_RR      = /\b(rr|blutdruck)\b/i;
+    const R_SPO2    = /\b(spo2|sauerstoffsatt|sattigung|pulsoxi)\b/i;
+    const R_AF      = /\b(af|atemfrequenz)\b/i;
+    const R_PULS    = /\b(puls|herzfrequenz|hf)\b/i;
+    const R_BZ      = /\b(bz|blutzucker|glukose|glucose)\b/i;
+    const R_TEMP    = /\b(temp|temperatur|fieber)\b/i;
+    const R_GCS     = /\b(gcs|glasgow)\b/i;
+    const R_MUND    = /(mundraum|mund|rachen|oropharynx|zunge|aspiration)/i;
+    const R_PUPIL   = /(pupille|pupillen)/i;
+    const R_AUSK    = /(auskultation|abhorchen|lungengerau?sch|giemen|rassel|stridor)/i;
+    const R_PERK    = /(perkussion|beklopfen|hypersonor|gedampft)/i;
+    const R_HAUT    = /(haut|blasse|zyanose|schweiss|schweissig|kaltschweiss)/i;
+    const R_SCHMERZ = /(schmerzskala|nrs|schmerzensskala)/i;
+    const R_BEDM    = /(dms|durchblutung.*motorik.*sensibilitat|perfusionscheck|kapill|rekap)/i;
+    const R_BEFAST  = /\bbefast\b/i;
+    const R_NEURO   = /(neurolog|status)/i;
+    const R_ANAM    = /(anamnese|vorerkrank|medikation|allergien|antikoagul|blutverdunner)/i;
+
+    // Informations-Abfragen
+    const R_DIAG    = /(diagnose|verdachtsdiagnose|arbeitsdiagnose|was hat der patient|was ist die diagnose|was ist es\b|was fehlt)/i;
+    const R_SUMMARY = /(zusammenfassung|fazit|kurzfassung|summary)/i;
+    const R_FLAGS   = /(red ?flags?|warnzeichen)/i;
+    const R_FINDS   = /(wichtige befunde|key findings|schlusselbefunde)/i;
+    const R_GOAL    = /\b(ziel|weiteres vorgehen|plan|strategie)\b/i;
+
+    // ===== 6) Informations-Abfragen zuerst =====
+    if (R_DIAG.test(ua)) {
+      const diag  = state.solution?.diagnosis || 'Diagnose noch nicht eindeutig.';
+      const why   = Array.isArray(state.solution?.justification) ? state.solution.justification.join(' • ') : (state.solution?.justification || state.key_findings?.join(' • ') || '');
+      accept('Informationsabfrage erkannt.');
+      found(`Diagnose/Verdacht: ${diag}${why ? ` — Begründung: ${why}.` : ''}`);
+      hint(state.target_outcome || 'Monitoring fortführen, weitere Befunde erheben.');
+    }
+
+    else if (R_SUMMARY.test(ua)) {
+      accept('Zusammenfassung des aktuellen Falls.');
+      const id = state.id || '–';
+      const story = state.story || '—';
+      const flags = Array.isArray(state.red_flags) ? state.red_flags.join(' • ') : (state.red_flags || '—');
+      const finds = Array.isArray(state.key_findings) ? state.key_findings.join(' • ') : (state.key_findings || '—');
+      const diag  = state.solution?.diagnosis || '—';
+      found(`FALL-ID: ${id}\nStory: ${story}\nRed Flags: ${flags}\nWichtige Befunde: ${finds}\nDiagnose/Verdacht: ${diag}`);
+      hint(state.target_outcome || '');
+    }
+
+    else if (R_FLAGS.test(ua)) {
+      accept('Informationsabfrage: Red Flags.');
+      const flags = Array.isArray(state.red_flags) ? state.red_flags.join(' • ') : (state.red_flags || 'Keine Red Flags hinterlegt.');
+      found(`Red Flags: ${flags}`);
+      hint('Passe Prioritäten und Transportziel entsprechend an.');
+    }
+
+    else if (R_FINDS.test(ua)) {
+      accept('Informationsabfrage: Wichtige Befunde.');
+      const finds = Array.isArray(state.key_findings) ? state.key_findings.join(' • ') : (state.key_findings || 'Keine Schlüsselbefunde hinterlegt.');
+      found(`Wichtige Befunde: ${finds}`);
+      hint('Ergänze Befunde mit gezielter Diagnostik (EKG, BZ, Auskultation …).');
+    }
+
+    else if (R_GOAL.test(ua)) {
+      accept('Informationsabfrage: Ziel/Vorgehen.');
+      found(state.target_outcome || 'Ziel/Vorgehen ist im Fall nicht explizit hinterlegt.');
+      hint('Weiter mit Monitoring, Reevaluation und Übergabe/Transportplanung.');
+    }
+
+    // ===== 7) Maßnahmen-Erkennung =====
+
+    // O2-Gabe
+    else if (R_O2.test(ua) && !R_MESSEN.test(ua)) {
+      accept('Sauerstoffgabe in dieser Situation sinnvoll.');
+      if (state.current_vitals.SpO2 == null && base?.SpO2 && base.SpO2 < 92) {
+        vitals({ SpO2: Math.min(95, base.SpO2 + 2) });
+      }
+      hint('Monitoring fortführen, EKG erwägen, weitere Diagnostik (BZ, Pupillen, Auskultation).');
+    }
+
+    // EKG
+    else if (R_EKG12.test(ua)) {
+      accept('12-Kanal-EKG abgeleitet.');
+      found(hidden.ekg12 ? `EKG-Befund: ${hidden.ekg12}.` : 'EKG-Befund: Sinus, keine akuten Hebungen.');
+      hint('Befund bewerten, Transport/NA, Verlaufskontrolle planen.');
+    } else if (R_EKG3.test(ua)) {
+      accept('Monitoring/3-Kanal-EKG angelegt.');
+      found(hidden.ekg3 ? `Monitoring: ${hidden.ekg3}.` : 'Monitoring: Sinusrhythmus.');
+      hint('Bei Thoraxschmerz 12-Kanal-EKG ergänzen.');
+    }
+
+    // Mundraum
+    else if (R_MUND.test(ua)) {
+      accept('Mundraum inspiziert.');
+      found(hidden.mouth || 'Keine Fremdkörper, Schleimhäute rosig, keine Aspiration erkennbar.');
+      hint('Bei Atemproblemen: Auskultation, SpO₂, ggf. O₂, ggf. Absaugen (SOP).');
+    }
+
+    // Pupillen
+    else if (R_PUPIL.test(ua)) {
+      accept('Pupillen geprüft.');
+      found(hidden.pupils || 'Pupillen isokor, prompt lichtreagibel.');
+      hint('Bei Bewusstseinsstörung: GCS, BZ, EKG, ggf. BEFAST.');
+    }
+
+    // Auskultation
+    else if (R_AUSK.test(ua)) {
+      accept('Lunge auskultiert.');
+      found(hidden.lung || 'Seitengleiches Atemgeräusch, keine groben Nebengeräusche.');
+      hint('Perkussion/Inspektion ergänzen, SpO₂/AF dokumentieren.');
+    }
+
+    // Perkussion
+    else if (R_PERK.test(ua)) {
+      accept('Thorax perkutiert.');
+      found('Perkussionsbefund unauffällig (kein deutlicher Klopfschalldifferenz).');
+      hint('Auskultation/Inspektion fortführen, Monitoring komplettieren.');
+    }
+
+    // Hautbefund
+    else if (R_HAUT.test(ua)) {
+      accept('Hautbefund erhoben.');
+      found('Haut warm, rosig; keine Zyanose, ggf. leicht kaltschweißig je nach Belastung.');
+      hint('Vitalparameter komplettieren, Kapilläre Füllung prüfen.');
+    }
+
+    // DMS / Perfusion
+    else if (R_BEDM.test(ua)) {
+      accept('Durchblutung, Motorik, Sensibilität (DMS) geprüft.');
+      found('DMS unauffällig, Kapilläre Füllung < 2 s.');
+      hint('Bei Trauma: Pulse, Sensibilität/Motorik dokumentieren, Schienung/Lagerung nach Bedarf.');
+    }
+
+    // Schmerzskala
+    else if (R_SCHMERZ.test(ua)) {
+      accept('Schmerzskala erhoben.');
+      found('NRS 6/10, drückend retrosternal (Beispiel; je nach Fall variabel).');
+      hint('Analgesie nach SOP erwägen, Monitoring weiterführen.');
+    }
+
+    // BEFAST
+    else if (R_BEFAST.test(ua)) {
+      accept('BEFAST durchgeführt.');
+      if (hidden.befast) {
+        const b = hidden.befast;
+        found(`BEFAST: Balance=${b.Balance}, Eyes=${b.Eyes}, Face=${b.Face}, Arms=${b.Arms}, Speech=${b.Speech}, Time=${b.Time}.`);
+      } else {
+        found('BEFAST unauffällig oder nicht eindeutig pathologisch.');
+      }
+      hint('Zeitfenster beachten, Stroke-Unit / Transport organisieren.');
+    }
+
+    // Neurologischer Status
+    else if (R_NEURO.test(ua)) {
+      accept('Neurologischer Status erhoben.');
+      found(hidden.neuro || 'Keine groben fokal-neurologischen Defizite; Bewusstsein klar.');
+      hint('Bei Auffälligkeit: Stroke-Protokoll, BZ, EKG, Transport priorisieren.');
+    }
+
+    // Anamnese / Vorerkrankungen / Medikation
+    else if (R_ANAM.test(ua)) {
+      accept('Anamnese/Vorerkrankungen erfragt.');
+      if (hidden.anamnesis) {
+        found(hidden.anamnesis);
+      } else {
+        const dx = (state.solution?.diagnosis || '').toLowerCase();
+        if (dx.includes('koronar') || dx.includes('acs') || dx.includes('stemi') || dx.includes('nstemi')) {
+          found('Vorerkrankungen: Hypertonie, Diabetes; Medikation: Ramipril, Metformin; Allergien: keine; Kein Antikoagulans.');
+        } else if (dx.includes('schlaganfall') || dx.includes('stroke')) {
+          found('Vorerkrankungen: Hypertonie; Medikation: Amlodipin; Allergien: keine; Beginn laut Angehörigen vor ~30–60 min.');
+        } else {
+          found('Vorerkrankungen/Medikation nach Patient/Angehörigen; Allergien verneint; Risikofaktoren möglich.');
+        }
+      }
+      hint('Ergänze Allergien, Dauermedikation, Antikoagulation, frühere Ereignisse, Noxen.');
+    }
+
+    // Vitalparameter messen
+    else if (R_RR.test(ua) && R_MESSEN.test(ua)) {
+      accept('Blutdruck gemessen.');
+      const RR = base?.RR || '120/80';
+      found(`Befund: RR ${RR}`);
+      vitals({ RR });
+      hint('Vitalparameter komplettieren (SpO₂, AF, Puls, BZ, Temp, GCS).');
+    } else if (R_SPO2.test(ua) && R_MESSEN.test(ua)) {
+      accept('SpO₂ gemessen.');
+      const SpO2 = base?.SpO2 ?? 97;
+      found(`Befund: SpO₂ ${SpO2}%`);
+      vitals({ SpO2 });
+      hint('Bei Hypoxie O₂-Gabe erwägen, Monitoring fortführen.');
+    } else if (R_AF.test(ua) && R_MESSEN.test(ua)) {
+      accept('Atemfrequenz gezählt.');
+      const AF = base?.AF ?? 16;
+      found(`Befund: AF ${AF}/min`);
+      vitals({ AF });
+      hint('Auskultation/Perkussion ergänzen, Verlauf dokumentieren.');
+    } else if (R_PULS.test(ua) && R_MESSEN.test(ua)) {
+      accept('Puls/Herzfrequenz erhoben.');
+      const Puls = base?.Puls ?? 80;
+      found(`Befund: Puls ${Puls}/min`);
+      vitals({ Puls });
+      hint('EKG/Monitoring ergänzen, Rhythmus kontrollieren.');
+    } else if (R_BZ.test(ua) && R_MESSEN.test(ua)) {
+      accept('Blutzucker gemessen.');
+      const BZ = base?.BZ ?? 110;
+      found(`Befund: BZ ${BZ} mg/dl`);
+      vitals({ BZ });
+      hint('Bei Entgleisung Maßnahmen nach SOP, Monitoring fortführen.');
+    } else if (R_TEMP.test(ua) && R_MESSEN.test(ua)) {
+      accept('Temperatur gemessen.');
+      const Temp = base?.Temp ?? 36.8;
+      found(`Befund: Temp ${Temp}°C`);
+      vitals({ Temp });
+      hint('Weiterer klinischer Kontext berücksichtigen (Infekt/Sepsis?).');
+    } else if (R_GCS.test(ua) && R_MESSEN.test(ua)) {
+      accept('GCS erhoben.');
+      const GCS = base?.GCS ?? 15;
+      found(`Befund: GCS ${GCS}`);
+      vitals({ GCS });
+      hint('Bei Reduktion: Ursachen klären (BZ, Kopf, Intox, Hypoxie).');
+    }
+
+    // Fallback
+    else {
+      reject('Aktion/Frage nicht eindeutig zuordenbar.');
+      found('Nutze klare, kurze Statements (z. B. „Mundraum schauen“, „Pupillen prüfen“, „EKG schreiben“, „RR messen“, „Diagnose?“).');
+      hint('Vitalzeichen komplettieren, Auskultation/Perkussion, EKG, ggf. BEFAST.');
+    }
+
+    // ===== 8) State aktualisieren =====
+    if (reply.accepted) state.steps_done.push(ua);
+    if (reply.updated_vitals) state.current_vitals = { ...(state.current_vitals || {}), ...reply.updated_vitals };
+    reply.case_state = state;
+
+    return { statusCode: 200, headers, body: JSON.stringify(reply) };
   } catch (e) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
   }
