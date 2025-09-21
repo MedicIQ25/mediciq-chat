@@ -57,3 +57,14 @@ send.addEventListener('click', handleSend);
 msg.addEventListener('keydown', (e) => {
   if(e.key === 'Enter') handleSend();
 });
+function renderVitals(v) {
+  const show = (x) => (x === null || x === undefined ? '–' : x);
+
+  document.querySelector('#vRR')  .textContent = show(v.RR);
+  document.querySelector('#vSpO2').textContent = show(v.SpO2);
+  document.querySelector('#vAF')  .textContent = show(v.AF);
+  document.querySelector('#vPuls').textContent = show(v.Puls);
+  document.querySelector('#vBZ')  .textContent = show(v.BZ);
+  document.querySelector('#vTemp').textContent = show(v.Temp);
+  document.querySelector('#vGCS') .textContent = show(v.GCS);
+}
