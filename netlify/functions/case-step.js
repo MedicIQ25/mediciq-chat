@@ -19,232 +19,337 @@ export async function handler(event) {
   }
 
   try {
+    // ===== 2) Eingabe =====
     const { case_state, user_action, role = 'RS' } = JSON.parse(event.body || '{}');
     if (!case_state || !user_action) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'case_state oder user_action fehlt' }) };
     }
 
-    // ===== 2) Helper =====
-    const text = String(user_action || '').trim().toLowerCase();
-    const includesAny = (arr) => arr.some(k => text.includes(k));
+    // ===== 3) Helpers =====
+    const ua = (user_action || '').toLowerCase().trim();
+    const includesAny = (needles) => needles.some(w => ua.includes(w));
+    const includesAll = (needles) => needles.every(w => ua.includes(w));
 
-    const hidden = case_state.hidden || {};
-    const base = hidden.vitals_baseline || {};
     const keepVitals = (v) => ({
-      RR: v?.RR ?? null,
+      RR:   v?.RR   ?? null,
       SpO2: v?.SpO2 ?? null,
-      AF: v?.AF ?? null,
+      AF:   v?.AF   ?? null,
       Puls: v?.Puls ?? null,
-      BZ: v?.BZ ?? null,
+      BZ:   v?.BZ   ?? null,
       Temp: v?.Temp ?? null,
-      GCS: v?.GCS ?? null,
+      GCS:  v?.GCS  ?? null
     });
 
-    let result = {
+    const base = case_state?.hidden?.vitals_baseline || {};
+    const current = keepVitals(case_state?.current_vitals || {});
+    const mergeVitals = (patch) => keepVitals({ ...current, ...patch });
+
+    const result = {
       accepted: false,
       outside_scope: false,
       unsafe: false,
       score_delta: 0,
-      rationale: "",
-      next_hint: "",
+      rationale: '',
+      next_hint: '',
+      observation: '',
       updated_vitals: null,
-      observation: null,   // <- kurzer Befundtext
-      done: false,
-      solution: null       // <- wird nur bei "Lösung" / Diagnoseabfrage gefüllt
+      done: false
     };
 
-    // ===== 3) Sicherheits-/Scope-Check minimal (nur RS/NotSan) =====
-    const isRS = (role || case_state?.scope?.role || 'RS') === 'RS';
-
-    // ===== 4) Heuristiken für typische Schritte =====
-
-    // --- Messungen: RR ---
-    if (includesAny(['rr', 'blutdruck'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "Blutdruck gemessen.";
-      result.observation = `RR: ${base.RR || '—'}`;
-      result.updated_vitals = keepVitals({ ...base });
-      result.next_hint = "Weitere Vitalparameter erheben (Puls, SpO₂, AF, BZ).";
+    // ===== 4) Heuristiken =====
+    // --- RR ---
+    if (includesAny(['rr', 'blutdruck', 'druck messen', 'blutdruck messen'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Blutdruck gemessen.';
+      const v = base.RR ?? current.RR ?? '—';
+      result.observation = `RR: ${v}`;
+      result.updated_vitals = mergeVitals({ RR: base.RR ?? current.RR ?? null });
+      result.next_hint = 'Weitere Vitalparameter erheben (Puls, SpO₂, AF, BZ).';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- SpO2 ---
-    else if (includesAny(['spo2', 'sättigung', 'sauerstoffsättigung'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "SpO₂ gemessen.";
-      result.observation = `SpO₂: ${base.SpO2 ?? '—'} %`;
-      result.updated_vitals = keepVitals({ ...base });
-      if (base.SpO2 && base.SpO2 < 90) {
-        result.next_hint = "O₂-Gabe ist indiziert. Monitoring fortführen.";
-      } else {
-        result.next_hint = "Monitoring fortführen.";
-      }
-    }
-
-    // --- AF ---
-    else if (includesAny(['af ', 'atemfrequenz', 'respiration'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "Atemfrequenz gezählt.";
-      result.observation = `AF: ${base.AF ?? '—'} /min`;
-      result.updated_vitals = keepVitals({ ...base });
-      result.next_hint = "Weiter Puls und EKG erheben.";
+    // --- SpO₂ ---
+    if (includesAny(['spo2', 'sättigung', 'sauerstoffsättigung', 'pulsoxy'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'SpO₂ gemessen.';
+      const v = base.SpO2 ?? current.SpO2 ?? '—';
+      result.observation = `SpO₂: ${v}%`;
+      result.updated_vitals = mergeVitals({ SpO2: base.SpO2 ?? current.SpO2 ?? null });
+      result.next_hint = 'Bei Hypoxie O₂-Gabe erwägen, Monitoring fortführen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
     // --- Puls ---
-    else if (includesAny(['puls', 'herzfrequenz'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "Puls gezählt.";
-      result.observation = `Puls: ${base.Puls ?? '—'} /min`;
-      result.updated_vitals = keepVitals({ ...base });
-      result.next_hint = "EKG ableiten (3- oder 12-Kanal) und Monitoring fortführen.";
+    if (includesAny(['puls', 'herzfrequenz'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Puls gemessen.';
+      const v = base.Puls ?? current.Puls ?? '—';
+      result.observation = `Puls: ${v}/min`;
+      result.updated_vitals = mergeVitals({ Puls: base.Puls ?? current.Puls ?? null });
+      result.next_hint = 'Rhythmusbeurteilung am EKG erwägen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+
+    // --- AF ---
+    if (includesAny(['af', 'atemfrequenz', 'respiration'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Atemfrequenz gemessen.';
+      const v = base.AF ?? current.AF ?? '—';
+      result.observation = `AF: ${v}/min`;
+      result.updated_vitals = mergeVitals({ AF: base.AF ?? current.AF ?? null });
+      result.next_hint = 'Atemarbeit/Spannung beurteilen; Monitoring fortführen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
     // --- BZ ---
-    else if (includesAny(['bz', 'blutzucker'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "BZ gemessen (v. a. bei neurologischen Symptomen wichtig).";
-      result.observation = `BZ: ${base.BZ ?? '—'} mg/dl`;
-      result.updated_vitals = keepVitals({ ...base });
-      result.next_hint = "Neurologische Untersuchung/BEFAST ergänzen.";
+    if (includesAny(['bz', 'blutzucker', 'zucker'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'BZ gemessen.';
+      const v = base.BZ ?? current.BZ ?? '—';
+      result.observation = `BZ: ${v} mg/dl`;
+      result.updated_vitals = mergeVitals({ BZ: base.BZ ?? current.BZ ?? null });
+      result.next_hint = 'Bei Hypo-/Hyperglykämie je nach SOP handeln.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
     // --- Temp ---
-    else if (includesAny(['temp', 'temperatur', 'fieber'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "Temperatur gemessen.";
-      result.observation = `Temp: ${base.Temp ?? '—'} °C`;
-      result.updated_vitals = keepVitals({ ...base });
-      result.next_hint = "Monitoring, weitere Diagnostik.";
+    if (includesAny(['temp', 'temperatur', 'fieber'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Temperatur gemessen.';
+      const v = base.Temp ?? current.Temp ?? '—';
+      result.observation = `Temp: ${v} °C`;
+      result.updated_vitals = mergeVitals({ Temp: base.Temp ?? current.Temp ?? null });
+      result.next_hint = 'Anamnese/Inspektion ergänzen; Monitoring fortführen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
     // --- GCS ---
-    else if (includesAny(['gcs', 'bewusstsein'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "GCS/Bewusstseinslage erhoben.";
-      result.observation = `GCS: ${base.GCS ?? '—'}`;
-      result.updated_vitals = keepVitals({ ...base });
-      result.next_hint = "ABCDE fortführen, Pupillenreaktion prüfen.";
+    if (includesAny(['gcs', 'glasgow'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'GCS erhoben.';
+      const v = base.GCS ?? current.GCS ?? '—';
+      result.observation = `GCS: ${v}`;
+      result.updated_vitals = mergeVitals({ GCS: base.GCS ?? current.GCS ?? null });
+      result.next_hint = 'Neurologische Tests (Pupillen, FAST/BEFAST) ergänzen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Pupillen ---
-    else if (includesAny(['pupille', 'pupillen'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "Pupillen geprüft.";
-      result.observation = hidden.pupils || "isokor, prompt lichtreagibel";
-      result.next_hint = "Neurologischen Status/BEFAST prüfen.";
+    // --- EKG ---
+    if (includesAny(['ekg', '12 kanal', 'zwölf kanal'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'EKG abgeleitet.';
+      result.observation = 'EKG: Sinusrhythmus ~90/min, keine ST-Hebungen (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Bei ACS-Verdacht serielles EKG, Monitoring & Reevaluation.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
     // --- Mundraum ---
-    else if (includesAny(['mund', 'mundraum', 'zunge'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "Mundraum inspiziert.";
-      result.observation = hidden.mouth || "unauffällig, keine Aspiration.";
-      result.next_hint = "Weiter ABCDE/Monitoring.";
+    if (includesAny(['mundraum', 'mund ansehen', 'mund inspizieren', 'zunge'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Mundraum inspiziert.';
+      result.observation = 'Befund: Mundraum frei, keine Aspiration/Blutung sichtbar (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Atemwege/Atmung weiter beurteilen (AF, SpO₂), Pupillen prüfen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Auskultation Lunge ---
-    else if (includesAny(['auskultation', 'lunge'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "Lunge auskultiert.";
-      result.observation = hidden.lung || "seitengleiches Atemgeräusch, keine RGs.";
-      result.next_hint = "AF/SpO₂ im Blick, ggf. O₂ bei Hypoxie.";
+    // --- Pupillen ---
+    if (includesAny(['pupille', 'pupillen', 'lichtreflex', 'isokor'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Pupillen geprüft.';
+      result.observation = 'Pupillen isokor, prompt lichtreagibel (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Neurologischen Status komplettieren (GCS, FAST/BEFAST).';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Abdomen ---
-    else if (includesAny(['abdomen', 'bauch'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "Abdomen palpiert.";
-      result.observation = hidden.abdomen || "weich, keine Abwehrspannung.";
-      result.next_hint = "ABCDE fortsetzen.";
+    // --- FAST / BEFAST ---
+    if (includesAny(['fast', 'befast'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = ua.includes('befast') ? 'BEFAST durchgeführt.' : 'FAST durchgeführt.';
+      result.observation = 'Neurologische Auffälligkeiten: z. B. Fazialisparese, Armschwäche, Sprachstörung (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Zeitfenster prüfen, Stroke-SOP beachten, zügiger Transport in geeignete Klinik.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- EKG 3-Kanal ---
-    else if (includesAny(['3-kanal', '3 kanal', 'monitor', 'monitoring ekg'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "3-Kanal-EKG abgeleitet.";
-      result.observation = hidden.ekg3 || "Sinusrhythmus, Frequenz ~90/min, keine Hebungen";
-      result.next_hint = "Bei Thoraxschmerz 12-Kanal-EKG ergänzen.";
+    // --- ABCDE ---
+    if (includesAny(['abcde', 'a b c d e', 'primärsurvey'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'ABCDE-Assessment begonnen.';
+      result.observation = 'A/B/C/D/E strukturiert abarbeiten, Vitalwerte seriell, Monitoring.';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Atemwege/Atmung/Kreislauf/Neurologie/Exposure gezielt untersuchen und dokumentieren.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- EKG 12-Kanal ---
-    else if (includesAny(['12-kanal', '12 kanal', 'zwölf-kanal', '12kanal'])) {
-      result.accepted = true;
-      result.score_delta = 2;
-      result.rationale = "12-Kanal-EKG abgeleitet.";
-      result.observation = hidden.ekg12 || "Kein STEMI-Muster, Sinusrhythmus.";
-      if (hidden.ekg12?.toLowerCase().includes('st-heb')) {
-        result.next_hint = "ACS/STEMI wahrscheinlich → zügiger Transport, NA nachfordern je nach SOP.";
-      } else {
-        result.next_hint = "EKG kontrollieren/überwachen, weitere Diagnostik.";
+    // --- O2 ---
+    if (includesAny(['o2', 'sauerstoff', 'oxygen'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Sauerstoffgabe veranlasst (bei Indikation).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Wirksamkeit an SpO₂/AF/Klinik prüfen, Monitoring fortführen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+
+    // ===== Differenzierte AUSKULTATION zuerst (spezifisch) =====
+    if (includesAny(['auskult', 'lungen anhören', 'lungen abhören', 'thorax abhören', 'lungenauskult'])) {
+      // Spezifische Schlüsselwörter prüfen:
+      if (includesAny(['rassel', 'rg', 'krepit'])) {
+        result.accepted = true; result.score_delta = 1;
+        result.rationale = 'Lungenauskultation: feuchte RG.';
+        result.observation = 'Auskultation: basal beidseits feuchte RG (Beispiel).';
+        result.updated_vitals = mergeVitals({});
+        result.next_hint = 'Ddy: kardial/pulmonal – O₂, aufgestellte Oberkörperlagerung, Diuretika/NA je nach SOP erwägen.';
+        return { statusCode: 200, headers, body: JSON.stringify(result) };
       }
-    }
-
-    // --- BEFAST / neurologisch ---
-    else if (includesAny(['befast', 'neurologisch', 'stroke-screen', 'stroke screen'])) {
-      result.accepted = true;
-      result.score_delta = 2;
-      result.rationale = "BEFAST/neurologischer Status erhoben.";
-      if (hidden.befast) {
-        const b = hidden.befast;
-        result.observation =
-          `BEFAST: Balance=${b.Balance}; Face=${b.Face}; Arms=${b.Arms}; Speech=${b.Speech}; Time=${b.Time}`;
-      } else if (hidden.neuro) {
-        result.observation = `Neurologischer Status: ${hidden.neuro}`;
-      } else {
-        result.observation = "Keine fokalneurologischen Auffälligkeiten.";
+      if (includesAny(['giemen', 'wheez', 'brummen'])) {
+        result.accepted = true; result.score_delta = 1;
+        result.rationale = 'Lungenauskultation: exspiratorisches Giemen.';
+        result.observation = 'Auskultation: exspiratorisches Giemen (Beispiel).';
+        result.updated_vitals = mergeVitals({});
+        result.next_hint = 'Bronchodilatatorisch nach SOP (z. B. BDT), O₂ titriert, Monitoring.';
+        return { statusCode: 200, headers, body: JSON.stringify(result) };
       }
-      result.next_hint = "Stroke-Unit Transport erwägen (Zeitfenster beachten) / BZ prüfen.";
+      if (includesAny(['stridor'])) {
+        result.accepted = true; result.score_delta = 1;
+        result.rationale = 'Lungenauskultation: inspiratorischer Stridor.';
+        result.observation = 'Auskultation: inspiratorischer Stridor (Beispiel).';
+        result.updated_vitals = mergeVitals({});
+        result.next_hint = 'Obere Atemwege sichern: Sitzen lassen, O₂, ggf. Adrenalin-Inhalation/NA/Algorithmus Atemwegsmanagement.';
+        return { statusCode: 200, headers, body: JSON.stringify(result) };
+      }
+      if (includesAny(['einseitig', 'seitendifferenz', 'vermindert rechts', 'vermindert links', 'rechts vermindert', 'links vermindert', 'abgeschwächt'])) {
+        result.accepted = true; result.score_delta = 1;
+        result.rationale = 'Lungenauskultation: Seitendifferenz.';
+        result.observation = 'Auskultation: Atemgeräusch einseitig abgeschwächt (Beispiel).';
+        result.updated_vitals = mergeVitals({});
+        result.next_hint = 'Ddy: Pneumothorax, Atelektase – Perkussion, SpO₂, Sonographie/Transport-Priorität; NA-Nachforderung erwägen.';
+        return { statusCode: 200, headers, body: JSON.stringify(result) };
+      }
+      // Generische Auskultation (wenn nichts Spezifisches erkannt)
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Lungenauskultation durchgeführt.';
+      result.observation = 'Auskultation: vesikuläres Atemgeräusch beidseits, keine RG/Giemen (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Bei Auffälligkeiten entsprechend SOP handeln; Monitoring/AF/SpO₂ seriell.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- O2 geben (als Hinweis, keine automatische Vitalveränderung) ---
-    else if (includesAny(['o2', 'sauerstoff', 'oxygen'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "Sauerstoffgabe in Erwägung gezogen / begonnen (Indikation beachten).";
-      result.next_hint = "Monitoring fortführen, SpO₂-Trend beobachten.";
+    // ===== Thorax-PERKUSSION =====
+    if (includesAny(['perkuss', 'perkut', 'klopfschall']) && includesAny(['thorax', 'brust', 'brustkorb'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Thorax perkutiert.';
+      result.observation = 'Perkussion: sonorer Klopfschall beidseits, keine Dämpfung/Tympanie (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Bei Seitendifferenz/Auffälligkeit: Ddy Pneumothorax/Pleuraerguss – weitere Diagnostik/NA je nach SOP.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- ABCDE allgemein / unspezifisch ---
-    else if (includesAny(['abcde', 'primary survey'])) {
-      result.accepted = true;
-      result.score_delta = 1;
-      result.rationale = "ABCDE strukturiert abgearbeitet.";
-      result.next_hint = "Gezielt Messungen/Befunde ergänzen (z. B. SpO₂, EKG, Pupillen, BZ).";
+    // ===== Thorax-INSPEKTION/PALPATION =====
+    if (
+      includesAny(['thorax', 'brustkorb', 'brust', 'rippen', 'sternum']) &&
+      includesAny(['inspiz', 'ansehen', 'inspect', 'palpier', 'druckschmerz', 'kontusion'])
+    ) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Thorax inspiziert/palpatorisch untersucht.';
+      result.observation = 'Thorax: symmetrische Atemexkursion, keine Prellmarken, kein Druck-/Instabilitätszeichen (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Bei Trauma-/Schmerzbefund Analgesie/Immobilisation/Monitoring je nach SOP; 12-Kanal-EKG erwägen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Diagnose / Lösung anfordern ---
-    else if (includesAny(['lösung', 'loesung', 'diagnose', 'was hat der patient', 'was hat die patientin'])) {
-      result.accepted = true;
-      result.score_delta = 0;
-      result.rationale = "Zusammenfassung & Lernziel/Diagnose.";
-      result.solution = case_state.solution || {
-        diagnosis: "Verdachtsdiagnose nicht eindeutig.",
-        justification: []
-      };
-      result.done = true;
-      result.next_hint = "Falls etwas fehlt: gezielte Diagnostik ergänzen (EKG/BEFAST/BZ etc.).";
+    // ===== Abdomen-INSPEKTION/PALPATION =====
+    if (
+      includesAny(['abdomen', 'bauch']) &&
+      includesAny(['inspiz', 'ansehen', 'inspect', 'palpier', 'palpation', 'druckschmerz'])
+    ) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Abdomen untersucht (Inspektion/Palpation).';
+      result.observation = 'Abdomen: weich, kein Abwehrspannung, kein palpatorischer Druckschmerz, kein Peritonismus (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Bei pathologischen Zeichen Volumentherapie/Schmerztherapie/Transport-Priorisierung je nach SOP.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // --- Unbekannte Aktion: Knappes Coaching ---
-    else {
-      result.accepted = false;
-      result.score_delta = 0;
-      result.rationale = "Aktion nicht eindeutig zuordenbar.";
-      result.next_hint = "Nutze klare Kurzbefehle, z. B. „RR messen“, „SpO₂ messen“, „Pupillen prüfen“, „12-Kanal-EKG“, „BEFAST“.";
+    // ===== HAUTBEFUND / Perfusion =====
+    if (includesAny(['haut', 'hautbefund', 'zyanose', 'blässe', 'schweiß', 'schweißig', 'kaltschweißig', 'perfusion', 'peripher', 'kapillar', 'rekap'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Hautstatus/Perfusion beurteilt.';
+
+      // spezifische Keywörter einfließen lassen
+      let parts = [];
+      if (includesAny(['blässe', 'blass'])) parts.push('blass');
+      if (includesAny(['zyanose', 'zyanot'])) parts.push('zyanotisch');
+      if (includesAny(['schweiß', 'schweißig', 'kaltschweiß'])) parts.push('kaltschweißig');
+      let skin = parts.length ? parts.join(', ') : 'rosig, warm, trocken';
+
+      // Kapillarfüllung
+      let crt = includesAny(['kapillar', 'rekap']) ? '< 2 s' : '—';
+
+      result.observation = `Haut: ${skin}. Kapilläre Füllung: ${crt}.`;
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Bei schlechter Perfusion Schock-Algorithmus/SOP; O₂/Volumen/NA je nach Klinikbild.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
     }
 
-    // ===== 5) Rückgabe =====
+    // ===== ÖDEME =====
+    if (includesAny(['ödem', 'ödeme', 'geschwollen', 'knöchelödem', 'bein geschwollen', 'fuß geschwollen'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Ödeme überprüft.';
+      result.observation = 'Periphere Ödeme: Knöchel beidseits leicht eindrückbar (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Ddy kardial/renal – Anamnese/Diurese/Belastungssymptome, Monitoring, ggf. NA je nach SOP.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+
+    // ===== DMS (Durchblutung-Motorik-Sensibilität) =====
+    if (includesAny(['dms', 'durchblutung motorik sensibilität', 'durchblutung', 'motorik', 'sensibil'])) {
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'DMS geprüft.';
+      result.observation = 'DMS: durchblutet, Motorik erhalten, Sensibilität erhalten (Beispiel).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Bei Auffälligkeit Immobilisation/Schienung, Re-DMS nach Maßnahme, Transport-Priorisierung.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+
+    // ===== SCHMERZSKALA (NRS) =====
+    if (includesAny(['schmerz', 'nrs', 'numeric rating'])) {
+      const m = ua.match(/(?:nrs|schmerz(?:skala)?)\D{0,5}(\d{1,2})/i);
+      let nrs = null;
+      if (m) {
+        const val = parseInt(m[1], 10);
+        if (!Number.isNaN(val) && val >= 0 && val <= 10) nrs = val;
+      }
+      result.accepted = true; result.score_delta = 1;
+      result.rationale = 'Schmerzskala (NRS) erhoben.';
+      result.observation = nrs !== null ? `NRS: ${nrs}/10.` : 'NRS erfasst (Wert 0–10 bitte angeben).';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint =
+        nrs !== null && nrs >= 4
+          ? 'Analgesie nach SOP erwägen, Wirkung reevaluieren (NRS seriell).'
+          : 'Monitoring fortführen; bei Schmerzanstieg Analgesie nach SOP erwägen.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+
+    // --- Gefährlich/außerhalb Scope ---
+    if (includesAny(['opioid geben', 'morphin spritzen', 'notfallnarkose']) && role === 'RS') {
+      result.accepted = false; result.unsafe = true; result.outside_scope = true; result.score_delta = -1;
+      result.rationale = 'Maßnahme außerhalb RS-Kompetenz / potentiell gefährlich.';
+      result.updated_vitals = mergeVitals({});
+      result.next_hint = 'Notarzt nachfordern / SOP beachten.';
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+
+    // ===== 5) Fallback =====
+    result.accepted = false;
+    result.score_delta = 0;
+    result.rationale = 'Aktion nicht eindeutig zuordenbar.';
+    result.updated_vitals = mergeVitals({});
+    result.next_hint =
+      'Nutze klare Kurzbefehle/Befunde: „RR messen“, „SpO₂ messen“, „Puls/AF messen“, „BZ messen“, „Temp messen“, „EKG abgeleitet“, „Mundraum inspizieren“, „Pupillen prüfen“, „Auskultation Lunge“, „Thorax inspizieren/perkutieren“, „Abdomen palpieren“, „Hautbefund“, „Ödeme prüfen“, „Perfusion/Kapillarfüllung“, „DMS“, „NRS 6/10“ …';
+
     return { statusCode: 200, headers, body: JSON.stringify(result) };
 
   } catch (e) {
