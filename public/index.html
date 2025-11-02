@@ -2,35 +2,75 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>medicIQ KI-Lernhilfe</title>
-  <link rel="stylesheet" href="./style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>medicIQ – Fallbeispiele</title>
 
-  <!-- Markdown-Renderer (CDN) -->
+  <link rel="stylesheet" href="./style.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="./app.js"></script>
 </head>
 <body>
-    
   <main class="page">
-    <section class="chat-container">
-        <h1>medicIQ KI-Lernhilfe</h1>
+    <section class="chat-container" aria-label="Fallbeispiele und Chat">
+      <h1>medicIQ – Fallbeispiele</h1>
+
+      <!-- Status: aktueller Fall + Score -->
+      <div class="status-row" role="status" aria-live="polite">
+        <div id="caseStatus">Kein Fall aktiv.</div>
+        <div id="caseScore">Score: 0</div>
+      </div>
+
+      <!-- Vitals kompakt -->
+      <div class="vitals" aria-label="Vitalwerte">
+        <span><strong>RR</strong> <span id="vRR">–</span></span>
+        <span><strong>SpO₂</strong> <span id="vSpO2">–</span></span>
+        <span><strong>AF</strong> <span id="vAF">–</span></span>
+        <span><strong>Puls</strong> <span id="vPuls">–</span></span>
+        <span><strong>BZ</strong> <span id="vBZ">–</span></span>
+        <span><strong>Temp</strong> <span id="vTemp">–</span></span>
+        <span><strong>GCS</strong> <span id="vGCS">–</span></span>
+      </div>
+
+      <!-- Fortschritt XABCDE -->
+      <div class="progress" aria-label="XABCDE-Fortschritt">
+        <div class="chip" data-step="X">X</div>
+        <div class="chip" data-step="A">A</div>
+        <div class="chip" data-step="B">B</div>
+        <div class="chip" data-step="C">C</div>
+        <div class="chip" data-step="D">D</div>
+        <div class="chip" data-step="E">E</div>
+      </div>
+
+      <!-- Hinweisbox -->
+      <div id="hintCard" class="hint hidden" aria-live="polite">
+        <strong>Nächster Schritt:</strong>
+        <div id="hintText">—</div>
+      </div>
+
+      <!-- Chat-Verlauf -->
       <div id="chat-box" class="chat-box" aria-live="polite" aria-label="Chat-Verlauf"></div>
 
+      <!-- Eingabezeile -->
       <div class="input-row">
         <input
           id="msg"
           type="text"
-          placeholder="Frage eingeben …"
+          placeholder="Schreibe ganze Sätze: z. B. „Ich prüfe die Sättigung und messe den Blutdruck.“"
           autocomplete="off"
-          aria-label="Frage eingeben" />
+          aria-label="Eingabe für Anweisungen/Fragen" />
         <button id="send" class="btn">Senden</button>
+      </div>
+
+      <!-- Aktionen -->
+      <div class="action-row">
+        <button id="startCase" class="btn secondary" aria-label="Neuen Fall starten">Neuen Fall starten</button>
+        <button id="finishCase" class="btn danger" aria-label="Fall beenden">Fall beenden</button>
       </div>
     </section>
 
     <p class="legal">
-      Hinweis: Antworten generiert eine KI. Keine medizinische Beratung.<br>
-      Beachte: Unterschiedliche Rettungsdienstschulen haben eigene Lehraussagen – diese haben stets Vorrang.
+      Hinweis: Antworten generiert eine KI. Keine medizinische Beratung.<br />
+      Beachte: Lehraussagen deiner Rettungsdienstschule haben Vorrang.
     </p>
   </main>
 </body>
