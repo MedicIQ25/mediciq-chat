@@ -42,6 +42,7 @@ document.querySelectorAll('.schema-btn').forEach(btn=>{
     if (tool === 'SAMPLER')    openSampler();
     if (tool === 'FOUR_S')     openFourS();
     if (tool === 'DIAGNOSIS')  openDiagnosis();
+    if (tool === 'DEBRIEF')    openDebrief();
   });
 });
 
@@ -284,86 +285,170 @@ async function stepCase(phrase) {
 const $id = (x)=>document.getElementById(x);
 function openModal(id){ $id('modalBackdrop').classList.remove('hidden'); $id(id).classList.remove('hidden'); }
 function closeModal(id){ $id('modalBackdrop').classList.add('hidden'); $id(id).classList.add('hidden'); }
-
-// ---- AF COUNTER (30s Tap) ----
 function openAFCounter(){
-  let secs=30, count=0, timer=null;
-  $id('afTimer').textContent=secs; $id('afCount').textContent=count;
-  const tick=()=>{ secs--; $id('afTimer').textContent=secs; if(secs<=0){ stop(true);} };
+  let secs = 30, count = 0, timer = null, targetAF = null;
+
+  // 1) Zielwert aus dem Fall holen (ohne Anzeige ändern)
+  (async ()=>{
+    try{
+      const res = await fetch(API_CASE_STEP, {
+        method: 'POST', headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ case_state: caseState, user_action: 'AF Info', role: caseState?.role || 'RS' })
+      });
+      const data = await res.json();
+      // Wir akzeptieren AF in updated_vitals oder im Text (z.B. "AF: 12/min")
+      if (data.updated_vitals?.AF) targetAF = Number(String(data.updated_vitals.AF).replace(/\D/g,''));
+      else if (data.finding) {
+        const m = String(data.finding).match(/AF[^0-9]*([0-9]{1,2})/i);
+        if (m) targetAF = Number(m[1]);
+      }
+      const info = targetAF!=null ? `🎯 Ziel (Erwartung): ${targetAF}/min` : `ℹ️ Zähle 30s – wir rechnen hoch.`;
+      document.getElementById('befastInfo')?.textContent; // no-op to avoid linter
+      const t = document.createElement('div'); t.className='small muted'; t.textContent = info;
+      const body = document.querySelector('#modalAF .modal-body');
+      body && body.appendChild(t);
+    }catch(e){ /* still ok */ }
+  })();
+
+  document.getElementById('afTimer').textContent = secs;
+  document.getElementById('afCount').textContent = count;
+
+  const tick = () => {
+    secs--; document.getElementById('afTimer').textContent = secs;
+    if (secs <= 0) stop(true);
+  };
+
   function stop(finish){
-    clearInterval(timer); timer=null;
-    $id('afStart').disabled=false; $id('afTap').disabled=true;
-    if(finish){
-      // hochrechnen: count in 30s -> *2
-      const perMin = Math.max(0, Math.round(count*2));
+    clearInterval(timer); timer = null;
+    document.getElementById('afStart').disabled = false;
+    document.getElementById('afTap').disabled = true;
+
+    if (finish){
+      const perMin = Math.max(0, Math.round(count * 2));
       visibleVitals.AF = perMin;
       renderVitalsFromVisible();
+
+      // Vergleich mit Ziel (±2)
+      let note = '';
+      if (targetAF != null) {
+        const diff = Math.abs(perMin - targetAF);
+        note = diff <= 2 ? ' (🎯 entspricht Erwartung)' : ` (↔︎ abweichend, Ziel: ${targetAF}/min)`;
+      }
+
       // an Backend melden
-      stepCase(`AF messen ${perMin}/min`);
+      stepCase(`AF messen ${perMin}/min${note}`);
       closeModal('modalAF');
     }
   }
-  $id('afStart').onclick=()=>{ if(timer) return; secs=30; count=0; $id('afTimer').textContent=secs; $id('afCount').textContent=count; timer=setInterval(tick,1000); $id('afStart').disabled=true; $id('afTap').disabled=false; };
-  $id('afTap').onclick=()=>{ if(!timer) return; count++; $id('afCount').textContent=count; };
-  $id('afCancel').onclick=()=>{ stop(false); closeModal('modalAF'); };
-  $id('afTap').disabled=true;
+
+  document.getElementById('afStart').onclick = ()=>{
+    if (timer) return;
+    secs = 30; count = 0;
+    document.getElementById('afTimer').textContent = secs;
+    document.getElementById('afCount').textContent = count;
+    timer = setInterval(tick, 1000);
+    document.getElementById('afStart').disabled = true;
+    document.getElementById('afTap').disabled = false;
+  };
+  document.getElementById('afTap').onclick = ()=>{ if (!timer) return; count++; document.getElementById('afCount').textContent = count; };
+  document.getElementById('afCancel').onclick = ()=>{ stop(false); closeModal('modalAF'); };
+  document.getElementById('afTap').disabled = true;
+
   openModal('modalAF');
 }
 
+
 // ---- NRS ----
 function openNRS(){
-  const range=$id('nrsRange'), val=$id('nrsVal');
-  val.textContent=range.value;
-  range.oninput=()=> val.textContent=range.value;
-  $id('nrsOk').onclick=()=>{ const n=Number(range.value||0); stepCase(`NRS ${n}`); closeModal('modalNRS'); };
-  $id('nrsCancel').onclick=()=> closeModal('modalNRS');
+  const infoBox = document.getElementById('nrsInfo');
+  document.getElementById('nrsFetch')?.addEventListener('click', async ()=>{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'Schmerz Info', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    infoBox.textContent = data.finding || data.evaluation || 'Schmerzangabe nicht verfügbar – erfrage aktiv.';
+  }, { once:true });
+
+  const range=document.getElementById('nrsRange'), val=document.getElementById('nrsVal');
+  val.textContent=range.value; range.oninput=()=> val.textContent=range.value;
+  document.getElementById('nrsOk').onclick=()=>{ const n=Number(range.value||0); stepCase(`NRS ${n}`); closeModal('modalNRS'); };
+  document.getElementById('nrsCancel').onclick=()=> closeModal('modalNRS');
   openModal('modalNRS');
 }
 
 // ---- BE-FAST ----
 function openBEFAST(){
-  $id('befastOk').onclick=()=>{
+  const infoBox = document.getElementById('befastInfo');
+  document.getElementById('befastFetch')?.addEventListener('click', async ()=>{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'BEFAST Info', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    infoBox.textContent = data.finding || data.evaluation || 'Keine neurologischen Hinweise.';
+  }, { once:true });
+
+  document.getElementById('befastOk').onclick = ()=>{
     const data={
-      B:$id('b_face').checked, E:$id('e_eyes').checked, F:$id('f_face').checked,
-      A:$id('a_arm').checked,  S:$id('s_speech').checked, T:$id('t_time').value||''
+      B:document.getElementById('b_face').checked,
+      E:document.getElementById('e_eyes').checked,
+      F:document.getElementById('f_face').checked,
+      A:document.getElementById('a_arm').checked,
+      S:document.getElementById('s_speech').checked,
+      T:document.getElementById('t_time').value||''
     };
-    const parts=[];
-    if(data.B) parts.push('Balance');
-    if(data.E) parts.push('Eyes');
-    if(data.F) parts.push('Face');
-    if(data.A) parts.push('Arm');
-    if(data.S) parts.push('Speech');
+    const parts=[]; if(data.B) parts.push('Balance'); if(data.E) parts.push('Eyes'); if(data.F) parts.push('Face'); if(data.A) parts.push('Arm'); if(data.S) parts.push('Speech');
     const msg=`BEFAST: ${parts.join(', ') || 'unauffällig'}${data.T?` | Last known well: ${data.T}`:''}`;
     stepCase(msg);
     closeModal('modalBEFAST');
   };
-  $id('befastCancel').onclick=()=> closeModal('modalBEFAST');
+  document.getElementById('befastCancel').onclick = ()=> closeModal('modalBEFAST');
   openModal('modalBEFAST');
 }
 
 // ---- SAMPLER ----
 function openSampler(){
-  $id('samplerOk').onclick=()=>{
-    const msg = `SAMPLER: S=${$id('s_sympt').value||'-'}; A=${$id('s_allerg').value||'-'}; M=${$id('s_med').value||'-'}; P=${$id('s_hist').value||'-'}; L=${$id('s_last').value||'-'}; E=${$id('s_events').value||'-'}; R=${$id('s_risk').value||'-'}`;
-    stepCase(msg);
-    closeModal('modalSampler');
+  const infoBox = document.getElementById('samplerInfo');
+  document.getElementById('samplerFetch')?.addEventListener('click', async ()=>{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'SAMPLER Info', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    infoBox.textContent = data.finding || data.evaluation || 'Keine zusätzlichen Infos verfügbar.';
+  }, { once:true });
+
+  document.getElementById('samplerOk').onclick = ()=>{
+    const msg = `SAMPLER: S=${document.getElementById('s_sympt').value||'-'}; A=${document.getElementById('s_allerg').value||'-'}; M=${document.getElementById('s_med').value||'-'}; P=${document.getElementById('s_hist').value||'-'}; L=${document.getElementById('s_last').value||'-'}; E=${document.getElementById('s_events').value||'-'}; R=${document.getElementById('s_risk').value||'-'}`;
+    stepCase(msg); closeModal('modalSampler');
   };
-  $id('samplerCancel').onclick=()=> closeModal('modalSampler');
+  document.getElementById('samplerCancel').onclick = ()=> closeModal('modalSampler');
   openModal('modalSampler');
 }
 
 // ---- 4S ----
 function openFourS(){
-  $id('s4Ok').onclick=()=>{
+  const infoBox = document.getElementById('s4Info');
+  document.getElementById('s4Fetch')?.addEventListener('click', async ()=>{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: '4S Info', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    infoBox.textContent = data.finding || data.evaluation || 'Keine Hinweise zur Einsatzstelle.';
+  }, { once:true });
+
+  document.getElementById('s4Ok').onclick = ()=>{
     const list=[];
-    if($id('s1').checked) list.push('Sicherheit');
-    if($id('s2').checked) list.push('Szenerie beurteilt');
-    if($id('s3').checked) list.push('Sichtung/Ressourcen');
-    if($id('s4').checked) list.push('Support angefordert');
+    if(document.getElementById('s1').checked) list.push('Sicherheit');
+    if(document.getElementById('s2').checked) list.push('Szenerie beurteilt');
+    if(document.getElementById('s3').checked) list.push('Sichtung/Ressourcen');
+    if(document.getElementById('s4').checked) list.push('Support angefordert');
     stepCase(`4S: ${list.length?list.join(', '):'ohne Auffälligkeit'}`);
     closeModal('modal4S');
   };
-  $id('s4Cancel').onclick=()=> closeModal('modal4S');
+  document.getElementById('s4Cancel').onclick = ()=> closeModal('modal4S');
   openModal('modal4S');
 }
 
@@ -394,6 +479,33 @@ function openDiagnosis(){
   };
   $id('dxCancel').onclick=()=> closeModal('modalDx');
   openModal('modalDx');
+}
+async function openDebrief(){
+  // Versuche zuerst, ein Debrief vom Backend zu bekommen
+  try{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'Debriefing', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    if (data.debrief || data.evaluation || data.finding) {
+      addMsg(`<strong>Debriefing</strong><div class="small">${data.debrief || data.evaluation || data.finding}</div>`);
+      return;
+    }
+  }catch(e){ /* fallback unten */ }
+
+  // Fallback: Lokale Auswertung (Score, Schritte, Vitals)
+  const steps = (caseState?.steps_done || []).join(' → ') || '–';
+  const vitals = Object.entries(visibleVitals).map(([k,v])=>`${k}: ${v}`).join(' · ') || 'keine erhoben';
+  const score  = caseState?.score ?? 0;
+
+  addMsg(`
+    <strong>Debriefing (lokal)</strong>
+    <div class="small">Score: <b>${score}</b></div>
+    <div class="small">Schritte: ${steps}</div>
+    <div class="small">Erhobene Vitals: ${vitals}</div>
+    <div class="small">Hinweis: Nutze X→A→B→C→D→E und verknüpfe Maßnahmen mit Befund (z. B. O₂ ↔︎ SpO₂).</div>
+  `);
 }
 
 async function runQueue() {

@@ -85,6 +85,8 @@
   <button class="schema-btn" data-tool="BEFAST">BE-FAST</button>
   <button class="schema-btn" data-tool="NRS">Schmerzskala (NRS)</button>
   <button class="schema-btn primary" data-tool="DIAGNOSIS">Verdachtsdiagnose & Transport</button>
+  <button class="schema-btn" data-tool="DEBRIEF">Debriefing anzeigen</button>
+
 </div>
 
     <!-- Queue -->
@@ -135,10 +137,12 @@
 <div id="modalNRS" class="modal hidden">
   <div class="modal-head">Schmerzskala (NRS 0–10)</div>
   <div class="modal-body">
+    <div id="nrsInfo" class="small muted"></div>
     <input id="nrsRange" type="range" min="0" max="10" step="1" value="0" />
     <div class="nrs-val">Wert: <b id="nrsVal">0</b></div>
   </div>
   <div class="modal-actions">
+    <button id="nrsFetch" class="btn secondary">Infos abrufen</button>
     <button id="nrsOk" class="btn">Übernehmen</button>
     <button id="nrsCancel" class="btn secondary">Abbrechen</button>
   </div>
@@ -148,6 +152,7 @@
 <div id="modalBEFAST" class="modal hidden">
   <div class="modal-head">BE-FAST Check</div>
   <div class="modal-body befast-grid">
+    <div id="befastInfo" class="small muted"></div>
     <label><input type="checkbox" id="b_face" /> B – Balance (Gleichgewicht)</label>
     <label><input type="checkbox" id="e_eyes" /> E – Eyes (Sehstörung)</label>
     <label><input type="checkbox" id="f_face" /> F – Face (Facialisparese)</label>
@@ -156,6 +161,7 @@
     <label>Zeit letzter normaler Zustand: <input type="time" id="t_time" /></label>
   </div>
   <div class="modal-actions">
+    <button id="befastFetch" class="btn secondary">Infos abrufen</button>
     <button id="befastOk" class="btn">Dokumentieren</button>
     <button id="befastCancel" class="btn secondary">Abbrechen</button>
   </div>
@@ -165,6 +171,7 @@
 <div id="modalSampler" class="modal hidden">
   <div class="modal-head">SAMPLER</div>
   <div class="modal-body form-grid">
+    <div id="samplerInfo" class="small muted"></div>
     <label>Symptoms <input id="s_sympt" placeholder="Beschwerden…" /></label>
     <label>Allergies <input id="s_allerg" placeholder="Allergien…" /></label>
     <label>Medications <input id="s_med" placeholder="Medikamente…" /></label>
@@ -174,6 +181,7 @@
     <label>Risk factors <input id="s_risk" placeholder="Risikofaktoren (optional)…" /></label>
   </div>
   <div class="modal-actions">
+    <button id="samplerFetch" class="btn secondary">Infos abrufen</button>
     <button id="samplerOk" class="btn">Dokumentieren</button>
     <button id="samplerCancel" class="btn secondary">Abbrechen</button>
   </div>
@@ -183,12 +191,14 @@
 <div id="modal4S" class="modal hidden">
   <div class="modal-head">4S-Schema</div>
   <div class="modal-body form-grid">
+    <div id="s4Info" class="small muted"></div>
     <label><input type="checkbox" id="s1" /> Sicherheit (Eigenschutz/Umfeld)</label>
     <label><input type="checkbox" id="s2" /> Szene/Szenerie beurteilt</label>
     <label><input type="checkbox" id="s3" /> Sichtung / Anzahl / Ressourcen</label>
     <label><input type="checkbox" id="s4" /> Support nachgefordert (z. B. NA/Feuerwehr)</label>
   </div>
   <div class="modal-actions">
+    <button id="s4Fetch" class="btn secondary">Infos abrufen</button>
     <button id="s4Ok" class="btn">Dokumentieren</button>
     <button id="s4Cancel" class="btn secondary">Abbrechen</button>
   </div>
