@@ -78,3 +78,9 @@ h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand
 
 /* Footer */
 .legal { margin: 14px 6px 0; color: var(--muted); text-align: left; font-size: .95rem; }
+/* Setup-Zeile (Fachrichtung / Rolle) */
+.setup-row{display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.setup-label{font-size:.9rem;color:var(--muted);margin-right:6px}
+.spec-chip{border:1px solid #dbe3ee;background:#fff;padding:8px 10px;border-radius:999px;cursor:pointer}
+.spec-chip.active{background:#eef6ff;border-color:#bfdcff}
+.role-select{height:38px;border:1px solid #dbe3ee;border-radius:8px;padding:0 10px;background:#fff;margin-right:8px}

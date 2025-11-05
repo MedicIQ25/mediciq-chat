@@ -10,85 +10,98 @@
   <script defer src="./app.js"></script>
 </head>
 <body>
-  <main class="page">
-    <section class="chat-container" aria-label="Fallbeispiele (Click-UI)">
-      <h1>medicIQ – Fallbeispiele</h1>
+<main class="page">
+  <section class="chat-container" aria-label="Fallbeispiele (Click-UI)">
+    <h1>medicIQ – Fallbeispiele</h1>
 
-      <!-- Status -->
-      <div class="status-row" role="status" aria-live="polite">
-        <div id="caseStatus">Kein Fall aktiv.</div>
-        <div id="caseScore">Score: 0</div>
+    <!-- NEU: Setup-Zeile -->
+    <div class="setup-row">
+      <div class="setup-left">
+        <span class="setup-label">Fachrichtung:</span>
+        <button class="spec-chip active" data-spec="internistisch">Internistisch</button>
+        <button class="spec-chip" data-spec="neurologisch">Neurologisch</button>
+        <button class="spec-chip" data-spec="trauma">Trauma</button>
+        <button class="spec-chip" data-spec="paediatrisch">Pädiatrisch</button>
       </div>
-
-      <!-- Vitals -->
-      <div class="vitals" aria-label="Vitalwerte">
-        <span><strong>RR</strong>   <span id="vRR">–</span></span>
-        <span><strong>SpO₂</strong> <span id="vSpO2">–</span></span>
-        <span><strong>AF</strong>   <span id="vAF">–</span></span>
-        <span><strong>Puls</strong> <span id="vPuls">–</span></span>
-        <span><strong>BZ</strong>   <span id="vBZ">–</span></span>
-        <span><strong>Temp</strong> <span id="vTemp">–</span></span>
-        <span><strong>GCS</strong>  <span id="vGCS">–</span></span>
-      </div>
-
-      <!-- Fortschritt XABCDE -->
-      <div class="progress" aria-label="XABCDE-Fortschritt">
-        <div class="chip" data-step="X">X</div>
-        <div class="chip" data-step="A">A</div>
-        <div class="chip" data-step="B">B</div>
-        <div class="chip" data-step="C">C</div>
-        <div class="chip" data-step="D">D</div>
-        <div class="chip" data-step="E">E</div>
-      </div>
-
-      <!-- Hinweis -->
-      <div id="hintCard" class="hint hidden" aria-live="polite">
-        <strong>Nächster Schritt:</strong>
-        <div id="hintText">—</div>
-      </div>
-
-      <!-- Action Tabs -->
-      <div class="tabs">
-        <button class="tab active" data-tab="X">X – Exsanguination</button>
-        <button class="tab" data-tab="A">A – Airway</button>
-        <button class="tab" data-tab="B">B – Breathing</button>
-        <button class="tab" data-tab="C">C – Circulation</button>
-        <button class="tab" data-tab="D">D – Disability</button>
-        <button class="tab" data-tab="E">E – Exposure</button>
-      </div>
-
-      <!-- Action Panel -->
-      <div id="panel" class="action-grid" aria-live="polite"></div>
-
-      <!-- Queue -->
-      <div class="queue card">
-        <div class="queue-head">
-          <div class="h">Geplante Maßnahmen</div>
-          <div class="q-right">
-            <button id="btnClearQueue" class="btn secondary">Leeren</button>
-            <button id="btnRunQueue" class="btn">Ausführen</button>
-          </div>
-        </div>
-        <ul id="queueList" class="queue-list"></ul>
-      </div>
-
-      <!-- Feedback / Log (nur Antworten der Engine) -->
-      <div class="card chat-wrap">
-        <div class="h">Feedback</div>
-        <div id="chatLog" class="chat-log"></div>
-      </div>
-
-      <!-- Global-Aktionen -->
-      <div class="action-row">
+      <div class="setup-right">
+        <label class="setup-label" for="roleSel">Rolle:</label>
+        <select id="roleSel" class="role-select">
+          <option value="RS" selected>RS</option>
+          <option value="NotSan">NotSan</option>
+        </select>
         <button id="startCase" class="btn secondary">Neuen Fall starten</button>
         <button id="finishCase" class="btn danger">Fall beenden</button>
       </div>
-    </section>
+    </div>
 
-    <p class="legal">
-      Hinweis: Antworten generiert eine KI. Keine medizinische Beratung.<br />
-      Beachte: Lehraussagen deiner Rettungsdienstschule haben Vorrang.
-    </p>
-  </main>
+    <!-- Status -->
+    <div class="status-row" role="status" aria-live="polite">
+      <div id="caseStatus">Kein Fall aktiv.</div>
+      <div id="caseScore">Score: 0</div>
+    </div>
+
+    <!-- Vitals (starten auf „–“, erst sichtbar wenn erhoben/aktualisiert) -->
+    <div class="vitals" aria-label="Vitalwerte">
+      <span><strong>RR</strong>   <span id="vRR">–</span></span>
+      <span><strong>SpO₂</strong> <span id="vSpO2">–</span></span>
+      <span><strong>AF</strong>   <span id="vAF">–</span></span>
+      <span><strong>Puls</strong> <span id="vPuls">–</span></span>
+      <span><strong>BZ</strong>   <span id="vBZ">–</span></span>
+      <span><strong>Temp</strong> <span id="vTemp">–</span></span>
+      <span><strong>GCS</strong>  <span id="vGCS">–</span></span>
+    </div>
+
+    <!-- Fortschritt -->
+    <div class="progress" aria-label="XABCDE-Fortschritt">
+      <div class="chip" data-step="X">X</div>
+      <div class="chip" data-step="A">A</div>
+      <div class="chip" data-step="B">B</div>
+      <div class="chip" data-step="C">C</div>
+      <div class="chip" data-step="D">D</div>
+      <div class="chip" data-step="E">E</div>
+    </div>
+
+    <!-- Hinweis -->
+    <div id="hintCard" class="hint hidden" aria-live="polite">
+      <strong>Nächster Schritt:</strong>
+      <div id="hintText">—</div>
+    </div>
+
+    <!-- Tabs & Actions -->
+    <div class="tabs">
+      <button class="tab active" data-tab="X">X – Exsanguination</button>
+      <button class="tab" data-tab="A">A – Airway</button>
+      <button class="tab" data-tab="B">B – Breathing</button>
+      <button class="tab" data-tab="C">C – Circulation</button>
+      <button class="tab" data-tab="D">D – Disability</button>
+      <button class="tab" data-tab="E">E – Exposure</button>
+    </div>
+    <div id="panel" class="action-grid" aria-live="polite"></div>
+
+    <!-- Queue -->
+    <div class="queue card">
+      <div class="queue-head">
+        <div class="h">Geplante Maßnahmen</div>
+        <div class="q-right">
+          <button id="btnClearQueue" class="btn secondary">Leeren</button>
+          <button id="btnRunQueue" class="btn">Ausführen</button>
+        </div>
+      </div>
+      <ul id="queueList" class="queue-list"></ul>
+    </div>
+
+    <!-- Feedback -->
+    <div class="card chat-wrap">
+      <div class="h">Feedback</div>
+      <div id="chatLog" class="chat-log"></div>
+    </div>
+  </section>
+
+  <p class="legal">
+    Hinweis: Antworten generiert eine KI. Keine medizinische Beratung.<br />
+    Beachte: Lehraussagen deiner Rettungsdienstschule haben Vorrang.
+  </p>
+</main>
+
 </body>
 </html>

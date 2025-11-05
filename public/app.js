@@ -1,12 +1,14 @@
 // ===============================================================
-// medicIQ – Click-UI (kein Freitext)
-// Steuert Fallstart, Action-Tabs, Queue & Kommunikation mit Functions
+// medicIQ – Click-UI (nur Klicks) mit:
+// - sichtbaren Vitalen erst nach Messung
+// - persistierenden Messwerten
+// - Fachrichtungs-/Rollenwahl vor Start
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
 const API_CASE_STEP = '/.netlify/functions/case-step';
 
-// ------- UI Refs -------
+// ------- UI -------
 const statusEl  = document.getElementById('caseStatus');
 const scoreEl   = document.getElementById('caseScore');
 const chips     = Array.from(document.querySelectorAll('.chip'));
@@ -21,6 +23,17 @@ const startBtn  = document.getElementById('startCase');
 const finishBtn = document.getElementById('finishCase');
 const chatLog   = document.getElementById('chatLog');
 
+const roleSel   = document.getElementById('roleSel');
+let selectedSpec = 'internistisch';
+document.querySelectorAll('.spec-chip').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.spec-chip').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active');
+    selectedSpec = btn.dataset.spec;
+  });
+});
+
+// Vitals – DOM + sichtbarer Zustand (nur erhobene Werte)
 const vitalsMap = {
   RR:   document.getElementById('vRR'),
   SpO2: document.getElementById('vSpO2'),
@@ -30,6 +43,7 @@ const vitalsMap = {
   Temp: document.getElementById('vTemp'),
   GCS:  document.getElementById('vGCS')
 };
+const visibleVitals = {}; // <- persistiert Messungen
 
 // ------- State -------
 let caseState = null;
@@ -38,9 +52,20 @@ const queue = []; // [{label, token}]
 // ------- Helpers -------
 const setStatus = t => statusEl.textContent = t;
 const setScore  = n => scoreEl.textContent  = `Score: ${n ?? 0}`;
-function renderVitals(v = {}) {
-  for (const [k, el] of Object.entries(vitalsMap)) el.textContent = v[k] ?? '–';
+
+function renderVitalsFromVisible() {
+  // Erst „–“ überall…
+  for (const el of Object.values(vitalsMap)) el.textContent = '–';
+  // …dann nur erhobene/aktualisierte Werte schreiben
+  for (const [k, v] of Object.entries(visibleVitals)) {
+    if (v != null && vitalsMap[k]) vitalsMap[k].textContent = v;
+  }
 }
+function clearVisibleVitals() {
+  for (const k of Object.keys(visibleVitals)) delete visibleVitals[k];
+  renderVitalsFromVisible();
+}
+
 function addMsg(html) {
   const el = document.createElement('div');
   el.className = 'msg';
@@ -66,7 +91,7 @@ function renderProgress(steps = []) {
   if (activeEl) activeEl.classList.add('active');
 }
 
-// ------- Actions Definition (Buttons -> tokens) -------
+// ------- Actions -------
 const ACTIONS = {
   X: [
     { label: 'Druckverband', token: 'Druckverband am Unterarm rechts' },
@@ -82,39 +107,31 @@ const ACTIONS = {
     { label: 'BVM', token: 'Beutel-Masken-Beatmung' }
   ],
   B: [
+    { label: 'SpO₂ messen', token: 'SpO2 messen' }, // Messaktion
     { label: 'Thorax inspizieren', token: 'Thorax inspizieren' },
-    { label: 'Thorax palpieren', token: 'Thorax palpieren' },
-    { label: 'Thorax perkutieren', token: 'Thorax perkutieren' },
     { label: 'Lunge auskultieren', token: 'Thorax auskultieren' },
-    { label: 'Sauerstoff geben', token: 'O2 geben' }
+    { label: 'Sauerstoff geben', token: 'O2 geben' } // Intervention -> Backend ändert SpO2
   ],
   C: [
-    { label: 'RR messen', token: 'RR messen' },
-    { label: 'Puls messen', token: 'Puls messen' },
-    { label: 'CFT prüfen', token: 'Rekap Zeit prüfen' },
-    { label: 'Monitoring (3-Kanal)', token: 'EKG Monitoring' },
+    { label: 'RR messen', token: 'RR messen' },         // Messaktion
+    { label: 'Puls messen', token: 'Puls messen' },     // Messaktion
     { label: '12-Kanal-EKG', token: '12-Kanal-EKG' },
-    { label: 'i.v. Zugang', token: 'Zugang legen' },
     { label: 'Volumen 500 ml', token: 'Volumen 500 ml' }
   ],
   D: [
-    { label: 'GCS erheben', token: 'GCS erheben' },
+    { label: 'GCS erheben', token: 'GCS erheben' },     // Messaktion
     { label: 'Pupillen prüfen', token: 'Pupillen' },
-    { label: 'BZ messen', token: 'BZ messen' },
-    { label: 'Glukose geben', token: 'Glukose geben' }
+    { label: 'BZ messen', token: 'BZ messen' }          // Messaktion
   ],
   E: [
-    { label: 'Entkleiden / Bodycheck', token: 'Bodycheck' },
-    { label: 'Temperatur messen', token: 'Temp messen' },
+    { label: 'Temperatur messen', token: 'Temp messen' }, // Messaktion
     { label: 'Wärmeerhalt', token: 'Wärme' },
-    { label: 'DMS prüfen', token: 'DMS prüfen' },
-    { label: 'Schiene Unterschenkel links', token: 'Schiene an Unterschenkel links' }
+    { label: 'Kopfteil hoch lagern', token: 'Oberkörper hoch lagern' }
   ]
 };
 
-// ------- Action Panel -------
 function renderPanel(tab = 'X') {
-  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   panel.innerHTML = '';
   (ACTIONS[tab] || []).forEach(a => {
     const card = document.createElement('button');
@@ -127,14 +144,8 @@ function renderPanel(tab = 'X') {
 tabs.forEach(t => t.addEventListener('click', () => renderPanel(t.dataset.tab)));
 
 // ------- Queue -------
-function addToQueue(label, token) {
-  queue.push({ label, token });
-  renderQueue();
-}
-function removeFromQueue(idx) {
-  queue.splice(idx, 1);
-  renderQueue();
-}
+function addToQueue(label, token) { queue.push({ label, token }); renderQueue(); }
+function removeFromQueue(idx) { queue.splice(idx, 1); renderQueue(); }
 function renderQueue() {
   queueList.innerHTML = '';
   queue.forEach((q, idx) => {
@@ -142,15 +153,13 @@ function renderQueue() {
     li.className = 'queue-item';
     li.innerHTML = `
       <span class="qi-label">${q.label}</span>
-      <div class="q-actions">
-        <button class="btn secondary" data-i="${idx}">Entfernen</button>
-      </div>`;
+      <div class="q-actions"><button class="btn secondary" data-i="${idx}">Entfernen</button></div>`;
     li.querySelector('button').addEventListener('click', () => removeFromQueue(idx));
     queueList.appendChild(li);
   });
 }
 
-// ------- Backend Calls -------
+// ------- Backend -------
 async function startCase() {
   startBtn.disabled = true;
   addMsg('<div class="small">Neuer Fall wird erstellt …</div>');
@@ -158,13 +167,18 @@ async function startCase() {
     const res = await fetch(API_CASE_NEW, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ specialty: 'internistisch', difficulty: 'mittel', role: 'RS' })
+      body: JSON.stringify({
+        specialty: selectedSpec,       // <- vom Chip
+        difficulty: 'mittel',
+        role: roleSel?.value || 'RS'   // <- Rolle
+      })
     });
     const data = await res.json();
     caseState = data.case || data;
 
-    renderVitals(caseState?.current_vitals || caseState?.hidden?.vitals_baseline || {});
-    setStatus(`Fall aktiv: ${caseState?.patient?.name || 'Patient/in'}`);
+    // Wichtig: NICHT automatisch Vitals setzen -> alles auf „–“ bis gemessen
+    clearVisibleVitals();
+    setStatus(`Fall aktiv: ${caseState?.patient?.name || 'Patient/in'} (${selectedSpec})`);
     setScore(caseState?.score ?? 0);
     renderProgress(caseState?.steps_done || []);
     showHint('Starte mit **X**: lebensbedrohliche Blutungen ausschließen/stoppen.');
@@ -187,7 +201,13 @@ async function stepCase(phrase) {
     });
     const data = await res.json();
 
-    // Feedback
+    // 1) sichtbare Vitals MERGEN (nur keys, die zurückkommen)
+    if (data.updated_vitals) {
+      Object.entries(data.updated_vitals).forEach(([k,v]) => { visibleVitals[k] = v; });
+      renderVitalsFromVisible();
+    }
+
+    // 2) Feedback & Progress
     const badges = [];
     if (data.accepted)      badges.push('✓ akzeptiert');
     if (data.outside_scope) badges.push('⚠ außerhalb Kompetenz');
@@ -208,14 +228,11 @@ async function stepCase(phrase) {
       ${data.next_hint ? `<div class="small">💡 ${data.next_hint}</div>` : ''}
     `);
 
-    // State/Vitals/Progress
-    if (data.updated_vitals) renderVitals(data.updated_vitals);
     caseState = data.case_state || caseState;
     setScore(caseState?.score ?? 0);
     renderProgress(caseState?.steps_done || []);
     showHint(data.next_hint || '');
 
-    // Abschluss
     if (data.done) {
       setStatus('Fall abgeschlossen.');
       if (data.found) addMsg(`<strong>Ergebnis:</strong> ${data.found}`);
@@ -230,11 +247,9 @@ async function runQueue() {
   if (!caseState || queue.length === 0) return;
   runBtn.disabled = clearBtn.disabled = true;
   try {
-    // nacheinander abarbeiten (so siehst du auch einzelne Rückmeldungen)
     while (queue.length) {
       const { token } = queue.shift();
       renderQueue();
-      // kleine Pause für bessere Lesbarkeit
       await stepCase(token);
       await new Promise(r => setTimeout(r, 120));
     }
@@ -243,17 +258,16 @@ async function runQueue() {
   }
 }
 
-// ------- Events -------
+// ------- Events/Init -------
 runBtn.addEventListener('click', runQueue);
 clearBtn.addEventListener('click', () => { queue.length = 0; renderQueue(); });
 startBtn.addEventListener('click', startCase);
 finishBtn.addEventListener('click', () => { if (caseState) stepCase('Fall beenden'); });
 
-// ------- Init -------
-renderVitals({});
+clearVisibleVitals();
 setStatus('Kein Fall aktiv.');
 setScore(0);
 resetProgress();
 showHint('—');
 renderPanel('X');
-addMsg('👋 Willkommen! Wähle oben einen Bereich (X–E), füge Maßnahmen in die Queue und klicke **Ausführen**.');
+addMsg('👋 Wähle oben die Fachrichtung, starte den Fall, erhebe Werte per Buttons. Gemessene Werte bleiben sichtbar; Interventionen passen Vitals an.');
