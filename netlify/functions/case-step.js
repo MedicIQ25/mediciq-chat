@@ -43,8 +43,93 @@ export async function handler(event) {
     const reply = {
       accepted:false, outside_scope:false, unsafe:false, score_delta:0,
       evaluation:"", found:"", finding:"", result_text:"", next_hint:"",
-      updated_vitals:null, done:false, case_state:null
+      updated_vitals:null, done:false, case_state:null, debrief:null
     };
+
+    // ==== helpers for info/debrief ====
+    const get = (obj, path, dflt=null) => {
+      try { return path.split('.').reduce((o,k)=>o?.[k], obj) ?? dflt; } catch { return dflt; }
+    };
+    // Nur Zahlen aus Strings ziehen (keine Default-Variante, Name bewusst
+    // anders als die num()-Helper weiter unten, damit es keine Konflikte gibt)
+    const parseNum = (x) => {
+      if (x==null) return null;
+      const m = String(x).match(/-?\d+/);
+      return m ? Number(m[0]) : null;
+    };
+
+    function formatSampler(s){
+      if (!s) return "Keine SAMPLER-Daten hinterlegt.";
+      return `S=${s.S||"-"}; A=${s.A||"-"}; M=${s.M||"-"}; P=${s.P||"-"}; L=${s.L||"-"}; E=${s.E||"-"}; R=${s.R||"-"}`;
+    }
+    function formatBEFAST(h){
+      const b = h?.befast; const lkw = h?.lkw;
+      if (!b && !lkw) return "Keine BEFAST-Daten hinterlegt.";
+      let txt = "BEFAST ";
+      if (b && typeof b === "object") {
+        const pos = [];
+        if (b.B) pos.push("Balance"); if (b.E) pos.push("Eyes"); if (b.F) pos.push("Face");
+        if (b.A) pos.push("Arm");     if (b.S) pos.push("Speech");
+        txt += pos.length ? `positiv: ${pos.join(", ")}` : "ohne klare Auffälligkeiten";
+      } else if (typeof h?.befast === "string") {
+        txt += h.befast;
+      }
+      if (lkw) txt += ` | LKW: ${lkw}`;
+      return txt;
+    }
+    function makeDebrief(state){
+      const H = state.hidden || {};
+      const steps = (state.steps_done || []).join(" → ") || "–";
+      const vitalsHistory = (H.vitals_history || [])
+        .map(v => `${v.key}:${typeof v.val==="string"?v.val:`${v.val}`}`).join(" · ") || "keine erhoben";
+      const target = state.target_outcome || "–";
+      const expDx  = H.expected_dx || state.solution?.diagnosis || "–";
+      const score  = state.score ?? 0;
+
+      return {
+        debrief:
+          `Ziel: ${target}\n`+
+          `Arbeitsdiagnose erwartet: ${expDx}\n`+
+          `Score: ${score}\n`+
+          `Durchlauf: ${steps}\n`+
+          `Erhobene Vitals: ${vitalsHistory}\n`+
+          `Hinweis: X→A→B→C→D→E strukturiert abarbeiten. Interventionen (z.B. O₂) sollen passende Vitaländerungen auslösen.`
+      };
+    }
+    function pushVital(state, key, val){
+      state.hidden ||= {};
+      state.hidden.vitals_history ||= [];
+      state.hidden.vitals_history.push({ t: Date.now(), key, val });
+    }
+
+    // ==== Info endpoints for modals ====
+    if (ua.toLowerCase().startsWith("af info")) {
+      const af = parseNum(get(case_state, "hidden.vitals_baseline.AF"));
+      return { statusCode:200, headers, body: JSON.stringify({
+        evaluation: (af!=null) ? `Erwartete Atemfrequenz ca. ${af}/min.` : "AF-Ziel nicht hinterlegt."
+      })};
+    }
+    if (ua.toLowerCase().startsWith("sampler info")) {
+      const s = get(case_state, "anamnesis.SAMPLER");
+      return { statusCode:200, headers, body: JSON.stringify({ evaluation: formatSampler(s) })};
+    }
+    if (ua.toLowerCase().startsWith("4s info")) {
+      // Wenn du später szenespezifische Felder hast, hier auslesen
+      const sceneTxt = "Sicherheit geprüft. Keine besonderen Gefahren genannt. Ressourcen verfügbar.";
+      return { statusCode:200, headers, body: JSON.stringify({ evaluation: sceneTxt })};
+    }
+    if (ua.toLowerCase().startsWith("befast info")) {
+      const neuro = get(case_state, "hidden") || {};
+      return { statusCode:200, headers, body: JSON.stringify({ evaluation: formatBEFAST(neuro) })};
+    }
+    if (ua.toLowerCase().startsWith("schmerz info")) {
+      const nrs = get(case_state, "hidden.pain.nrs", null);
+      const txt = (nrs!=null) ? `Patient berichtet NRS ${nrs}/10.` : "Keine Schmerzangabe hinterlegt.";
+      return { statusCode:200, headers, body: JSON.stringify({ evaluation: txt })};
+    }
+    if (ua.toLowerCase().startsWith("debriefing")) {
+      return { statusCode:200, headers, body: JSON.stringify(makeDebrief(case_state))};
+    }
 
     // ----- State -----
     const state = { ...case_state };
@@ -88,6 +173,8 @@ export async function handler(event) {
       const patch = { [key]: value };
       reply.updated_vitals = { ...(reply.updated_vitals || {}), ...patch };
       state.current_vitals = { ...(state.current_vitals || {}), ...patch };
+      // Historie für Debrief
+      pushVital(state, key, value);
     };
 
     // ----- Injury helpers -----
@@ -310,6 +397,7 @@ export async function handler(event) {
     const R_RR     = /\b(rr|blutdruck)\b/i;
     const R_SPO2   = /\b(spo2|sauerstoffsatt|sattigung|pulsoxi)\b/i;
     const R_AF     = /\b(af|atemfrequenz)\b/i;
+    const R_AF_MEASURE = /^af.*?(\d+)/i; // "AF messen 24/min"
     const R_PULS   = /\b(puls|herzfrequenz|hf)\b/i;
     const R_BZ     = /\b(bz|blutzucker|glukose|glucose)\b/i;
     const R_TEMP   = /\b(temp|temperatur|fieber)\b/i;
@@ -322,6 +410,10 @@ export async function handler(event) {
     const R_SCHMERZ= /(schmerzskala|nrs|schmerzscore)/i;
     const R_BEFAST = /\bbefast\b/i;
     const R_NEURO  = /(neurolog|status)/i;
+
+    // Dokumentationspräfixe aus Modals
+    const R_4S_DOC     = /^4s:/i;
+    const R_SAMPLER_DOC= /^sampler:/i;
 
     // Trauma – Sichtbefunde & Maßnahmen
     const R_SEE_INJ = /(sehe ich|sichtbare|gibt es|wo).*verletz(ung|ungen|te)|verletzungen sichtbar|wunden sichtbar/i;
@@ -390,6 +482,8 @@ export async function handler(event) {
       accept("Arbeitsdiagnose benannt.");
       setFinding(`Arbeitsdiagnose: ${state.solution?.diagnosis || "—"}`);
       markStep('Diagnose');
+      // Debrief mitliefern
+      reply.debrief = makeDebrief(state).debrief;
     }
 
     // XABCDE – Übersichten/Schritte
@@ -420,6 +514,26 @@ export async function handler(event) {
     else if (R_EKG12.test(ua))       { accept("12-Kanal-EKG."); setFinding(state.hidden?.ekg12 ? `12-Kanal: ${state.hidden.ekg12}` : "12-Kanal abgeleitet."); }
     else if (R_EKG3.test(ua))        { accept("Monitoring/3-Kanal-EKG."); setFinding(state.hidden?.ekg3 ? state.hidden.ekg3 : "Monitoring gestartet."); }
 
+    // AF messen mit Zahl (vor den generischen Messern behandeln)
+    else if (R_AF_MEASURE.test(ua))  {
+      const m = ua.match(R_AF_MEASURE);
+      const val = m ? Number(m[1]) : null;
+      if (val!=null) {
+        setIV({ AF: val });
+        exposeMeasured("AF");                       // zeigt & loggt
+        const target = parseNum(get(state,"hidden.vitals_baseline.AF"));
+        if (target!=null) {
+          const diff = Math.abs(val - target);
+          accept(diff <= 2 ? "AF entspricht Erwartung (±2)." : `AF abweichend (Ziel: ${target}).`);
+        } else {
+          accept("AF gemessen.");
+        }
+        markStep('AF');
+      } else {
+        accept("AF gemessen."); exposeMeasured("AF"); markStep('AF');
+      }
+    }
+
     else if (R_RR.test(ua))          { accept("RR gemessen.");   exposeMeasured("RR"); }
     else if (R_SPO2.test(ua))        { accept("SpO₂ gemessen."); exposeMeasured("SpO2"); }
     else if (R_AF.test(ua))          { accept("AF gemessen.");   exposeMeasured("AF"); }
@@ -442,8 +556,33 @@ export async function handler(event) {
     else if (R_PUPIL.test(ua))       { accept("Pupillen geprüft."); setFinding(state.hidden?.pupils ? `Pupillen: ${state.hidden.pupils}` : "Pupillen isokor, prompt."); }
     else if (R_AUSK.test(ua))        { accept("Lunge auskultiert."); setFinding(state.hidden?.lung || "Vesikuläratmen."); }
     else if (R_HAUT.test(ua))        { accept("Haut beurteilt."); setFinding("Hautfarbe/Temp/Feuchtigkeit erhoben."); }
-    else if (R_SCHMERZ.test(ua))     { accept("Schmerzscore erhoben."); setFinding("NRS dokumentiert."); }
-    else if (R_BEFAST.test(ua))      { accept("BEFAST durchgeführt."); setFinding(state.hidden?.befast || "BEFAST ohne klare Auffälligkeiten."); }
+
+    // NRS-Dokumentation inkl. Vergleich, falls Ziel hinterlegt
+    else if (R_SCHMERZ.test(ua)) {
+      const val = parseNum(ua);
+      if (val!=null) {
+        const targetNRS = get(state, "hidden.pain.nrs", null);
+        if (targetNRS!=null) {
+          const diff = Math.abs(val - Number(targetNRS));
+          accept(diff <= 2 ? "NRS entspricht Erwartung (±2)." : `NRS abweichend (Ziel: ${targetNRS}).`);
+        } else {
+          accept(`NRS ${val}/10 dokumentiert.`);
+        }
+        setFinding("NRS dokumentiert.");
+        // für Debrief optional loggen
+        pushVital(state, "NRS", val);
+      } else {
+        accept("Schmerzscore erhoben."); setFinding("NRS dokumentiert.");
+      }
+    }
+
+    // BEFAST (Modal sendet "BEFAST: ...")
+    else if (R_BEFAST.test(ua))      { accept("BEFAST durchgeführt."); setFinding(state.hidden?.befast || formatBEFAST(state.hidden)); }
+
+    // 4S- & SAMPLER-Modal-Dokumentation (nie außerhalb Kompetenz)
+    else if (R_4S_DOC.test(ua))      { reply.outside_scope = false; accept("4S dokumentiert."); }
+    else if (R_SAMPLER_DOC.test(ua)) { accept("SAMPLER dokumentiert."); setFinding(formatSampler(get(state,"anamnesis.SAMPLER"))); }
+
     else if (R_NEURO.test(ua))       { accept("Neurologischer Status."); setFinding("Orientierung, Motorik, Sensibilität, Pupillen geprüft."); }
 
     // Trauma-Befunde & Maßnahmen
@@ -481,6 +620,8 @@ export async function handler(event) {
       reply.found = s.text;
       // zum Abschluss alle aktuell bekannten Werte zeigen
       ["RR","SpO2","AF","Puls","BZ","Temp","GCS"].forEach(exposeMeasured);
+      // und ein Debrief erzeugen
+      reply.debrief = makeDebrief(state).debrief;
     }
 
     // Fallback
