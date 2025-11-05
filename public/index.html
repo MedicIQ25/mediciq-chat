@@ -77,6 +77,15 @@
       <button class="tab" data-tab="E">E – Exposure</button>
     </div>
     <div id="panel" class="action-grid" aria-live="polite"></div>
+<!-- Schemata / Tools -->
+<div class="schemata-row">
+  <button class="schema-btn" data-tool="AF_COUNTER">AF zählen (30s)</button>
+  <button class="schema-btn" data-tool="FOUR_S">4S-Schema</button>
+  <button class="schema-btn" data-tool="SAMPLER">SAMPLER</button>
+  <button class="schema-btn" data-tool="BEFAST">BE-FAST</button>
+  <button class="schema-btn" data-tool="NRS">Schmerzskala (NRS)</button>
+  <button class="schema-btn primary" data-tool="DIAGNOSIS">Verdachtsdiagnose & Transport</button>
+</div>
 
     <!-- Queue -->
     <div class="queue card">
@@ -102,6 +111,123 @@
     Beachte: Lehraussagen deiner Rettungsdienstschule haben Vorrang.
   </p>
 </main>
+<!-- ===== MODALS ===== -->
+<div id="modalBackdrop" class="modal-backdrop hidden"></div>
+
+<!-- AF COUNTER -->
+<div id="modalAF" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-head">Atemfrequenz zählen (30 Sekunden)</div>
+  <div class="modal-body">
+    <p>Tippe bei jeder Inspiration auf „Atemzug“. Nach 30s rechnen wir auf /min hoch.</p>
+    <div class="af-ui">
+      <div><span id="afTimer">30</span>s</div>
+      <div><span id="afCount">0</span> Atemzüge</div>
+    </div>
+  </div>
+  <div class="modal-actions">
+    <button id="afTap" class="btn secondary">Atemzug</button>
+    <button id="afStart" class="btn">Start</button>
+    <button id="afCancel" class="btn danger">Abbrechen</button>
+  </div>
+</div>
+
+<!-- NRS -->
+<div id="modalNRS" class="modal hidden">
+  <div class="modal-head">Schmerzskala (NRS 0–10)</div>
+  <div class="modal-body">
+    <input id="nrsRange" type="range" min="0" max="10" step="1" value="0" />
+    <div class="nrs-val">Wert: <b id="nrsVal">0</b></div>
+  </div>
+  <div class="modal-actions">
+    <button id="nrsOk" class="btn">Übernehmen</button>
+    <button id="nrsCancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+
+<!-- BE-FAST -->
+<div id="modalBEFAST" class="modal hidden">
+  <div class="modal-head">BE-FAST Check</div>
+  <div class="modal-body befast-grid">
+    <label><input type="checkbox" id="b_face" /> B – Balance (Gleichgewicht)</label>
+    <label><input type="checkbox" id="e_eyes" /> E – Eyes (Sehstörung)</label>
+    <label><input type="checkbox" id="f_face" /> F – Face (Facialisparese)</label>
+    <label><input type="checkbox" id="a_arm"  /> A – Arm (Armschwäche)</label>
+    <label><input type="checkbox" id="s_speech" /> S – Speech (Sprache)</label>
+    <label>Zeit letzter normaler Zustand: <input type="time" id="t_time" /></label>
+  </div>
+  <div class="modal-actions">
+    <button id="befastOk" class="btn">Dokumentieren</button>
+    <button id="befastCancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+
+<!-- SAMPLER -->
+<div id="modalSampler" class="modal hidden">
+  <div class="modal-head">SAMPLER</div>
+  <div class="modal-body form-grid">
+    <label>Symptoms <input id="s_sympt" placeholder="Beschwerden…" /></label>
+    <label>Allergies <input id="s_allerg" placeholder="Allergien…" /></label>
+    <label>Medications <input id="s_med" placeholder="Medikamente…" /></label>
+    <label>Past history <input id="s_hist" placeholder="Vorerkrankungen…" /></label>
+    <label>Last intake <input id="s_last" placeholder="Letzte Einnahme / Mahlzeit…" /></label>
+    <label>Events <input id="s_events" placeholder="Ereignis / Mechanismus…" /></label>
+    <label>Risk factors <input id="s_risk" placeholder="Risikofaktoren (optional)…" /></label>
+  </div>
+  <div class="modal-actions">
+    <button id="samplerOk" class="btn">Dokumentieren</button>
+    <button id="samplerCancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+
+<!-- 4S -->
+<div id="modal4S" class="modal hidden">
+  <div class="modal-head">4S-Schema</div>
+  <div class="modal-body form-grid">
+    <label><input type="checkbox" id="s1" /> Sicherheit (Eigenschutz/Umfeld)</label>
+    <label><input type="checkbox" id="s2" /> Szene/Szenerie beurteilt</label>
+    <label><input type="checkbox" id="s3" /> Sichtung / Anzahl / Ressourcen</label>
+    <label><input type="checkbox" id="s4" /> Support nachgefordert (z. B. NA/Feuerwehr)</label>
+  </div>
+  <div class="modal-actions">
+    <button id="s4Ok" class="btn">Dokumentieren</button>
+    <button id="s4Cancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+
+<!-- Diagnose & Transport -->
+<div id="modalDx" class="modal hidden">
+  <div class="modal-head">Verdachtsdiagnose & Transport</div>
+  <div class="modal-body form-grid">
+    <label>Fachrichtung
+      <select id="dxSpec">
+        <option value="internistisch">Internistisch</option>
+        <option value="neurologisch">Neurologisch</option>
+        <option value="trauma">Trauma</option>
+        <option value="paediatrisch">Pädiatrisch</option>
+      </select>
+    </label>
+    <label>Verdachtsdiagnose
+      <select id="dxSelect">
+        <!-- wird dynamisch je Fachrichtung befüllt -->
+      </select>
+    </label>
+    <label>Priorität
+      <select id="dxPrio">
+        <option value="hoch (rot)">hoch (rot)</option>
+        <option value="mittel (gelb)">mittel (gelb)</option>
+        <option value="niedrig (grün)">niedrig (grün)</option>
+      </select>
+    </label>
+    <label>Bemerkung (optional)
+      <textarea id="dxNote" rows="3" placeholder="z. B. Schlaganfallverdacht – FAST positiv …"></textarea>
+    </label>
+  </div>
+  <div class="modal-actions">
+    <button id="dxOk" class="btn">Dokumentieren</button>
+    <button id="dxCancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+<!-- ===== END MODALS ===== -->
 
 </body>
 </html>

@@ -32,6 +32,18 @@ document.querySelectorAll('.spec-chip').forEach(btn=>{
     selectedSpec = btn.dataset.spec;
   });
 });
+// Tools (Buttons unter den Tabs)
+document.querySelectorAll('.schema-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const tool = btn.dataset.tool;
+    if (tool === 'AF_COUNTER') openAFCounter();
+    if (tool === 'NRS')        openNRS();
+    if (tool === 'BEFAST')     openBEFAST();
+    if (tool === 'SAMPLER')    openSampler();
+    if (tool === 'FOUR_S')     openFourS();
+    if (tool === 'DIAGNOSIS')  openDiagnosis();
+  });
+});
 
 // Vitals – DOM + sichtbarer Zustand (nur erhobene Werte)
 const vitalsMap = {
@@ -106,12 +118,14 @@ const ACTIONS = {
     { label: 'Wendel', token: 'Wendel' },
     { label: 'BVM', token: 'Beutel-Masken-Beatmung' }
   ],
-  B: [
-    { label: 'SpO₂ messen', token: 'SpO2 messen' }, // Messaktion
-    { label: 'Thorax inspizieren', token: 'Thorax inspizieren' },
-    { label: 'Lunge auskultieren', token: 'Thorax auskultieren' },
-    { label: 'Sauerstoff geben', token: 'O2 geben' } // Intervention -> Backend ändert SpO2
-  ],
+ B: [
+  { label: 'SpO₂ messen', token: 'SpO2 messen' },
+  { label: 'AF zählen (30s)', token: 'modal:AF' },     // <— neu
+  { label: 'Thorax inspizieren', token: 'Thorax inspizieren' },
+  { label: 'Lunge auskultieren', token: 'Thorax auskultieren' },
+  { label: 'Sauerstoff geben', token: 'O2 geben' }
+],
+
   C: [
     { label: 'RR messen', token: 'RR messen' },         // Messaktion
     { label: 'Puls messen', token: 'Puls messen' },     // Messaktion
@@ -131,16 +145,40 @@ const ACTIONS = {
 };
 
 function renderPanel(tab = 'X') {
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === tab)
+  );
   panel.innerHTML = '';
+
   (ACTIONS[tab] || []).forEach(a => {
     const card = document.createElement('button');
     card.className = 'action-card';
-    card.innerHTML = `<div class="action-title">${a.label}</div><div class="action-sub">${a.token}</div>`;
-    card.addEventListener('click', () => addToQueue(a.label, a.token));
+    card.innerHTML =
+      `<div class="action-title">${a.label}</div>
+       <div class="action-sub">${a.token}</div>`;
+
+    card.addEventListener('click', () => {
+      // ✅ Modal-Aktionen abfangen
+      if (a.token && a.token.startsWith('modal:')) {
+        const key = a.token.split(':')[1];
+
+        if (key === 'AF') return openAFCounter();
+        if (key === 'NRS') return openNRS();
+        if (key === 'BEFAST') return openBEFAST();
+        if (key === 'SAMPLER') return openSampler();
+        if (key === '4S') return openFourS();
+        if (key === 'Dx') return openDiagnosis();
+      }
+
+      // ✅ normale Aktion → direkt in die Queue
+      addToQueue(a.label, a.token);
+    });
+
     panel.appendChild(card);
   });
 }
+
+
 tabs.forEach(t => t.addEventListener('click', () => renderPanel(t.dataset.tab)));
 
 // ------- Queue -------
@@ -241,6 +279,121 @@ async function stepCase(phrase) {
   } catch (e) {
     addMsg(`⚠️ Schrittfehler: <span class="small">${e.message}</span>`);
   }
+}
+// ===== MODAL HELPERS =====
+const $id = (x)=>document.getElementById(x);
+function openModal(id){ $id('modalBackdrop').classList.remove('hidden'); $id(id).classList.remove('hidden'); }
+function closeModal(id){ $id('modalBackdrop').classList.add('hidden'); $id(id).classList.add('hidden'); }
+
+// ---- AF COUNTER (30s Tap) ----
+function openAFCounter(){
+  let secs=30, count=0, timer=null;
+  $id('afTimer').textContent=secs; $id('afCount').textContent=count;
+  const tick=()=>{ secs--; $id('afTimer').textContent=secs; if(secs<=0){ stop(true);} };
+  function stop(finish){
+    clearInterval(timer); timer=null;
+    $id('afStart').disabled=false; $id('afTap').disabled=true;
+    if(finish){
+      // hochrechnen: count in 30s -> *2
+      const perMin = Math.max(0, Math.round(count*2));
+      visibleVitals.AF = perMin;
+      renderVitalsFromVisible();
+      // an Backend melden
+      stepCase(`AF messen ${perMin}/min`);
+      closeModal('modalAF');
+    }
+  }
+  $id('afStart').onclick=()=>{ if(timer) return; secs=30; count=0; $id('afTimer').textContent=secs; $id('afCount').textContent=count; timer=setInterval(tick,1000); $id('afStart').disabled=true; $id('afTap').disabled=false; };
+  $id('afTap').onclick=()=>{ if(!timer) return; count++; $id('afCount').textContent=count; };
+  $id('afCancel').onclick=()=>{ stop(false); closeModal('modalAF'); };
+  $id('afTap').disabled=true;
+  openModal('modalAF');
+}
+
+// ---- NRS ----
+function openNRS(){
+  const range=$id('nrsRange'), val=$id('nrsVal');
+  val.textContent=range.value;
+  range.oninput=()=> val.textContent=range.value;
+  $id('nrsOk').onclick=()=>{ const n=Number(range.value||0); stepCase(`NRS ${n}`); closeModal('modalNRS'); };
+  $id('nrsCancel').onclick=()=> closeModal('modalNRS');
+  openModal('modalNRS');
+}
+
+// ---- BE-FAST ----
+function openBEFAST(){
+  $id('befastOk').onclick=()=>{
+    const data={
+      B:$id('b_face').checked, E:$id('e_eyes').checked, F:$id('f_face').checked,
+      A:$id('a_arm').checked,  S:$id('s_speech').checked, T:$id('t_time').value||''
+    };
+    const parts=[];
+    if(data.B) parts.push('Balance');
+    if(data.E) parts.push('Eyes');
+    if(data.F) parts.push('Face');
+    if(data.A) parts.push('Arm');
+    if(data.S) parts.push('Speech');
+    const msg=`BEFAST: ${parts.join(', ') || 'unauffällig'}${data.T?` | Last known well: ${data.T}`:''}`;
+    stepCase(msg);
+    closeModal('modalBEFAST');
+  };
+  $id('befastCancel').onclick=()=> closeModal('modalBEFAST');
+  openModal('modalBEFAST');
+}
+
+// ---- SAMPLER ----
+function openSampler(){
+  $id('samplerOk').onclick=()=>{
+    const msg = `SAMPLER: S=${$id('s_sympt').value||'-'}; A=${$id('s_allerg').value||'-'}; M=${$id('s_med').value||'-'}; P=${$id('s_hist').value||'-'}; L=${$id('s_last').value||'-'}; E=${$id('s_events').value||'-'}; R=${$id('s_risk').value||'-'}`;
+    stepCase(msg);
+    closeModal('modalSampler');
+  };
+  $id('samplerCancel').onclick=()=> closeModal('modalSampler');
+  openModal('modalSampler');
+}
+
+// ---- 4S ----
+function openFourS(){
+  $id('s4Ok').onclick=()=>{
+    const list=[];
+    if($id('s1').checked) list.push('Sicherheit');
+    if($id('s2').checked) list.push('Szenerie beurteilt');
+    if($id('s3').checked) list.push('Sichtung/Ressourcen');
+    if($id('s4').checked) list.push('Support angefordert');
+    stepCase(`4S: ${list.length?list.join(', '):'ohne Auffälligkeit'}`);
+    closeModal('modal4S');
+  };
+  $id('s4Cancel').onclick=()=> closeModal('modal4S');
+  openModal('modal4S');
+}
+
+// ---- Diagnose & Transport ----
+const DX_BY_SPEC = {
+  internistisch: ['ACS (STEMI/NSTEMI?)','Ateminsuffizienz','Sepsis','Hypoglykämie','Exsikkose'],
+  neurologisch:  ['Schlaganfall/TIA','Krampfanfall postiktal','Intrazerebrale Blutung','Delir'],
+  trauma:        ['Polytrauma','Schädel-Hirn-Trauma','Thoraxtrauma','Fraktur/Blutung'],
+  paediatrisch:  ['Fieberkrampf','Asthmaanfall','Dehydratation','Trauma Kind']
+};
+function openDiagnosis(){
+  const dxSpec=$id('dxSpec'), dxSel=$id('dxSelect');
+  const fill=()=>{
+    const list=DX_BY_SPEC[dxSpec.value]||[];
+    dxSel.innerHTML = list.map(x=>`<option>${x}</option>`).join('') + `<option>Andere (Kommentar)</option>`;
+  };
+  dxSpec.value = (selectedSpec || 'internistisch');
+  fill();
+  dxSpec.onchange=fill;
+  $id('dxOk').onclick=()=>{
+    const txt = dxSel.value;
+    const prio= $id('dxPrio').value;
+    const note= ($id('dxNote').value||'').trim();
+    let msg = `Verdachtsdiagnose: ${txt}; Priorität: ${prio}`;
+    if(note) msg += `; Hinweis: ${note}`;
+    stepCase(msg);
+    closeModal('modalDx');
+  };
+  $id('dxCancel').onclick=()=> closeModal('modalDx');
+  openModal('modalDx');
 }
 
 async function runQueue() {
