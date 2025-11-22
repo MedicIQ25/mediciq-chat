@@ -1,19 +1,48 @@
 /**
  * Netlify Function: case-step
  * Processes a user action against a case_state.
+ * Version: click-UI mit Schemata, NRS, dynamischen Vitalwerten & strukturiertem Debriefing.
  */
 exports.handler = async (event) => {
   const headers = {
     "content-type": "application/json",
     "access-control-allow-origin": "*"
   };
-  try {
-    const body = event.body ? JSON.parse(event.body) : {};
-    const state = body.case_state || {};
-    const role = body.role || state.role || "RS";
-    const ua = String(body.user_action || "").trim();
 
-    // canonical reply object
+  try {
+    const body  = event.body ? JSON.parse(event.body) : {};
+    const state = body.case_state || {};
+    const ua    = String(body.user_action || "").trim();
+
+    // ---------- Basis-Struktur im State sicherstellen ----------
+    state.id          = state.id || "unknown_case";
+    state.specialty   = state.specialty || "internistisch";
+    state.role        = state.role || body.role || "RS";
+    state.difficulty  = state.difficulty || "mittel";
+    state.score       = typeof state.score === "number" ? state.score : 0;
+    state.vitals      = state.vitals || {};
+    state.steps_done  = Array.isArray(state.steps_done) ? state.steps_done : [];
+    state.hidden      = state.hidden || {};
+    state.anamnesis   = state.anamnesis || {};
+    state.scene_4s    = state.scene_4s || { sicherheit:"—", szene:"—", sichtung_personen:"—", support_empfehlung:"—" };
+    state.support     = state.support || { calls: [] };
+    state.history     = Array.isArray(state.history) ? state.history : [];
+    state.measurements = state.measurements || {
+      vitals: {},
+      schemas: {},
+      pain: null,
+      diagnosis: null,
+      transport: null
+    };
+
+    const H = state.hidden;
+
+    // Aktionen für Debriefing mitloggen
+    if (ua) {
+      state.history.push({ ts: new Date().toISOString(), action: ua });
+      if (state.history.length > 300) state.history.shift(); // Hardcap
+    }
+
     const reply = {
       accepted: false,
       outside_scope: false,
@@ -21,242 +50,584 @@ exports.handler = async (event) => {
       finding: undefined,
       evaluation: undefined,
       next_hint: undefined,
-      updated_vitals: {}
+      updated_vitals: {},
+      debrief: undefined,
+      case_state: state
     };
 
+    const low = ua.toLowerCase();
+
+    // ---------- Helper ----------
+    function text(v) {
+      return (v === undefined || v === null || String(v).trim() === "") ? "—" : String(v);
+    }
+    function list(arr) {
+      return Array.isArray(arr) && arr.length ? arr.join(", ") : "—";
+    }
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+    function updVitals(obj) {
+      state.vitals = state.vitals || {};
+      for (const k in obj) {
+        if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+        state.vitals[k] = obj[k];
+        reply.updated_vitals[k] = obj[k];
+      }
+    }
+    function ensureMeasurement() {
+      state.measurements = state.measurements || { vitals:{}, schemas:{}, pain:null, diagnosis:null, transport:null };
+      state.measurements.vitals   = state.measurements.vitals   || {};
+      state.measurements.schemas  = state.measurements.schemas  || {};
+      if (!state.measurements.pain) {
+        state.measurements.pain = {
+          documented: false,
+          nrs: null,
+          target: (H.pain && typeof H.pain.nrs === "number") ? H.pain.nrs : null
+        };
+      }
+    }
+
+    const STEP_LABEL = {
+      X: "X – Exsanguination",
+      A: "A – Airway",
+      B: "B – Breathing",
+      C: "C – Circulation",
+      D: "D – Disability",
+      E: "E – Exposure"
+    };
+    function touchStep(letter) {
+      const label = STEP_LABEL[letter];
+      if (!label) return;
+      if (!Array.isArray(state.steps_done)) state.steps_done = [];
+      if (!state.steps_done.some(x => String(x).toUpperCase().startsWith(letter))) {
+        state.steps_done.push(label);
+        state.score += 1;
+      }
+    }
+    function credit(pts) {
+      if (typeof pts !== "number" || !isFinite(pts)) return;
+      state.score += pts;
+    }
+
+    // ---------- 0) Keine Aktion ----------
     if (!ua) {
-      reply.evaluation = "Keine Eingabe erkannt.";
       return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
 
-    // helpers
-    const low = ua.toLowerCase();
-    function textOrNA(x){ return (x && String(x).trim()) ? String(x) : "Keine Auffälligkeiten angegeben."; }
-    function formatList(arr){ return Array.isArray(arr)&&arr.length ? arr.join(", ") : "keine Angaben"; }
-    function answerAnamnesis(st){
-      const a = st.anamnesis || {};
-      const s = a.SAMPLER || {};
-      const o = a.OPQRST  || {};
-      return (
-        `SAMPLER → S:${s.S||"-"} | A:${s.A||"-"} | M:${s.M||"-"} | P:${s.P||"-"} | L:${s.L||"-"} | E:${s.E||"-"} | R:${s.R||"-"}\n`+
-        `Vorerkrankungen: ${formatList(a.vorerkrankungen)}\n`+
-        `Medikation: ${formatList(a.medikation)}\n`+
-        `Allergien: ${formatList(a.allergien)}\n`+
-        `Antikoagulation: ${a.antikoagulation ? "ja" : "nein"}\n`+
-        (o.O || o.P || o.Q || o.R || o.S || o.T ? 
-          `OPQRST → O:${o.O||"-"} | P:${o.P||"-"} | Q:${o.Q||"-"} | R:${o.R||"-"} | S:${o.S||"-"} | T:${o.T||"-"}` 
-          : "")
-      ).trim();
+    // ---------- 1) Debriefing ----------
+    if (/debrief/.test(low)) {
+      ensureMeasurement();
+      const meas   = state.measurements;
+      const vM     = meas.vitals   || {};
+      const sM     = meas.schemas  || {};
+      const steps  = Array.isArray(state.steps_done) ? state.steps_done : [];
+      const order  = ["X","A","B","C","D","E"];
+      const open   = order.filter(l => !steps.some(x => String(x).toUpperCase().startsWith(l)));
+
+      const vitalsAll     = ["RR","SpO2","AF","Puls","BZ","Temp","GCS"];
+      const vitalsDone    = vitalsAll.filter(k => vM[k]);
+      const vitalsMissing = vitalsAll.filter(k => !vM[k]);
+
+      const pain = meas.pain || {};
+      let painLine = "Schmerzskala nicht erhoben.";
+      if (pain.documented) {
+        const n    = pain.nrs;
+        const targ = pain.target;
+        const parts = [`NRS ${n != null ? n : "—"}`];
+        if (targ != null) {
+          parts.push(`Sollwert im Fall: ${targ}`);
+          if (n != null) {
+            const diff = Math.abs(n - targ);
+            parts.push(`Abweichung: ${diff}`);
+          }
+        }
+        painLine = "Schmerzskala dokumentiert (" + parts.join(", ") + ").";
+      }
+
+      const schemaLines = [];
+      schemaLines.push(sM["4S"]    ? "4S-Schema angewandt"       : "4S-Schema nicht dokumentiert");
+      schemaLines.push(sM.SAMPLER  ? "SAMPLER-Anamnese erhoben"  : "SAMPLER noch nicht genutzt");
+      schemaLines.push(sM.BEFAST   ? "BE-FAST geprüft"           : "BE-FAST nicht dokumentiert");
+
+      let dxLine = "Verdachtsdiagnose noch nicht dokumentiert.";
+      if (meas.diagnosis) dxLine = "Verdachtsdiagnose: " + meas.diagnosis;
+      let trLine = "Transportpriorität noch nicht festgelegt.";
+      if (meas.transport) trLine = "Transportentscheidung: " + meas.transport;
+
+      const lines = [];
+      lines.push("XABCDE-Fortschritt: " + (steps.length ? steps.join(" → ") : "keine Schritte dokumentiert."));
+      lines.push(open.length ? ("Offene Bereiche: " + open.join(", ") + ".") : "Alle XABCDE-Bereiche wurden mindestens einmal angesprochen.");
+      lines.push("Vitals erhoben: " + (vitalsDone.length ? vitalsDone.join(", ") : "keine vollständigen Vitalparameter."));
+      if (vitalsMissing.length) lines.push("Fehlende Vitals: " + vitalsMissing.join(", ") + ".");
+      lines.push("Schemata: " + schemaLines.join(" | "));
+      lines.push(painLine);
+      lines.push(dxLine);
+      lines.push(trLine);
+      lines.push("Tipp: Verknüpfe Maßnahmen mit Verlauf (O₂ → SpO₂/AF, Analgesie → NRS, Volumen → RR, Lagerung → Atmung) und dokumentiere Re-Assessments.");
+
+      reply.accepted   = true;
+      reply.debrief    = lines.join("\n");
+      reply.evaluation = reply.debrief;
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    function answerExam(st, key){
-      const H = st.hidden || {};
-      const map = { mund:"mouth", mundraum:"mouth", pupillen:"pupils", lunge:"lung", thorax:"lung",
-                    abdomen:"abdomen", bauch:"abdomen", haut:"skin", ekg:"ekg12", "ekg 12":"ekg12", "ekg3":"ekg3" };
-      const k = map[key] || key;
-      return textOrNA(H[k]);
+
+    // ---------- 2) 4S ----------
+    if (/4s info|^4s$|scene|szene|sicherheit|lagebeurteilung/.test(low)) {
+      ensureMeasurement();
+      state.measurements.schemas["4S"] = true;
+
+      const s = state.scene_4s || {};
+      reply.accepted   = true;
+      reply.evaluation =
+        "4S\n" +
+        "Sicherheit: "         + text(s.sicherheit)         + "\n" +
+        "Szene: "              + text(s.szene)              + "\n" +
+        "Sichtung/Personen: "  + text(s.sichtung_personen)  + "\n" +
+        "Support-Empfehlung: " + text(s.support_empfehlung);
+      reply.next_hint  = "Überlege, ob du NA / Feuerwehr / Polizei / RTH nachfordern möchtest.";
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    function ofKind(kind){
-      const H = state.hidden || {};
-      return (H.injuries||[]).filter(x => x.kind === kind);
-    }
-    function updateVitals(patch){
-      state.vitals = state.vitals || {};
-      for (const k in patch){
-        state.vitals[k] = patch[k];
-        reply.updated_vitals[k] = patch[k];
+
+    // ---------- 3) Support ----------
+    const supportMap = [
+      { re: /(na|notarzt).*nachfordern|^na nachfordern$/, type:"NA" },
+      { re: /feuerwehr.*nachfordern|fw.*nachfordern/,     type:"Feuerwehr" },
+      { re: /polizei.*nachfordern/,                       type:"Polizei" },
+      { re: /(rth|hubschrauber|helikopter).*nachfordern/, type:"RTH" }
+    ];
+    for (const s of supportMap) {
+      if (s.re.test(low)) {
+        state.support.calls.push({ type: s.type, time: new Date().toISOString() });
+        reply.accepted   = true;
+        reply.evaluation = s.type + " nachgefordert.";
+        reply.next_hint  = "Arbeite das XABCDE-Schema weiter ab und dokumentiere deine Befunde.";
+        credit(1);
+        return { statusCode: 200, headers, body: JSON.stringify(reply) };
       }
     }
-    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 
-    // === NON-MODIFYING INFO QUERIES ===
-    if (/(^| )anamnese|sampler|opqrst|vorerkrank|medikati|allergi|sozial|antikoag/.test(low)) {
-      reply.accepted = true;
-      reply.evaluation = answerAnamnesis(state);
-      reply.next_hint = "Arbeite X→A→B→C→D→E weiter ab oder erhebe gezielt Vitalwerte.";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+    // ---------- 4) Anamnese / SAMPLER ----------
+    if (/sampler info|^sampler$|anamnese\b|vorerkrank|medikati|allergi|opqrst/.test(low)) {
+      ensureMeasurement();
+      state.measurements.schemas.SAMPLER = true;
+
+      const a = state.anamnesis || {};
+      const S = a.SAMPLER || {};
+      const O = a.OPQRST || {};
+      reply.accepted   = true;
+      reply.evaluation =
+        `SAMPLER → S:${S.S||"—"} | A:${S.A||"—"} | M:${S.M||"—"} | P:${S.P||"—"} | L:${S.L||"—"} | E:${S.E||"—"} | R:${S.R||"—"}\n` +
+        `Vorerkrankungen: ${list(a.vorerkrankungen)}\n` +
+        `Medikation: ${list(a.medikation)}\n` +
+        `Allergien: ${list(a.allergien)}\n` +
+        `Antikoagulation: ${a.antikoagulation ? "ja" : "nein"}\n` +
+        (O.O||O.P||O.Q||O.R||O.S||O.T
+          ? `OPQRST → O:${O.O||"—"} | P:${O.P||"—"} | Q:${O.Q||"—"} | R:${O.R||"—"} | S:${O.S||"—"} | T:${O.T||"—"}`
+          : "");
+      reply.next_hint = "Untersuche gezielt (Mundraum, Pupillen, Lunge, Abdomen, Haut, EKG) und erhebe Vitalparameter.";
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    // Körperliche Untersuchung
-    const examKeys = ["mund","mundraum","pupillen","lunge","thorax","abdomen","bauch","haut","ekg","ekg 12","ekg3"];
-    for (const k of examKeys){
-      if (low.includes(k)){
-        reply.accepted = true;
-        reply.finding = answerExam(state, k);
+
+    // ---------- 5) Schmerz-Infos + NRS ----------
+    if (/schmerz info/.test(low)) {
+      ensureMeasurement();
+      const p = H.pain || {};
+      state.measurements.pain.target = (typeof p.nrs === "number") ? p.nrs : state.measurements.pain.target;
+
+      reply.accepted   = true;
+      reply.evaluation = `Schmerz (NRS): ${p.nrs ?? "—"} | Ort: ${text(p.ort)} | Charakter: ${text(p.charakter)}`;
+      reply.next_hint  = "Erhebe eine konkrete NRS (0–10) und denke an Analgesie nach SOP.";
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+
+    const nrsMatch = low.match(/\bnrs\s*([0-9]{1,2})\b/);
+    if (nrsMatch) {
+      ensureMeasurement();
+      const n = Number(nrsMatch[1]);
+      state.measurements.pain.documented = true;
+      state.measurements.pain.nrs        = n;
+
+      reply.accepted   = true;
+      reply.evaluation = `Schmerzskala dokumentiert: NRS ${n}.`;
+      reply.next_hint  = "Dokumentiere den Verlauf der Schmerzen (z. B. nach Analgesie).";
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+
+    if (/(schmerz|nrs|schmerzskala)/.test(low)) {
+      ensureMeasurement();
+      const p = H.pain || {};
+      state.measurements.pain.target = (typeof p.nrs === "number") ? p.nrs : state.measurements.pain.target;
+
+      reply.accepted   = true;
+      reply.evaluation = `Schmerz (NRS): ${p.nrs ?? "—"} | Ort: ${text(p.ort)} | Charakter: ${text(p.charakter)}`;
+      reply.next_hint  = "Trage eine NRS (0–10) ein, z. B. 'NRS 6'.";
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+
+    // ---------- 6) Körperliche Untersuchung / BE-FAST ----------
+    if (/befast info|befast\b|last known well|lkw\b/.test(low)) {
+      ensureMeasurement();
+      state.measurements.schemas.BEFAST = true;
+
+      reply.accepted   = true;
+      reply.evaluation = `BE-FAST: ${text(H.befast)} | LKW: ${text(H.lkw)}`;
+      reply.next_hint  = "Bei Verdacht auf Schlaganfall Transport mit hoher Priorität und Stroke-Unit anfahren.";
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+
+    const examMap = {
+      "pupillen":      "pupils",
+      "pupille":       "pupils",
+      "mundraum":      "mouth",
+      "mund":          "mouth",
+      "thorax insp":   "lung",
+      "thorax ausk":   "lung",
+      "lunge":         "lung",
+      "abdomen":       "abdomen",
+      "bauch":         "abdomen",
+      "haut":          "skin",
+      "12-kanal-ekg":  "ekg12",
+      "12 kanal ekg":  "ekg12",
+      "ekg":           "ekg12"
+    };
+    for (const key in examMap) {
+      if (!Object.prototype.hasOwnProperty.call(examMap, key)) continue;
+      if (low.includes(key)) {
+        const field = examMap[key];
+        reply.accepted   = true;
+        reply.finding    = text(H[field]);
         reply.evaluation = "Befund aufgenommen.";
-        reply.next_hint = "Erhebe oder überprüfe passende Vitalwerte (z. B. SpO₂, AF, RR).";
-        return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+        reply.next_hint  = "Leite passende Maßnahmen ein und erhebe Vitalparameter.";
+        credit(1);
+        if (/pupille|gcs|bewusst/.test(key))      touchStep("D");
+        else if (/thorax|lunge/.test(key))        touchStep("B");
+        else if (/abdomen|bauch|haut/.test(key))  touchStep("E");
+        return { statusCode: 200, headers, body: JSON.stringify(reply) };
       }
     }
-    // BEFAST / LKW
-    if (/(befast|lkw\b|letzte.*wohl|last.*well|last known well)/.test(low)) {
-      const H = state.hidden || {};
-      reply.accepted = true;
-      reply.evaluation = `BEFAST: ${textOrNA(H.befast)} | LKW: ${textOrNA(H.lkw)}`;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+
+    // ---------- 7) Vitals (Einzelmessungen) ----------
+    ensureMeasurement();
+    const baseV = H.vitals_baseline || { RR:"120/80", SpO2:96, AF:16, Puls:80, BZ:110, Temp:36.8, GCS:15 };
+
+    // AF Info (für das AF-Modal)
+    if (/af info/.test(low)) {
+      const v = state.vitals.AF ?? baseV.AF;
+      updVitals({ AF: v });
+      state.measurements.vitals.AF = true;
+
+      reply.accepted   = true;
+      reply.evaluation = "AF laut Fallanlage bereitgestellt.";
+      reply.finding    = `AF: ${v} /min`;
+      reply.next_hint  = "Zähle die AF über 30 Sekunden und vergleiche mit dem Monitor.";
+      touchStep("B");
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
 
-    // === VITAL MEASUREMENTS (zeigen EINEN Wert – wie gewünscht) ===
-    if (/^rr|blutdruck|rr messen/.test(low)){
-      reply.accepted = true;
-      reply.evaluation = "RR gemessen.";
-      reply.finding = `RR: ${state.vitals?.RR || state.hidden?.vitals_baseline?.RR || "—"}`;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+    // AF aus Zähl-Tool: „AF messen 24/min …“
+    const afDirect = low.match(/\baf\s*messen[^0-9]*([0-9]{1,2})/);
+    if (afDirect) {
+      const af = Number(afDirect[1]);
+      updVitals({ AF: af });
+      state.measurements.vitals.AF = true;
+
+      let note = "";
+      if (baseV.AF != null) {
+        const diff = Math.abs(af - Number(baseV.AF));
+        if (diff <= 2) note = " (entspricht ungefähr dem erwarteten Wert)";
+        else           note = ` (abweichend, Fallvorgabe ca. ${baseV.AF}/min)`;
+      }
+
+      reply.accepted   = true;
+      reply.evaluation = `AF gezählt: ${af}/min${note}.`;
+      reply.finding    = `AF: ${af} /min`;
+      reply.next_hint  = "Beobachte den Verlauf und dokumentiere Re-Assessments.";
+      touchStep("B");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/sp[o0]2|sauerstoffs[aä]ttigung/.test(low)){
-      reply.accepted = true;
-      const v = (state.vitals && state.vitals.SpO2 != null) ? state.vitals.SpO2 : (state.hidden?.vitals_baseline?.SpO2 || "—");
+
+    // SpO2
+    if (/sp[o0]2 messen/.test(low)) {
+      const v = state.vitals.SpO2 ?? baseV.SpO2;
+      updVitals({ SpO2: v });
+      state.measurements.vitals.SpO2 = true;
+
+      reply.accepted   = true;
       reply.evaluation = "SpO₂ gemessen.";
-      reply.finding = `SpO₂: ${v} %`;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+      reply.finding    = `SpO₂: ${v} %`;
+      reply.next_hint  = "Monitor im Blick behalten und Verlauf interpretieren.";
+      touchStep("B");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/atemfrequenz|af\b|atmung.*frequenz/.test(low)){
-      reply.accepted = true;
-      const v = (state.vitals && state.vitals.AF != null) ? state.vitals.AF : (state.hidden?.vitals_baseline?.AF || "—");
-      reply.evaluation = "AF gezählt.";
-      reply.finding = `AF: ${v} /min`;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+
+    // RR
+    if (/rr messen|blutdruck/.test(low)) {
+      const v = state.vitals.RR ?? baseV.RR;
+      updVitals({ RR: v });
+      state.measurements.vitals.RR = true;
+
+      reply.accepted   = true;
+      reply.evaluation = "RR gemessen.";
+      reply.finding    = `RR: ${v}`;
+      reply.next_hint  = "Denk an Schockindex und wiederholte Messungen.";
+      touchStep("C");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/puls|herzfrequenz|hf\b/.test(low)){
-      reply.accepted = true;
-      const v = (state.vitals && state.vitals.Puls != null) ? state.vitals.Puls : (state.hidden?.vitals_baseline?.Puls || "—");
+
+    // Puls
+    if (/puls messen|herzfrequenz|hf\b/.test(low)) {
+      const v = state.vitals.Puls ?? baseV.Puls;
+      updVitals({ Puls: v });
+      state.measurements.vitals.Puls = true;
+
+      reply.accepted   = true;
       reply.evaluation = "Puls erhoben.";
-      reply.finding = `Puls: ${v} /min`;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+      reply.finding    = `Puls: ${v} /min`;
+      reply.next_hint  = "Qualität (rhythmisch, kräftig) mitdenken.";
+      touchStep("C");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/b(l|)utzucker|bz\b/.test(low)){
-      reply.accepted = true;
-      const v = (state.vitals && state.vitals.BZ != null) ? state.vitals.BZ : (state.hidden?.vitals_baseline?.BZ || "—");
+
+    // BZ
+    if (/bz messen|blutzucker/.test(low)) {
+      const v = state.vitals.BZ ?? baseV.BZ;
+      updVitals({ BZ: v });
+      state.measurements.vitals.BZ = true;
+
+      reply.accepted   = true;
       reply.evaluation = "BZ gemessen.";
-      reply.finding = `BZ: ${v} mg/dl`;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+      reply.finding    = `BZ: ${v} mg/dl`;
+      reply.next_hint  = "Bei Entgleisung Therapie nach SOP.";
+      touchStep("D");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/temperatur|temp\b|fieber/.test(low)){
-      reply.accepted = true;
-      const v = (state.vitals && state.vitals.Temp != null) ? state.vitals.Temp : (state.hidden?.vitals_baseline?.Temp || "—");
+
+    // Temperatur
+    if (/temp messen|temperatur/.test(low)) {
+      const v = state.vitals.Temp ?? baseV.Temp;
+      updVitals({ Temp: v });
+      state.measurements.vitals.Temp = true;
+
+      reply.accepted   = true;
       reply.evaluation = "Temperatur gemessen.";
-      reply.finding = `Temp: ${v} °C`;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+      reply.finding    = `Temp: ${v} °C`;
+      reply.next_hint  = "Hypo-/Hyperthermie gezielt behandeln.";
+      touchStep("E");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/gcs|glasgow/.test(low)){
-      reply.accepted = true;
-      const v = (state.vitals && state.vitals.GCS != null) ? state.vitals.GCS : (state.hidden?.vitals_baseline?.GCS || "—");
+
+    // GCS
+    if (/gcs erheben|gcs\b|glasgow/.test(low)) {
+      const v = state.vitals.GCS ?? baseV.GCS;
+      updVitals({ GCS: v });
+      state.measurements.vitals.GCS = true;
+
+      reply.accepted   = true;
       reply.evaluation = "GCS erhoben.";
-      reply.finding = `GCS: ${v}`;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+      reply.finding    = `GCS: ${v}`;
+      reply.next_hint  = "Entwicklung der Vigilanz im Verlauf dokumentieren.";
+      touchStep("D");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
 
-    // === TRAUMA INFO ===
-    if (/fraktur(en)? sichtbar|brueche|brüche sichtbar/.test(low)) {
-      const fx = ofKind("fracture");
-      reply.accepted = true;
-      reply.finding = fx.length ? fx.map(f=>`${f.location} (${f.open?"offen":"geschlossen"})`).join(" • ") : "Keine sichtbaren Frakturen.";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
-    }
-    if (/blutung(en)? sichtbar/.test(low)) {
-      const b = ofKind("bleeding");
-      reply.accepted = true;
-      reply.finding = b.length ? b.map(x=>`${x.location} (${x.vessel||"unbekannt"}), Stärke ${x.severity}${x.controlled?" – gestillt":""}`).join(" • ") : "Keine sichtbaren Blutungen.";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
-    }
-    if (/becken.*pruef|becken.*prüf|becken.*stabil/.test(low)) {
-      const p = ofKind("pelvis")[0];
-      reply.accepted = true;
-      reply.finding = p ? `Becken ${p.unstable? "instabil" : "stabil"}; Beckenschlinge ${p.binder_applied? "liegt" : "noch nicht angelegt"}.`
-                        : "Kein Hinweis auf relevante Beckenverletzung.";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
-    }
-    if (/nexus.*pruef|nexus.*prüf|c-spine|halswirbelsaeule|halswirbelsäule/.test(low)) {
-      const nx = (state.hidden && state.hidden.nexus) || { positive: false, criteria: ["keine Mittellinien-Schmerzen","keine fokal-neuro Defizite","wach, nüchtern, nicht intox"] };
-      reply.accepted = true;
-      reply.finding = `NEXUS: ${nx.positive? "positiv (Halskrause indiziert)" : "negativ"}. Kriterien: ${nx.criteria?.join(", ")||"–"}`;
-      reply.next_hint = nx.positive ? "Lege einen C-Collar an und immobilisiere achsengerecht." : "Bei negativer NEXUS kann auf Halskrause verzichtet werden.";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
-    }
-    if (/dms/.test(low)) {
-      reply.accepted = true;
-      reply.finding = "DMS unauffällig (vor Maßnahme).";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
-    }
+    // ---------- 8) Maßnahmen mit Vitaleffekt ----------
+    if (/o2 geben|sauerstoff/.test(low)) {
+      const baseSpO2 = Number(state.vitals.SpO2 ?? baseV.SpO2 ?? 94);
+      const baseAF   = Number(state.vitals.AF   ?? baseV.AF   ?? 20);
+      const newSpO2  = clamp(baseSpO2 + 4, 85, 100);
+      const newAF    = clamp(baseAF - 2, 8, 40);
+      updVitals({ SpO2: newSpO2, AF: newAF });
 
-    // === INTERVENTIONS (with effects) ===
-    if (/o2|sauerstoff(gabe)?|oxygen/.test(low)){
-      reply.accepted = true;
+      reply.accepted   = true;
       reply.evaluation = "Sauerstoffgabe eingeleitet.";
-      const base = Number(state.vitals?.SpO2 || state.hidden?.vitals_baseline?.SpO2 || 94);
-      const newSpO2 = clamp(base + 4, 88, 100);
-      const newAF = clamp((state.vitals?.AF ?? state.hidden?.vitals_baseline?.AF ?? 20) - 2, 8, 40);
-      updateVitals({ SpO2: newSpO2, AF: newAF });
-      reply.next_hint = "Erwäge inhalatives β₂-Mimetikum bei obstruktiver Komponente.";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+      reply.next_hint  = "SpO₂ und AF im Verlauf kontrollieren, ggf. Inhalation ergänzen.";
+      touchStep("B");
+      credit(2);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/salbutamol|saba|inhalation|vernebler/.test(low)){
-      reply.accepted = true;
-      reply.evaluation = "Inhalation (β₂-Mimetikum) verabreicht.";
-      const newAF = clamp((state.vitals?.AF ?? 24) - 3, 8, 40);
-      updateVitals({ AF: newAF });
-      reply.next_hint = "Re-Assessment in 5 Min., SpO₂ & AF prüfen.";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+
+    if (/volumen 500/.test(low)) {
+      const baseRR = String(state.vitals.RR ?? baseV.RR ?? "100/60");
+      const parts  = baseRR.split("/");
+      let sys = parseInt(parts[0],10);
+      let dia = parseInt(parts[1] || "60",10);
+      if (!isNaN(sys)) sys = clamp(sys + 5, 80, 180);
+      if (!isNaN(dia)) dia = clamp(dia + 3, 40, 120);
+      const newRR = `${sys}/${dia}`;
+      updVitals({ RR: newRR });
+
+      reply.accepted   = true;
+      reply.evaluation = "500 ml Volumen gegeben.";
+      reply.next_hint  = "RR und klinische Perfusion prüfen.";
+      touchStep("C");
+      credit(2);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/glukose|traubenzucker|glucose|dextrose/.test(low)){
-      reply.accepted = true;
-      reply.evaluation = "Glukosegabe durchgeführt.";
-      const newBZ = clamp((state.vitals?.BZ ?? 40) + 40, 60, 180);
-      const newGCS = clamp((state.vitals?.GCS ?? 13) + 2, 3, 15);
-      updateVitals({ BZ: newBZ, GCS: newGCS });
-      reply.next_hint = "Re-Assessment: Vigilanz, BZ nach 10–15 Min. erneut prüfen.";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+
+    if (/wärme\b|decken|wärmeerhalt/.test(low)) {
+      reply.accepted   = true;
+      reply.evaluation = "Wärmeerhalt sichergestellt.";
+      reply.next_hint  = "Temperatur und Kreislauf beobachten.";
+      touchStep("E");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/druckverband|blutung stillen|blood stop/.test(low)){
-      reply.accepted = true;
-      reply.evaluation = "Druckverband angelegt.";
-      const H = state.hidden || {}; H.injuries = H.injuries || [];
-      H.injuries = H.injuries.map(x => (x.kind==="bleeding" ? { ...x, controlled:true, severity: Math.max(0,(x.severity||1)-1)} : x));
-      state.hidden = H;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+
+    if (/oberkörper hoch lagern|kopfteil hoch/.test(low)) {
+      reply.accepted   = true;
+      reply.evaluation = "Oberkörper hoch gelagert.";
+      reply.next_hint  = "Atemarbeit beurteilen, ggf. O₂-Anpassung.";
+      touchStep("E");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/tourniquet|tk/.test(low)){
-      reply.accepted = true;
-      reply.evaluation = "Tourniquet angelegt.";
-      const H = state.hidden || {}; H.injuries = H.injuries || [];
-      H.injuries = H.injuries.map(x => (x.kind==="bleeding" ? { ...x, controlled:true, severity:0 } : x));
-      state.hidden = H;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+
+    if (/druckverband/.test(low)) {
+      touchStep("X");
+      reply.accepted   = true;
+      reply.evaluation = "Druckverband angelegt, Blutung kontrolliert.";
+      reply.next_hint  = "Vitalzeichen (RR, Puls, Haut) kontrollieren.";
+      credit(2);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/halskrause|c-collar|stif{1,2}neck/.test(low)){
-      reply.accepted = true;
-      reply.evaluation = "Halskrause angelegt.";
-      const H = state.hidden || {}; H.nexus = H.nexus || { positive:false, criteria:[] };
-      H.nexus.applied = true; state.hidden = H;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+
+    if (/tourniquet/.test(low)) {
+      touchStep("X");
+      reply.accepted   = true;
+      reply.evaluation = "Tourniquet angelegt, starke Blutung gestillt.";
+      reply.next_hint  = "Anlagezeit merken und dokumentieren.";
+      credit(2);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
-    if (/beckenschlinge|pelvic binder/.test(low)){
-      reply.accepted = true;
+
+    if (/hämostyptika|haemostyptika|haemostyptikum|hämostyptikum/.test(low)) {
+      touchStep("X");
+      reply.accepted   = true;
+      reply.evaluation = "Hämostyptikum angewendet.";
+      reply.next_hint  = "Wirkung und Perfusion der Extremität beurteilen.";
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+
+    if (/beckenschlinge/.test(low)) {
+      touchStep("C");
+      reply.accepted   = true;
       reply.evaluation = "Beckenschlinge angelegt.";
-      const H = state.hidden || {}; H.injuries = H.injuries || [];
-      H.injuries = H.injuries.map(x => (x.kind==="pelvis" ? { ...x, binder_applied:true } : x));
-      state.hidden = H;
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+      reply.next_hint  = "RR, Puls und Schmerzverhalten beobachten.";
+      credit(2);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
 
-    // Diagnose-Frage
-    if (/diagnose|was ist los|verdacht/.test(low)){
-      reply.accepted = true;
-      const spec = (state.specialty||"").toLowerCase();
-      let dx = "Die Daten deuten auf ein unspezifisches Geschehen hin – führe strukturierte Diagnostik fort.";
-      if (spec==="internistisch") dx = "Wahrscheinlich: akute Bronchialobstruktion (Asthma-Exazerbation).";
-      if (spec==="neurologisch") dx = "Wahrscheinlich: Hypoglykämie-bedingte Vigilanzminderung.";
-      if (spec==="trauma") dx = "Wahrscheinlich: geschlossene Fraktur/Weichteilverletzung Unterarm rechts; keine Anzeichen für Polytrauma.";
-      if (spec==="pädiatrisch") dx = "Wahrscheinlich: virale Atemwegsinfektion mit Fieber.";
+    // einfache Airwaymaßnahmen
+    if (/esmarch/.test(low)) {
+      touchStep("A");
+      reply.accepted   = true;
+      reply.evaluation = "Esmarch-Handgriff angewandt.";
+      reply.next_hint  = "Atemwege kontrollieren, ggf. Guedel/Wendel einlegen.";
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+    if (/guedel/.test(low) || /wendel/.test(low)) {
+      touchStep("A");
+      reply.accepted   = true;
+      reply.evaluation = "Atemwegshilfe eingelegt.";
+      reply.next_hint  = "Beatmungs- und Spontanatmungssituation kontrollieren.";
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+    if (/absaugen/.test(low)) {
+      touchStep("A");
+      reply.accepted   = true;
+      reply.evaluation = "Atemwege abgesaugt.";
+      reply.next_hint  = "Erneute Kontrolle von Atmung und SpO₂.";
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+    if (/beutel-masken-beatmung/.test(low)) {
+      touchStep("A");
+      reply.accepted   = true;
+      reply.evaluation = "Beutel-Masken-Beatmung begonnen.";
+      reply.next_hint  = "AF, Thoraxexkursion und SpO₂ engmaschig überwachen.";
+      credit(2);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+
+    // ---------- 9) EKG ----------
+    if (/12-kanal-ekg/.test(low) || /12 kanal ekg/.test(low)) {
+      reply.accepted   = true;
+      reply.finding    = text(H.ekg12);
+      reply.evaluation = "12-Kanal-EKG beurteilt.";
+      reply.next_hint  = "Bei Ischämiezeichen ACS-Algorithmus einleiten.";
+      touchStep("C");
+      credit(1);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+
+    // ---------- 10) Verdachtsdiagnose & Transport ----------
+    if (/^verdachtsdiagnose:/.test(ua)) {
+      ensureMeasurement();
+      state.measurements.diagnosis = ua;
+
+      const prioMatch = ua.match(/priorit[aä]t[: ]+([^;]+)/i);
+      if (prioMatch) {
+        state.measurements.transport = prioMatch[1].trim();
+      }
+
+      reply.accepted   = true;
+      reply.evaluation = "Verdachtsdiagnose und Transportpriorität dokumentiert.";
+      reply.next_hint  = "Prüfe, ob dein Vorgehen (Maßnahmen, Monitoring, Transportziel) dazu passt.";
+      credit(2);
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+
+    if (/diagnose|was ist los|verdacht/.test(low)) {
+      const spec = String(state.specialty || "").toLowerCase();
+      let dx;
+      if (spec === "internistisch") {
+        dx = "Klinik je nach genutzten Maßnahmen z. B. akute Bronchialobstruktion, ACS oder metabolische Entgleisung.";
+      } else if (spec === "neurologisch") {
+        dx = "Klinik kompatibel z. B. mit Schlaganfall, Krampfanfall oder metabolischer Ursache.";
+      } else if (spec === "trauma") {
+        dx = "Traumatisches Geschehen mit potenziell relevanten Verletzungen – Frakturen / Blutungen / SHT bedenken.";
+      } else if (spec === "pädiatrisch") {
+        dx = "Pädiatrischer Notfall – Atmung, Kreislauf und Bewusstsein engmaschig überwachen.";
+      } else {
+        dx = "Nicht eindeutig – strukturiere Diagnose über XABCDE, SAMPLER und zielgerichtete Untersuchung.";
+      }
+      reply.accepted   = true;
       reply.evaluation = dx;
-      reply.next_hint = "Bestätige durch gezielte Untersuchung und Monitoring; entscheide Transport/Nachforderung NA.";
-      return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+      reply.next_hint  = "Formuliere eine konkrete Verdachtsdiagnose über das Tool 'Verdachtsdiagnose & Transport'.";
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
     }
 
-    // Default fallback
+    // ---------- 11) Fall beenden ----------
+    if (/fall beenden/.test(low)) {
+      reply.accepted   = true;
+      reply.evaluation = "Fall beendet. Du kannst nun ein Debriefing anfordern.";
+      reply.done       = true;
+      return { statusCode: 200, headers, body: JSON.stringify(reply) };
+    }
+
+    // ---------- Fallback ----------
     reply.outside_scope = true;
-    reply.evaluation = "Aktion nicht erkannt. Formuliere frei (z. B. „Ich gebe 2 l O₂ über Brille“ oder „RR messen“).";
-    reply.next_hint = "Nutze X→A→B→C→D→E oder frage nach Anamnese, Pupillen, Lunge, EKG, BEFAST, DMS.";
-    return { statusCode:200, headers, body: JSON.stringify({ ...reply, case_state: state }) };
+    reply.evaluation    = "Aktion nicht erkannt. Beispiele: '4S Info', 'SAMPLER Info', 'SpO2 messen', 'AF messen 18/min', 'BZ messen', 'NRS 6', 'Verdachtsdiagnose: ...'.";
+    reply.next_hint     = "Arbeite Schritt für Schritt nach XABCDE, nutze die Schema-Buttons und erhebe vollständige Vitalparameter.";
+    return { statusCode: 200, headers, body: JSON.stringify(reply) };
+
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: err.message || String(err) })
+    };
   }
 };
