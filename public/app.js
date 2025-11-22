@@ -32,23 +32,18 @@ document.querySelectorAll('.spec-chip').forEach(btn=>{
     selectedSpec = btn.dataset.spec;
   });
 });
+
 // Tools (Buttons unter den Tabs)
 document.querySelectorAll('.schema-btn').forEach(btn=>{
-  const t = btn.dataset.tool;
   btn.addEventListener('click', ()=>{
-    if (!caseState && t!=='DEBRIEF') {
-      addMsg('<div class="small">Bitte zuerst einen Fall starten.</div>');
-      return;
-    }
-    switch(t){
-      case 'AF':       openAFCounter(); break;
-      case 'FOUR_S':   open4S(); break;
-      case 'SAMPLER':  openSampler(); break;
-      case 'BEFAST':   openBEFAST(); break;
-      case 'NRS':      openNRS(); break;
-      case 'DIAGNOSIS':openDiagnosis(); break;
-      case 'DEBRIEF':  stepCase('Debrief'); break;
-    }
+    const tool = btn.dataset.tool;
+    if (tool === 'AF_COUNTER') openAFCounter();
+    if (tool === 'NRS')        openNRS();
+    if (tool === 'BEFAST')     openBEFAST();
+    if (tool === 'SAMPLER')    openSampler();
+    if (tool === 'FOUR_S')     openFourS();
+    if (tool === 'DIAGNOSIS')  openDiagnosis();
+    if (tool === 'DEBRIEF')    openDebrief();
   });
 });
 
@@ -159,11 +154,6 @@ function addMsg(html) {
   el.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 function showHint(text) {
-  // Fallback: Wenn kein separater Hinweisbereich im DOM existiert, schreiben wir die Tipps einfach in den Chat.
-  if (!hintCard || !hintText) {
-    if (text && text.trim()) addMsg(`<div class="small">💡 ${text}</div>`);
-    return;
-  }
   if (text && text.trim()) { hintText.textContent = text; hintCard.classList.remove('hidden'); }
   else { hintText.textContent = '—'; hintCard.classList.add('hidden'); }
 }
@@ -197,23 +187,22 @@ const ACTIONS = {
     { label: 'BMV', token: 'Beutel-Masken-Beatmung' }
   ],
   B: [
-    { label: 'AF zählen (30s)', token: 'AF zählen' },      // öffnet Modal
-    { label: 'AF messen', token: 'AF messen' },           // einfache Messaktion
-    { label: 'SpO2 messen', token: 'SpO2 messen' },       // Messaktion
+    { label: 'AF zählen (30s)', token: 'AF zählen' },
+    { label: 'AF messen', token: 'AF messen' },
+    { label: 'SpO2 messen', token: 'SpO2 messen' },
     { label: 'Lunge auskultieren', token: 'Thorax auskultieren' },
     { label: 'Sauerstoff geben', token: 'O2 geben' }
   ],
-
   C: [
-    { label: 'RR messen', token: 'RR messen' },         // Messaktion
-    { label: 'Puls messen', token: 'Puls messen' },     // Messaktion
+    { label: 'RR messen', token: 'RR messen' },
+    { label: 'Puls messen', token: 'Puls messen' },
     { label: '12-Kanal-EKG', token: '12-Kanal-EKG' },
     { label: 'Volumen 500 ml', token: 'Volumen 500 ml' }
   ],
   D: [
-    { label: 'GCS erheben', token: 'GCS erheben' },     // Messaktion
+    { label: 'GCS erheben', token: 'GCS erheben' },
     { label: 'Pupillen prüfen', token: 'Pupillen' },
-    { label: 'BZ messen', token: 'BZ messen' }          // Messaktion
+    { label: 'BZ messen', token: 'BZ messen' }
   ],
   E: [
     { label: 'Ganzkörper Check', token: 'Bodycheck' },
@@ -260,42 +249,303 @@ function removeFromQueue(i) {
   renderQueue();
 }
 
-// ------- Case handling -------
+// ====================================================================
+// Lokaler Fallsimulator (Fallback, falls Netlify-Function nicht geht)
+// ====================================================================
+function buildLocalCase(spec, role, difficulty) {
+  spec = (spec || 'internistisch').toLowerCase();
+  role = role || 'RS';
+  difficulty = difficulty || 'mittel';
+
+  const cases = {
+    internistisch: () => ({
+      id: "rs_asthma_01",
+      specialty: "internistisch",
+      role,
+      difficulty,
+      story: "17-jähriger Patient auf dem Sportplatz mit akuter Atemnot nach Sprint. Sprechdyspnoe, 2-Wort-Sätze.",
+      target_outcome: "AF und SpO₂ verbessern (O₂ + inhalatives β₂-Mimetikum), Transport vorbereiten.",
+      key_findings: ["Dyspnoe", "verlängertes Exspirium", "Giemen", "Sprechdyspnoe"],
+      red_flags: ["SpO₂ < 90 %", "Erschöpfung", "Silent chest"],
+      vitals: { RR: "138/86", SpO2: 85, AF: 28, Puls: 124, BZ: 108, Temp: 36.8, GCS: 15 },
+      scene_4s: {
+        sicherheit: "Keine akute Eigen-/Fremdgefährdung, Sportplatz gesichert.",
+        szene: "Sportplatz, Patient sitzt nach vorne gebeugt, stützt sich auf die Knie.",
+        sichtung_personen: "1 Patient, Trainer und Mannschaftskameraden anwesend.",
+        support_empfehlung: "NA bei fehlender Besserung unter Therapie oder klinischer Verschlechterung erwägen."
+      },
+      anamnesis: {
+        SAMPLER: {
+          S: "akute Atemnot nach Sprint, bekannte Asthma bronchiale",
+          A: "Pollen, Hausstaub",
+          M: "Bedarfs-Spray (β₂-Mimetikum), Controller unregelmäßig",
+          P: "Asthma bronchiale seit Kindheit",
+          L: "keine Krankenhausaufenthalte in letzter Zeit",
+          E: "Belastung/Sport, Pollenflug, Inhalator vergessen",
+          R: "keine Reise, kein Fieber"
+        },
+        vorerkrankungen: ["Asthma bronchiale"],
+        medikation: ["β₂-Mimetikum Spray", "inhalatives Steroid (unregelmäßig)"],
+        allergien: ["Pollen", "Hausstaub"],
+        antikoagulation: false,
+        OPQRST: {
+          O: "plötzlich nach Sprint",
+          P: "schlimmer bei Belastung, besser im Sitzen nach vorne gebeugt",
+          Q: "Engegefühl in der Brust",
+          R: "kein Ausstrahlen",
+          S: "NRS 2–3, eher Luftnot als Schmerz",
+          T: "seit ca. 10 Minuten zunehmend"
+        }
+      },
+      hidden: {
+        pupils: "isokor, mittelweit, prompt",
+        mouth: "Mund-/Rachenraum frei, kein Stridor, kein Erbrochenes",
+        lung: "Giemen beidseits, verlängertes Exspirium, keine Rasselgeräusche",
+        abdomen: "weich, kein Abwehrspannungsbefund",
+        skin: "rosig, leicht schweißig",
+        ekg3: "Sinusrhythmus 110/min, keine ST-Hebungen",
+        ekg12: "Sinusrhythmus, keine Ischämiezeichen",
+        befast: "ohne Auffälligkeiten",
+        lkw: "nicht relevant",
+        pain: { nrs: 2, ort: "thorakal, diffus", charakter: "Engegefühl/Pressen" },
+        injuries: [],
+        vitals_baseline: { RR: "130/80", SpO2: 94, AF: 18, Puls: 98, BZ: 108, Temp: 36.8, GCS: 15 }
+      }
+    }),
+
+    neurologisch: () => ({
+      id: "rs_hypoglyk_01",
+      specialty: "neurologisch",
+      role,
+      difficulty,
+      story: "65-jähriger Patient, zuhause aufgefunden, wirkt verwirrt und schwitzig. Angehörige berichten von Diabetes.",
+      target_outcome: "Hypoglykämie erkennen, Glukosegabe, Bewusstseinslage und BZ im Verlauf dokumentieren.",
+      key_findings: ["Vigilanzminderung", "kaltschweißig", "niedriger BZ", "Diabetesanamnese"],
+      red_flags: ["Bewusstlosigkeit", "Krampfanfälle", "fehlende Besserung nach Glukose"],
+      vitals: { RR: "146/88", SpO2: 96, AF: 18, Puls: 96, BZ: 42, Temp: 36.4, GCS: 13 },
+      scene_4s: {
+        sicherheit: "Wohnung, keine akute Gefährdungslage, Zugang frei.",
+        szene: "Patient halb auf dem Sofa, reagiert verzögert, Wohnumgebung unauffällig.",
+        sichtung_personen: "1 Patient, Ehepartner anwesend.",
+        support_empfehlung: "NA bei Bewusstlosigkeit oder fehlender Besserung nach Therapie."
+      },
+      anamnesis: {
+        SAMPLER: {
+          S: "Verwirrtheit, Zittern, Schwitzen",
+          A: "keine bekannt",
+          M: "Insulin, Metformin, Blutdruckmedikamente",
+          P: "Diabetes mellitus Typ 2, Hypertonie",
+          L: "abends wenig gegessen, morgens keine Mahlzeit",
+          E: "Mahlzeit ausgelassen, Insulin dennoch gespritzt",
+          R: "keine Reise, keine Infektsymptome"
+        },
+        vorerkrankungen: ["Diabetes mellitus Typ 2", "arterielle Hypertonie"],
+        medikation: ["Basalinsulin", "Metformin", "ACE-Hemmer"],
+        allergien: [],
+        antikoagulation: false,
+        OPQRST: {
+          O: "seit ca. 30 Minuten zunehmende Verwirrtheit",
+          P: "keine klare Provokation außer Nahrungsverzicht",
+          Q: "kein Schmerz, eher Schwächegefühl",
+          R: "-",
+          S: "-",
+          T: "progredient über 30–60 Minuten"
+        }
+      },
+      hidden: {
+        pupils: "isokor, mittelweit, prompt",
+        mouth: "Mund-/Rachenraum frei",
+        lung: "vesikuläres Atemgeräusch beidseits, keine RG",
+        abdomen: "weich, kein Druckschmerz",
+        skin: "kaltschweißig, leicht blass",
+        ekg3: "Sinusrhythmus 90/min, einzelne supraventrikuläre Extrasystolen",
+        ekg12: "Sinusrhythmus, keine akuten Ischämiezeichen",
+        befast: "ohne fokal-neurologische Ausfälle",
+        lkw: "kein Schlaganfallverdacht, daher nicht relevant",
+        pain: { nrs: 0, ort: "kein Schmerz", charakter: "-" },
+        injuries: [],
+        vitals_baseline: { RR: "140/80", SpO2: 97, AF: 16, Puls: 82, BZ: 120, Temp: 36.6, GCS: 15 }
+      }
+    }),
+
+    trauma: () => ({
+      id: "rs_trauma_unterarm_01",
+      specialty: "trauma",
+      role,
+      difficulty,
+      story: "29-jährige Patientin stürzt beim Fahrradfahren, fängt sich mit dem rechten Arm ab. Deformität und Schmerzen am Unterarm.",
+      target_outcome: "Blutungskontrolle, adäquate Immobilisation, Schmerztherapie einleiten, Traumaschema anwenden.",
+      key_findings: ["deformierter Unterarm", "Druckschmerz", "Schwellung", "Bewegungsschmerz"],
+      red_flags: ["starke Blutung", "neurologische Ausfälle der Hand", "weitere Verletzungen übersehen"],
+      vitals: { RR: "132/84", SpO2: 98, AF: 18, Puls: 88, BZ: 102, Temp: 36.7, GCS: 15 },
+      scene_4s: {
+        sicherheit: "Straße gesichert, kein laufender Verkehr mehr, Helm vorhanden.",
+        szene: "Fahrradsturz, Patientin sitzt am Gehweg, Fahrrad daneben.",
+        sichtung_personen: "1 Patientin, Zeuge vor Ort.",
+        support_empfehlung: "NA nur bei zusätzlicher Kopfverletzung, Polytrauma oder Schockzeichen."
+      },
+      anamnesis: {
+        SAMPLER: {
+          S: "starke Schmerzen rechter Unterarm",
+          A: "keine bekannt",
+          M: "keine Dauermedikation",
+          P: "keine relevanten Vorerkrankungen",
+          L: "keine OPs / Krankenhausaufenthalte",
+          E: "Fahrradsturz, Sturz auf ausgestreckten Arm",
+          R: "keine Reise, kein Infekt"
+        },
+        vorerkrankungen: [],
+        medikation: [],
+        allergien: [],
+        antikoagulation: false,
+        OPQRST: {
+          O: "sofort nach Sturz",
+          P: "Bewegung / Belastung verschlechtert, Schienen / Ruhigstellung bessert",
+          Q: "stechender, lokaler Schmerz",
+          R: "kein Ausstrahlen",
+          S: "NRS 7–8",
+          T: "konstant seit Sturz"
+        }
+      },
+      hidden: {
+        pupils: "isokor, mittelweit, prompt",
+        mouth: "Mund-/Rachenraum frei",
+        lung: "vesikulär beidseits, keine RG",
+        abdomen: "weich, kein Druckschmerz",
+        skin: "Schürfwunden am rechten Unterarm, Hämatom, keine große offene Wunde",
+        ekg3: "Sinusrhythmus 85/min",
+        ekg12: "Sinus, keine Auffälligkeiten",
+        befast: "ohne Auffälligkeiten",
+        lkw: "nicht relevant",
+        pain: { nrs: 8, ort: "rechter Unterarm", charakter: "stechend, pulsierend" },
+        injuries: ["vermutete distale Unterarmfraktur rechts"],
+        vitals_baseline: { RR: "128/78", SpO2: 98, AF: 16, Puls: 80, BZ: 102, Temp: 36.7, GCS: 15 }
+      }
+    }),
+
+    paediatrisch: () => ({
+      id: "rs_paed_bronchiolitis_01",
+      specialty: "pädiatrisch",
+      role,
+      difficulty,
+      story: "9 Monate alter Säugling mit Husten und erschwerter Atmung seit gestern, heute deutliche Verschlechterung.",
+      target_outcome: "Respiratorische Situation einschätzen, Oxygenierung verbessern, Transport mit Monitoring in Kinderklinik.",
+      key_findings: ["Tachypnoe", "Einziehungen", "Nasenflügeln", "geringe Trinkmenge", "Fieber"],
+      red_flags: ["Apnoen", "Zyanose", "Erschöpfung", "SpO₂ < 92 % trotz O₂"],
+      vitals: { RR: "110/70", SpO2: 90, AF: 42, Puls: 168, BZ: 96, Temp: 38.7, GCS: 15 },
+      scene_4s: {
+        sicherheit: "Wohnung, keine akute Gefährdung. Eltern anwesend.",
+        szene: "Kind liegt im Bettchen, wirkt erschöpft, atmet schnell.",
+        sichtung_personen: "1 Kind, Eltern anwesend.",
+        support_empfehlung: "NA / Kinderarzt bei drohender respiratorischer Erschöpfung oder Apnoen."
+      },
+      anamnesis: {
+        SAMPLER: {
+          S: "Husten, schnelle Atmung, trinkt schlecht",
+          A: "keine bekannt",
+          M: "Fiebersaft heute Morgen",
+          P: "Frühgeboren 36+0, sonst unauffällig",
+          L: "keine Krankenhausaufenthalte",
+          E: "seit 2 Tagen Husten und Schnupfen, seit heute deutlich schlechter",
+          R: "kein Auslandsaufenthalt, Kontakt zu erkälteten Geschwistern"
+        },
+        vorerkrankungen: ["Frühgeburt 36+0"],
+        medikation: ["Paracetamol-Saft nach Bedarf"],
+        allergien: [],
+        antikoagulation: false,
+        OPQRST: {
+          O: "schleichender Beginn vor 2 Tagen",
+          P: "Lagewechsel kaum Einfluss, Sitzen auf dem Arm bessert etwas",
+          Q: "kein Schmerz, eher Luftnot/Unruhe",
+          R: "-",
+          S: "-",
+          T: "progredient"
+        }
+      },
+      hidden: {
+        pupils: "isokor, altersentsprechend, prompt",
+        mouth: "Nasen-Rachenraum mit klarem Sekret, kein Stridor",
+        lung: "beidseits giemende und pfeifende Atemgeräusche, verlängertes Exspirium, leichte Einziehungen",
+        abdomen: "weich, kein Druckschmerz",
+        skin: "leicht febril, etwas blass, periphere Zyanose bei Belastung",
+        ekg3: "Sinusrhythmus, altersentsprechende HF",
+        ekg12: "nicht routinemäßig abgeleitet; kein Hinweis auf kardiale Problematik",
+        befast: "nicht relevant",
+        lkw: "nicht relevant",
+        pain: { nrs: 3, ort: "unklar (Kind kann es nicht äußern)", charakter: "Unruhe, Quengeln" },
+        injuries: [],
+        vitals_baseline: { RR: "105/65", SpO2: 95, AF: 32, Puls: 150, BZ: 96, Temp: 37.8, GCS: 15 }
+      }
+    })
+  };
+
+  const createCase = cases[spec] || cases.internistisch;
+  const c = createCase();
+  c.steps_done = c.steps_done || [];
+  c.history = c.history || [];
+  c.score = typeof c.score === 'number' ? c.score : 0;
+  return c;
+}
+
+// ------- Case handling / Start -------
 async function startCase() {
   if (!selectedSpec) selectedSpec = 'internistisch';
-  clearVisibleVitals();
-  caseState = null;
-  resetProgress();
-  setStatus('Fall wird geladen …');
-  startBtn.disabled = true;
 
+  // UI-Reset
+  clearVisibleVitals();
+  resetProgress();
+  caseState = null;
+  setStatus('Fall wird geladen …');
+
+  startBtn.disabled = true;
   addMsg('<div class="small">Neuer Fall wird erstellt …</div>');
+
+  let usedFallback = false;
   try {
     const res = await fetch(API_CASE_NEW, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        specialty: selectedSpec,       // <- vom Chip
+        specialty: selectedSpec,
         difficulty: 'mittel',
-        role: roleSel?.value || 'RS'   // <- Rolle
+        role: roleSel?.value || 'RS'
       })
     });
-    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error('Backend antwortet mit Status ' + res.status);
+    }
+
+    const data = await res.json().catch(() => {
+      throw new Error('Antwort konnte nicht als JSON gelesen werden.');
+    });
+
+    if (!data || data.error) {
+      throw new Error(data && data.error ? data.error : 'Ungültige Antwort vom Backend.');
+    }
+
     caseState = data.case || data;
-
-    // Wichtig: NICHT automatisch Vitals setzen -> alles auf „–“ bis gemessen
-    clearVisibleVitals();
-    setStatus(`Fall aktiv: ${caseState?.patient?.name || 'Patient/in'} (${selectedSpec})`);
-    setScore(caseState?.score ?? 0);
-    renderProgress(caseState?.steps_done || []);
-    showHint('Starte mit X: lebensbedrohliche Blutungen ausschließen/stoppen.');
-
-    addMsg(`<strong>Fallstart:</strong> ${caseState?.story || '—'}`);
   } catch (e) {
-    addMsg(`⚠️ Konnte keinen Fall starten: <span class="small">${e.message}</span>`);
+    // Fallback: lokale Fallsimulation
+    usedFallback = true;
+    caseState = buildLocalCase(selectedSpec, roleSel?.value || 'RS', 'mittel');
+    addMsg(`<div class="small">⚠️ Backend nicht erreichbar, verwende lokalen Fallsimulator (${e.message}).</div>`);
   } finally {
     startBtn.disabled = false;
   }
+
+  if (!caseState) {
+    setStatus('Kein Fall aktiv.');
+    return;
+  }
+
+  clearVisibleVitals();
+  setStatus(`Fall aktiv: ${caseState?.patient?.name || 'Patient/in'} (${selectedSpec})`);
+  setScore(caseState?.score ?? 0);
+  renderProgress(caseState?.steps_done || []);
+  showHint('Starte mit X: lebensbedrohliche Blutungen ausschließen/stoppen.');
+
+  addMsg(`<strong>Fallstart${usedFallback ? ' (lokal)' : ''}:</strong> ${caseState?.story || '—'}`);
 }
 
 async function stepCase(phrase) {
@@ -310,9 +560,8 @@ async function stepCase(phrase) {
 
     // 1) sichtbare Vitals MERGEN (nur keys, die zurückkommen)
     if (data.updated_vitals) {
-      const keys = Object.keys(data.updated_vitals);
-      keys.forEach(k => { visibleVitals[k] = data.updated_vitals[k]; });
-      if (keys.length) markMonitor(keys);
+      Object.entries(data.updated_vitals).forEach(([k,v]) => { visibleVitals[k] = v; });
+      markMonitor(Object.keys(data.updated_vitals));
       renderVitalsFromVisible();
     }
 
@@ -402,7 +651,7 @@ function openAFCounter(){
         if (m) targetAF = Number(m[1]);
       }
       const info = targetAF!=null ? `🎯 Ziel (Erwartung): ${targetAF}/min` : `ℹ️ Zähle 30s – wir rechnen hoch.`;
-      document.getElementById('befastInfo')?.textContent; // no-op to avoid linter
+      document.getElementById('befastInfo')?.textContent; // no-op
       const t = document.createElement('div'); t.className='small muted'; t.textContent = info;
       const body = document.querySelector('#modalAF .modal-body');
       body && body.appendChild(t);
@@ -427,16 +676,7 @@ function openAFCounter(){
       visibleVitals.AF = perMin;
       renderVitalsFromVisible();
       markMonitor(['AF']);
-
-      // Vergleich mit Ziel (±2)
-      let note = '';
-      if (targetAF != null) {
-        const diff = Math.abs(perMin - targetAF);
-        note = diff <= 2 ? ' (🎯 entspricht Erwartung)' : ` (↔︎ abweichend, Ziel: ${targetAF}/min)`;
-      }
-
-      // an Backend melden
-      stepCase(`AF messen ${perMin}/min${note}`);
+      stepCase(`AF messen ${perMin}/min`);
       closeModal('modalAF');
     }
   }
@@ -549,7 +789,7 @@ function openSampler(){
 }
 
 // ---- 4S ----
-function open4S(){
+function openFourS(){
   const infoBox = document.getElementById('s4Info');
   document.getElementById('s4Fetch')?.addEventListener('click', async ()=>{
     const res = await fetch(API_CASE_STEP, {
@@ -610,6 +850,50 @@ function openDiagnosis(){
   openModal('modalDx');
 }
 
+// ---- Debrief / Zusammenfassung ----
+async function openDebrief(){
+  // Versuche zuerst, ein Debrief vom Backend zu bekommen
+  try{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'Debriefing', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    if (data.debrief || data.evaluation || data.finding) {
+      addMsg(`<strong>Debriefing</strong><div class="small">${data.debrief || data.evaluation || data.finding}</div>`);
+      return;
+    }
+  }catch(e){ /* fallback unten */ }
+
+  // Fallback: ganz grobe Auswertung auf Basis von caseState
+  if (!caseState) {
+    addMsg('<div class="small">Kein aktiver Fall für ein Debriefing.</div>');
+    return;
+  }
+  const s   = caseState;
+  const v   = s.measurements?.vitals || {};
+  const sch = s.measurements?.schemas || {};
+  const pain = s.measurements?.pain || {};
+  const steps = s.steps_done || [];
+
+  const vitalsAll     = ['RR','SpO2','AF','Puls','BZ','Temp','GCS'];
+  const vitalsDone    = vitalsAll.filter(k => v[k]);
+  const vitalsMissing = vitalsAll.filter(k => !v[k]);
+  const openXABCDE    = ['X','A','B','C','D','E'].filter(letter => !steps.some(x=>String(x).toUpperCase().startsWith(letter)));
+
+  const bullets = [];
+  bullets.push(`XABCDE: erledigt → ${steps.length ? steps.join(' → ') : 'keine Schritte dokumentiert'}`);
+  if (openXABCDE.length) bullets.push(`Offen: ${openXABCDE.join(', ')}`);
+  bullets.push(`Vitals erhoben: ${vitalsDone.length ? vitalsDone.join(', ') : 'keine vollständigen Vitalzeichen'}`);
+  if (vitalsMissing.length) bullets.push(`Vitals fehlen: ${vitalsMissing.join(', ')}`);
+  bullets.push(`4S: ${sch['4S'] ? 'durchgeführt' : 'nicht dokumentiert'}`);
+  bullets.push(`SAMPLER: ${sch['SAMPLER'] ? 'dokumentiert' : 'fehlt'}`);
+  bullets.push(`BE-FAST: ${sch['BEFAST'] ? 'geprüft' : 'nicht dokumentiert'}`);
+  bullets.push(`Schmerzskala: ${pain.documented ? `NRS ${pain.nrs ?? '—'}` : 'nicht erhoben'}`);
+
+  addMsg(`<strong>Debriefing (lokal)</strong><ul class="small"><li>${bullets.join('</li><li>')}</li></ul>`);
+}
+
 // ------- Modal Helpers -------
 function $id(id){ return document.getElementById(id); }
 
@@ -622,6 +906,22 @@ function closeModal(id){
   const el = document.getElementById(id);
   if (!el) return;
   el.classList.add('hidden');
+}
+
+// ------- Queue ausführen -------
+async function runQueue() {
+  if (!caseState || !queue.length) return;
+  runBtn.disabled = clearBtn.disabled = true;
+  try {
+    while (queue.length) {
+      const { token } = queue.shift();
+      renderQueue();
+      await stepCase(token);
+      await new Promise(r => setTimeout(r, 120));
+    }
+  } finally {
+    runBtn.disabled = clearBtn.disabled = false;
+  }
 }
 
 // ------- Events/Init -------
