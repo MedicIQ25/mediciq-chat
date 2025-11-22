@@ -1,20 +1,7 @@
 // netlify/functions/case-new.js
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-// Pfad zur cases.json (Netlify unterstützt __dirname nicht direkt → workaround)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 export async function handler(event) {
-  // ----- CORS -----
-  const ALLOWED_ORIGINS = [
-    "https://www.mediciq.de",
-    "https://mediciq.de",
-    "https://mediciq.webflow.io"
-  ];
-  const reqOrigin = event.headers?.origin || event.headers?.Origin || "";
+  const ALLOWED_ORIGINS = ["https://www.mediciq.de", "https://mediciq.de", "https://mediciq.webflow.io", "https://ornate-chimera-b77016.netlify.app"];
+  const reqOrigin = event.headers?.origin || "";
   const allowOrigin = ALLOWED_ORIGINS.includes(reqOrigin) ? reqOrigin : ALLOWED_ORIGINS[0];
 
   const headers = {
@@ -25,62 +12,72 @@ export async function handler(event) {
     "Content-Type": "application/json"
   };
 
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers, body: "" };
-  }
+  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers, body: "" };
 
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const specialty = (body.specialty || "internistisch").toString().toLowerCase();
-    const role = (body.role || "RS").toString();
+    const specialty = (body.specialty || "internistisch").toLowerCase();
+    const role = (body.role || "RS");
 
-    // ----- Helper -----
     const newId = () => "fall_" + Math.random().toString(36).slice(2, 8);
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     const rint = (min, max) => Math.floor(min + Math.random() * (max - min + 1));
     const jitter = (base, range = 5) => base + rint(-range, range);
 
-    // ----- Rollen-Scope -----
-    const scopeRS = {
-      role: "RS",
-      allowed_actions: ["Eigenschutz", "XABCDE", "Monitoring", "O₂", "Blutstillung", "Immobilisation", "Transport"],
-      disallowed_examples: ["i.v.-Zugang", "Medikamente (außer SOP)"]
-    };
-    const scopeNotSan = {
-      role: "NotSan",
-      allowed_actions: [...scopeRS.allowed_actions, "i.v./i.o.", "Volumen", "SOP-Medikamente"],
-      disallowed_examples: ["Narkose"]
-    };
+    const scopeRS = { role: "RS", allowed_actions: ["alles bis SOP"], disallowed_examples: ["i.v.", "Medis"] };
+    const scopeNotSan = { role: "NotSan", allowed_actions: [...scopeRS.allowed_actions, "i.v./i.o.", "Volumen", "SOP-Medis"] };
     const SCOPE = role === "NotSan" ? scopeNotSan : scopeRS;
 
-    // ----- Specialty Mapping -----
-    const MAP = {
-      internistisch: "internistisch", internal: "internistisch", innere: "internistisch",
-      neurologisch: "neurologisch", neuro: "neurologisch",
-      trauma: "trauma", traumatologie: "trauma",
-      paediatrisch: "paediatrisch", pädiatrisch: "paediatrisch", kind: "paediatrisch", pädiatrie: "paediatrisch"
-    };
+    const MAP = { internistisch: "internistisch", neurologisch: "neurologisch", trauma: "trauma", paediatrisch: "paediatrisch" };
     const normalized = MAP[specialty] || "internistisch";
 
-    // ----- Lade alle Fälle aus cases.json -----
-    const casesData = JSON.parse(readFileSync(join(__dirname, "cases.json"), "utf8"));
-    const pool = casesData[normalized];
-    if (!pool || pool.length === 0) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: "Keine Fälle für diese Fachrichtung" }) };
-    }
+    // ─── ALLE FÄLLE DIREKT IM CODE (kein externes JSON mehr!) ─────────────────
+    const ALL_CASES = {
+      internistisch: [
+        { diagnosis: "Diabetische Ketoazidose (DKA)", story: "19-jähriger Typ-1-Diabetiker, Durst, Erbrechen, Kussmaul-Atmung.", patient: { name: "Max Mustermann", age: 19, sex: "m" },
+          key_findings: ["Kussmaul", "BZ >350", "Exsikkose"], red_flags: ["Azidose", "Bewusstlosigkeit"], target_outcome: "Transport + Flüssigkeit",
+          hidden: { lung: "tiefe Kussmaul-Atmung", mouth: "trocken, Azetongeruch", abdomen: "weich, druckdolent", pain: { location: "Bauch", nrs: 7 } },
+          vitals_baseline: { bpSys: 105, bpDia: 65, spo2: 96, af: 28, puls: 110, bz: 420, temp: 37.4, gcs: 14, jitter: 8 }
+        },
+        { diagnosis: "Akute Hypoglykämie", story: "72-jährige Diabetikerin, verwirrt, schwitzt, zittert.", patient: { name: "Hilde K.", age: 72, sex: "w" },
+          hidden: { pain: { nrs: 0 } }, vitals_baseline: { bpSys: 140, bpDia: 80, spo2: 98, af: 18, puls: 110, bz: 38, temp: 36.6, gcs: 13, jitter: 6 }
+        },
+        { diagnosis: "Lungenembolie", story: "48-jährige Frau nach Flug, plötzlich Luftnot + Thoraxschmerz.", patient: { name: "Sandra L.", age: 48, sex: "w" },
+          hidden: { lung: "rechts basal abgeschwächt" }, vitals_baseline: { bpSys: 100, bpDia: 65, spo2: 88, af: 32, puls: 124, bz: 110, temp: 37.1, gcs: 15, jitter: 7 }
+        }
+      ],
+      neurologisch: [
+        { diagnosis: "Ischämischer Schlaganfall (MCA links)", story: "66-jähriger Mann, plötzlich Aphasie + Rechtschwäche.", patient: { name: "Werner G.", age: 66, sex: "m" },
+          hidden: { befast: { F: true, A: true, S: true }, lkw: "vor 50 Minuten" }, vitals_baseline: { bpSys: 190, bpDia: 100, spo2: 95, af: 18, puls: 82, bz: 140, temp: 36.8, gcs: 12, jitter: 10 }
+        }
+      ],
+      trauma: [
+        { diagnosis: "Polytrauma Motorradunfall", story: "34-jähriger Motorradfahrer, offene Oberschenkelfraktur + Beckenschmerz.", patient: { name: "Tim R.", age: 34, sex: "m" },
+          hidden: { injuries: [{ kind: "bleeding", location: "Oberschenkel links", type: "arterial" }], lung: "rechts abgeschwächt" },
+          vitals_baseline: { bpSys: 85, bpDia: 50, spo2: 89, af: 28, puls: 130, bz: 95, temp: 35.9, gcs: 9, jitter: 12 }
+        }
+      ],
+      paediatrisch: [
+        { diagnosis: "Schwerer Asthmaanfall", story: "7-jähriges Mädchen, Giemen, Einziehungen, SpO₂ 88%.", patient: { name: "Leonie S.", age: 7, sex: "w" },
+          hidden: { lung: "diffuses Giemen, prolongiertes Exspirium" }, vitals_baseline: { bpSys: 105, bpDia: 70, spo2: 88, af: 40, puls: 150, bz: 110, temp: 37.6, gcs: 15, jitter: 6 }
+        }
+      ]
+    };
+    // ───────────────────────────────────────────────────────────────────────
+
+    const pool = ALL_CASES[normalized];
+    if (!pool) return { statusCode: 400, headers, body: JSON.stringify({ error: "Fachrichtung nicht gefunden" }) };
 
     const chosen = pick(pool);
-
-    // Vitalwerte mit Jitter berechnen
-    const base = chosen.vitals_baseline;
+    const b = chosen.vitals_baseline;
     const v = {
-      RR: `${jitter(base.bpSys, base.jitter)}/${jitter(base.bpDia, base.jitter)}`,
-      SpO2: jitter(base.spo2, base.jitter),
-      AF: jitter(base.af, base.jitter),
-      Puls: jitter(base.puls, base.jitter),
-      BZ: jitter(base.bz, base.jitter ?? 20),
-      Temp: base.temp + (Math.random() * 0.4 - 0.2).toFixed(1),
-      GCS: base.gcs
+      RR: `${jitter(b.bpSys, b.jitter)}/${jitter(b.bpDia, b.jitter)}`,
+      SpO2: jitter(b.spo2, b.jitter),
+      AF: jitter(b.af, b.jitter),
+      Puls: jitter(b.puls, b.jitter),
+      BZ: jitter(b.bz, b.jitter ?? 20),
+      Temp: (b.temp + (Math.random() * 0.4 - 0.2)).toFixed(1),
+      GCS: b.gcs
     };
 
     const caseData = {
@@ -88,20 +85,15 @@ export async function handler(event) {
       specialty: normalized,
       role: role,
       story: chosen.story,
-      initial_vitals: null,                    // bleibt leer → werden erst bei Messung sichtbar
-      key_findings: chosen.key_findings,
-      red_flags: chosen.red_flags,
-      target_outcome: chosen.target_outcome,
+      patient: chosen.patient,
+      key_findings: chosen.key_findings || [],
+      red_flags: chosen.red_flags || [],
+      target_outcome: chosen.target_outcome || "",
       scope: SCOPE,
       steps_done: [],
       score: 0,
-      hidden: {
-        ...chosen.hidden,
-        vitals_baseline: v,
-        expected_dx: chosen.diagnosis
-      },
-      patient: chosen.patient,
-      anamnesis: chosen.anamnesis,
+      hidden: { ...chosen.hidden, vitals_baseline: v, expected_dx: chosen.diagnosis },
+      anamnesis: chosen.anamnesis || { SAMPLER: {} },
       patho: chosen.patho || {},
       solution: { diagnosis: chosen.diagnosis }
     };
@@ -109,7 +101,7 @@ export async function handler(event) {
     return { statusCode: 200, headers, body: JSON.stringify(caseData) };
 
   } catch (err) {
-    console.error("case-new error:", err);
+    console.error("case-new Fehler:", err);
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
 }
