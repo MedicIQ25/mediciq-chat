@@ -1,66 +1,56 @@
 // ===============================================================
-// medicIQ – Fallbeispiele (Click-UI, nur Buttons)
-// - XABCDE als Tabs
-// - Schemata: 4S, SAMPLER, BE-FAST, NRS, Verdachtsdiagnose, Debrief
-// - Vitalwerte werden erst nach Messung angezeigt
-// - AF: einfache Messung (kein 30-Sekunden-Zähler)
+// medicIQ – Click-UI (nur Klicks) mit:
+// - sichtbaren Vitalen erst nach Messung
+// - persistierenden Messwerten
+// - Fachrichtungs-/Rollenwahl vor Start
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
 const API_CASE_STEP = '/.netlify/functions/case-step';
 
-// ------- UI Elemente -------
-const statusEl   = document.getElementById('caseStatus');
-const scoreEl    = document.getElementById('caseScore');
-const chatLog    = document.getElementById('chatLog');
-const queueList  = document.getElementById('queueList');
-const runBtn     = document.getElementById('btnRunQueue');
-const clearBtn   = document.getElementById('btnClearQueue');
-const startBtn   = document.getElementById('startCase');
-const finishBtn  = document.getElementById('finishCase');
-const roleSel    = document.getElementById('roleSel');
+// ------- UI -------
+const statusEl  = document.getElementById('caseStatus');
+const scoreEl   = document.getElementById('caseScore');
+const chips     = Array.from(document.querySelectorAll('.chip'));
+const hintCard  = document.getElementById('hintCard');
+const hintText  = document.getElementById('hintText');
+const tabs      = Array.from(document.querySelectorAll('.tab'));
+const panel     = document.getElementById('panel');
 
-const chips      = Array.from(document.querySelectorAll('.chip'));
-const tabs       = Array.from(document.querySelectorAll('.tab'));
-const panel      = document.getElementById('panel');
-const hintCard   = document.getElementById('hintCard');
-const hintText   = document.getElementById('hintText');
+const queueList = document.getElementById('queueList');
+const runBtn    = document.getElementById('btnRunQueue');
+const clearBtn  = document.getElementById('btnClearQueue');
+const startBtn  = document.getElementById('startCase');
+const finishBtn = document.getElementById('finishCase');
+const chatLog   = document.getElementById('chatLog');
+const roleSel   = document.getElementById('roleSel');
 
+// Fachrichtung
 const specButtons = Array.from(document.querySelectorAll('.spec-chip'));
-let selectedSpec = 'internistisch';
-
-specButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    specButtons.forEach(b => b.classList.remove('active'));
+let selectedSpec  = 'internistisch';
+specButtons.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    specButtons.forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     selectedSpec = btn.dataset.spec || 'internistisch';
   });
 });
 
-// Schemata / Tools
-document.querySelectorAll('.schema-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
+// Schema-Buttons (4S, SAMPLER, BE-FAST, NRS, DX, Debrief)
+document.querySelectorAll('.schema-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
     const tool = btn.dataset.tool;
-    if (tool === 'AF_SIMPLE') {
-      // einfache AF-Messung ohne Zähler
-      stepCase('AF messen');
-    } else if (tool === 'FOUR_S') {
-      openFourS();
-    } else if (tool === 'SAMPLER') {
-      openSampler();
-    } else if (tool === 'BEFAST') {
-      openBEFAST();
-    } else if (tool === 'NRS') {
-      openNRS();
-    } else if (tool === 'DIAGNOSIS') {
-      openDiagnosis();
-    } else if (tool === 'DEBRIEF') {
-      openDebrief();
-    }
+    if (tool === 'AF_COUNTER')   openAFCounter();       // AF-Button: einfache Messung
+    if (tool === 'NRS')          openNRS();
+    if (tool === 'BEFAST')       openBEFAST();
+    if (tool === 'SAMPLER')      openSampler();
+    if (tool === 'FOUR_S')       openFourS();
+    if (tool === 'DIAGNOSIS')    openDiagnosis();
+    if (tool === 'DEBRIEF')      openDebrief();
   });
 });
 
-// Vital-Anzeige
+// Vitals – DOM + sichtbarer Zustand (nur erhobene Werte)
 const vitalsMap = {
   RR:   document.getElementById('vRR'),
   SpO2: document.getElementById('vSpO2'),
@@ -70,77 +60,28 @@ const vitalsMap = {
   Temp: document.getElementById('vTemp'),
   GCS:  document.getElementById('vGCS')
 };
-const visibleVitals   = {};
-const monitorEnabled  = { RR:false, SpO2:false, AF:false, Puls:false, BZ:false, Temp:false, GCS:false };
-let   caseState       = null;
+const visibleVitals = {}; // <- persistiert Messungen
+
+// ------- State -------
+let caseState = null;
+const queue = []; // [{label, token}]
+
+// ------- Helpers -------
+const setStatus = t => statusEl.textContent = t;
+const setScore  = n => scoreEl.textContent  = `Score: ${n ?? 0}`;
 
 function renderVitalsFromVisible() {
-  Object.values(vitalsMap).forEach(el => { el.textContent = '–'; });
+  // Erst „–“ überall…
+  for (const el of Object.values(vitalsMap)) el.textContent = '–';
+  // …dann nur erhobene/aktualisierte Werte schreiben
   for (const [k, v] of Object.entries(visibleVitals)) {
     if (v != null && vitalsMap[k]) vitalsMap[k].textContent = v;
   }
 }
 function clearVisibleVitals() {
-  for (const k in visibleVitals) delete visibleVitals[k];
-  for (const k in monitorEnabled) monitorEnabled[k] = false;
+  for (const k of Object.keys(visibleVitals)) delete visibleVitals[k];
   renderVitalsFromVisible();
 }
-function markMonitor(keys) {
-  keys.forEach(k => {
-    if (Object.prototype.hasOwnProperty.call(monitorEnabled, k)) monitorEnabled[k] = true;
-  });
-}
-
-// kleine Dynamik: nähert Messwerte den Fallvitalen an
-function vitalMonitorTick() {
-  if (!caseState) return;
-  const target = caseState.vitals || {};
-
-  // RR
-  if (monitorEnabled.RR && (visibleVitals.RR || target.RR)) {
-    const curStr = String(visibleVitals.RR || target.RR);
-    const tgtStr = String(target.RR || curStr);
-    const c = curStr.split('/');
-    const t = tgtStr.split('/');
-    if (c.length === 2 && t.length === 2) {
-      let cSys = parseInt(c[0], 10);
-      let cDia = parseInt(c[1], 10);
-      const tSys = parseInt(t[0], 10);
-      const tDia = parseInt(t[1], 10);
-      if (!isNaN(cSys) && !isNaN(tSys)) {
-        if (cSys < tSys) cSys += 2;
-        else if (cSys > tSys) cSys -= 2;
-      }
-      if (!isNaN(cDia) && !isNaN(tDia)) {
-        if (cDia < tDia) cDia += 2;
-        else if (cDia > tDia) cDia -= 2;
-      }
-      visibleVitals.RR = cSys + '/' + cDia;
-    }
-  }
-
-  ['SpO2','AF','Puls','BZ','Temp','GCS'].forEach(k => {
-    if (!monitorEnabled[k]) return;
-    const cur = Number(visibleVitals[k] ?? target[k]);
-    const tgt = Number(target[k] ?? cur);
-    if (!isFinite(cur) || !isFinite(tgt)) return;
-    let next = cur;
-    const diff = tgt - cur;
-    if (Math.abs(diff) > 1) {
-      next = cur + Math.sign(diff) * Math.max(1, Math.round(Math.abs(diff)/3));
-    } else if (Math.random() < 0.3) {
-      next = cur + (Math.random() < 0.5 ? -1 : 1);
-    }
-    visibleVitals[k] = Math.round(next * 10) / 10;
-  });
-
-  renderVitalsFromVisible();
-}
-setInterval(vitalMonitorTick, 5000);
-
-// ------- Helfer fürs UI -------
-function setStatus(t) { statusEl.textContent = t; }
-function setScore(n)  { scoreEl.textContent  = 'Score: ' + (n ?? 0); }
 
 function addMsg(html) {
   const el = document.createElement('div');
@@ -149,33 +90,25 @@ function addMsg(html) {
   chatLog.appendChild(el);
   el.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
-function showHint(t) {
-  if (t && t.trim()) {
-    hintText.textContent = t;
-    hintCard.classList.remove('hidden');
-  } else {
-    hintText.textContent = '—';
-    hintCard.classList.add('hidden');
-  }
+function showHint(text) {
+  if (text && text.trim()) { hintText.textContent = text; hintCard.classList.remove('hidden'); }
+  else { hintText.textContent = '—'; hintCard.classList.add('hidden'); }
 }
-
 function resetProgress() { chips.forEach(c => c.classList.remove('done','active')); }
-function renderProgress(steps) {
-  steps = Array.isArray(steps) ? steps : [];
+function renderProgress(steps = []) {
   resetProgress();
-  const done = new Set(steps.map(s => String(s).toUpperCase()));
+  const done = new Set(steps.map(s => s.toUpperCase()));
   const order = ['X','A','B','C','D','E'];
   order.forEach(step => {
     const el = chips.find(c => c.dataset.step === step);
-    if (!el) return;
     if ([...done].some(s => s.startsWith(step))) el.classList.add('done');
   });
-  const next = order.find(step => ![...done].some(s => s.startsWith(step)));
+  const next = order.find(s => ![...done].some(x => x.startsWith(s)));
   const activeEl = chips.find(c => c.dataset.step === next);
   if (activeEl) activeEl.classList.add('active');
 }
 
-// ------- Maßnahmen-Panel (XABCDE) -------
+// ------- Maßnahmen-Kacheln pro Tab -------
 const ACTIONS = {
   X: [
     { label: 'Druckverband',           token: 'Druckverband' },
@@ -214,41 +147,39 @@ const ACTIONS = {
   ]
 };
 
-function renderPanel(tab) {
+function renderPanel(tabKey) {
   panel.innerHTML = '';
-  const list = ACTIONS[tab] || [];
-  list.forEach((a) => {
+  (ACTIONS[tabKey] || []).forEach(action=>{
     const btn = document.createElement('button');
     btn.className = 'action-card';
-    btn.innerHTML = `<div class="label">${a.label}</div>`;
-    btn.addEventListener('click', () => {
-      queue.push({ label: a.label, token: a.token });
+    btn.innerHTML = `<div class="label">${action.label}</div>`;
+    btn.addEventListener('click', ()=>{
+      queue.push({ label: action.label, token: action.token });
       renderQueue();
     });
     panel.appendChild(btn);
   });
 }
-tabs.forEach(t => t.addEventListener('click', () => renderPanel(t.dataset.tab)));
+tabs.forEach(t=>t.addEventListener('click', ()=> renderPanel(t.dataset.tab)));
 
 // ------- Queue -------
-const queue = [];
 function renderQueue() {
   queueList.innerHTML = '';
-  queue.forEach((item, idx) => {
+  queue.forEach((item,idx)=>{
     const li = document.createElement('li');
     li.innerHTML = `
       <span>${item.label}</span>
       <button class="btn secondary small">Entfernen</button>
     `;
-    li.querySelector('button').addEventListener('click', () => {
-      queue.splice(idx, 1);
+    li.querySelector('button').addEventListener('click', ()=>{
+      queue.splice(idx,1);
       renderQueue();
     });
     queueList.appendChild(li);
   });
 }
 
-// ------- Fallback-Fallsimulator (wenn case-new nicht erreichbar) -------
+// ===== Lokaler Fallsimulator (Fallback, wenn Netlify down) =====
 function buildLocalCase(spec, role, difficulty) {
   spec = (spec || 'internistisch').toLowerCase();
   role = role || 'RS';
@@ -264,7 +195,7 @@ function buildLocalCase(spec, role, difficulty) {
       target_outcome: "AF und SpO₂ verbessern (O₂ + inhalatives β₂-Mimetikum), Transport vorbereiten.",
       key_findings: ["Dyspnoe", "verlängertes Exspirium", "Giemen", "Sprechdyspnoe"],
       red_flags: ["SpO₂ < 90 %", "Erschöpfung", "Silent chest"],
-      vitals: { RR: "138/86", SpO2: 85, AF: 28, Puls: 124, BZ: 108, Temp: 36.8, GCS: 15 },
+      vitals: { RR:"138/86", SpO2:85, AF:28, Puls:124, BZ:108, Temp:36.8, GCS:15 },
       scene_4s: {
         sicherheit: "Keine akute Eigen-/Fremdgefährdung, Sportplatz gesichert.",
         szene: "Sportplatz, Patient sitzt nach vorne gebeugt, stützt sich auf die Knie.",
@@ -304,9 +235,9 @@ function buildLocalCase(spec, role, difficulty) {
         ekg12: "Sinusrhythmus, keine Ischämiezeichen",
         befast: "ohne Auffälligkeiten",
         lkw: "nicht relevant",
-        pain: { nrs: 2, ort: "thorakal, diffus", charakter: "Engegefühl/Pressen" },
+        pain: { nrs:2, ort:"thorakal, diffus", charakter:"Engegefühl/Pressen" },
         injuries: [],
-        vitals_baseline: { RR: "130/80", SpO2: 94, AF: 18, Puls: 98, BZ: 108, Temp: 36.8, GCS: 15 }
+        vitals_baseline: { RR:"130/80", SpO2:94, AF:18, Puls:98, BZ:108, Temp:36.8, GCS:15 }
       }
     }),
 
@@ -319,49 +250,41 @@ function buildLocalCase(spec, role, difficulty) {
       target_outcome: "Hypoglykämie erkennen, Glukosegabe, Bewusstseinslage und BZ im Verlauf dokumentieren.",
       key_findings: ["Vigilanzminderung", "kaltschweißig", "niedriger BZ", "Diabetesanamnese"],
       red_flags: ["Bewusstlosigkeit", "Krampfanfälle", "fehlende Besserung nach Glukose"],
-      vitals: { RR: "146/88", SpO2: 96, AF: 18, Puls: 96, BZ: 42, Temp: 36.4, GCS: 13 },
+      vitals: { RR:"146/88", SpO2:96, AF:18, Puls:96, BZ:42, Temp:36.4, GCS:13 },
       scene_4s: {
         sicherheit: "Wohnung, keine akute Gefährdungslage, Zugang frei.",
         szene: "Patient halb auf dem Sofa, reagiert verzögert, Wohnumgebung unauffällig.",
         sichtung_personen: "1 Patient, Ehepartner anwesend.",
-        support_empfehlung: "NA bei Bewusstlosigkeit oder fehlender Besserung nach Therapie."
+        support_empfehlung: "NA/RTW ausreichend, bei Krampf oder fehlender Besserung ggf. NA nachfordern."
       },
       anamnesis: {
         SAMPLER: {
-          S: "Verwirrtheit, Zittern, Schwitzen",
-          A: "keine bekannt",
-          M: "Insulin, Metformin, Blutdruckmedikamente",
-          P: "Diabetes mellitus Typ 2, Hypertonie",
-          L: "abends wenig gegessen, morgens keine Mahlzeit",
-          E: "Mahlzeit ausgelassen, Insulin dennoch gespritzt",
-          R: "keine Reise, keine Infektsymptome"
+          S: "Verwirrtheit, Schwitzen, Schwäche",
+          A: "keine bekannten Allergien",
+          M: "Metformin, Insulin (unbekanntes Schema)",
+          P: "Diabetes mellitus Typ 2, arterielle Hypertonie",
+          L: "letzte KH-Aufnahme vor 2 Jahren wegen Pneumonie",
+          E: "heute wenig gegessen, Insulin wie gewohnt gespritzt",
+          R: "kein Trauma, kein Fieber"
         },
         vorerkrankungen: ["Diabetes mellitus Typ 2", "arterielle Hypertonie"],
-        medikation: ["Basalinsulin", "Metformin", "ACE-Hemmer"],
+        medikation: ["Metformin", "Insulin", "ACE-Hemmer"],
         allergien: [],
         antikoagulation: false,
-        OPQRST: {
-          O: "seit ca. 30 Minuten zunehmende Verwirrtheit",
-          P: "keine klare Provokation außer Nahrungsverzicht",
-          Q: "kein Schmerz, eher Schwächegefühl",
-          R: "-",
-          S: "-",
-          T: "progredient über 30–60 Minuten"
-        }
+        OPQRST: {}
       },
       hidden: {
         pupils: "isokor, mittelweit, prompt",
         mouth: "Mund-/Rachenraum frei",
-        lung: "vesikuläres Atemgeräusch beidseits, keine RG",
+        lung: "vesikuläres AG, keine Rasselgeräusche",
         abdomen: "weich, kein Druckschmerz",
-        skin: "kaltschweißig, leicht blass",
-        ekg3: "Sinusrhythmus 90/min, einzelne supraventrikuläre Extrasystolen",
+        skin: "kaltschweißig, blass",
         ekg12: "Sinusrhythmus, keine akuten Ischämiezeichen",
-        befast: "ohne fokal-neurologische Ausfälle",
-        lkw: "kein Schlaganfallverdacht, daher nicht relevant",
-        pain: { nrs: 0, ort: "kein Schmerz", charakter: "-" },
+        befast: "kein Paresen, keine Sprachstörung, keine Blickdeviation",
+        lkw: "nicht relevant (kein LKW für Schlaganfall)",
+        pain: { nrs:1, ort:"diffus", charakter:"Schwächegefühl" },
         injuries: [],
-        vitals_baseline: { RR: "140/80", SpO2: 97, AF: 16, Puls: 82, BZ: 120, Temp: 36.6, GCS: 15 }
+        vitals_baseline: { RR:"140/85", SpO2:97, AF:16, Puls:88, BZ:90, Temp:36.6, GCS:15 }
       }
     }),
 
@@ -370,53 +293,45 @@ function buildLocalCase(spec, role, difficulty) {
       specialty: "trauma",
       role,
       difficulty,
-      story: "29-jährige Patientin stürzt beim Fahrradfahren, fängt sich mit dem rechten Arm ab. Deformität und Schmerzen am Unterarm.",
-      target_outcome: "Blutungskontrolle, adäquate Immobilisation, Schmerztherapie einleiten, Traumaschema anwenden.",
-      key_findings: ["deformierter Unterarm", "Druckschmerz", "Schwellung", "Bewegungsschmerz"],
-      red_flags: ["starke Blutung", "neurologische Ausfälle der Hand", "weitere Verletzungen übersehen"],
-      vitals: { RR: "132/84", SpO2: 98, AF: 18, Puls: 88, BZ: 102, Temp: 36.7, GCS: 15 },
+      story: "28-jährige Person, Sturz vom Fahrrad auf den ausgestreckten Arm. Schmerzen und Fehlstellung am Unterarm.",
+      target_outcome: "Starke Blutung ausschließen, Schmerz und Fraktur versorgen, adäquaten Transport planen.",
+      key_findings: ["lokaler Schmerz", "Fehlstellung", "Bewegungsschmerz", "intakte periphere Perfusion"],
+      red_flags: ["starke Blutung", "neurovaskuläre Ausfälle", "Begleitverletzungen Kopf/Thorax"],
+      vitals: { RR:"132/82", SpO2:98, AF:16, Puls:88, BZ:104, Temp:36.9, GCS:15 },
       scene_4s: {
-        sicherheit: "Straße gesichert, kein laufender Verkehr mehr, Helm vorhanden.",
-        szene: "Fahrradsturz, Patientin sitzt am Gehweg, Fahrrad daneben.",
-        sichtung_personen: "1 Patientin, Zeuge vor Ort.",
-        support_empfehlung: "NA nur bei zusätzlicher Kopfverletzung, Polytrauma oder Schockzeichen."
+        sicherheit: "Straßenrand, kein fließender Verkehr mehr, RTW schützt Unfallstelle.",
+        szene: "Fahrrad neben Patient, Helm getragen, keine Fremdgefährdung.",
+        sichtung_personen: "1 Patient, Passant als Ersthelfer.",
+        support_empfehlung: "Bei Anzeichen Polytrauma / Instabilität NA nachfordern."
       },
       anamnesis: {
         SAMPLER: {
-          S: "starke Schmerzen rechter Unterarm",
-          A: "keine bekannt",
+          S: "Schmerzen und Fehlstellung rechter Unterarm nach Sturz",
+          A: "keine bekannten Allergien",
           M: "keine Dauermedikation",
-          P: "keine relevanten Vorerkrankungen",
-          L: "keine OPs / Krankenhausaufenthalte",
-          E: "Fahrradsturz, Sturz auf ausgestreckten Arm",
-          R: "keine Reise, kein Infekt"
+          P: "keine bekannten Vorerkrankungen",
+          L: "letzte Mahlzeit vor ca. 3 Stunden",
+          E: "Sturz über Lenker, Landung auf ausgestrecktem Arm",
+          R: "keine Risikofaktoren"
         },
         vorerkrankungen: [],
         medikation: [],
         allergien: [],
         antikoagulation: false,
-        OPQRST: {
-          O: "sofort nach Sturz",
-          P: "Bewegung / Belastung verschlechtert, Schienen / Ruhigstellung bessert",
-          Q: "stechender, lokaler Schmerz",
-          R: "kein Ausstrahlen",
-          S: "NRS 7–8",
-          T: "konstant seit Sturz"
-        }
+        OPQRST: {}
       },
       hidden: {
         pupils: "isokor, mittelweit, prompt",
-        mouth: "Mund-/Rachenraum frei",
-        lung: "vesikulär beidseits, keine RG",
+        mouth: "unauffällig",
+        lung: "beidseits belüftet, kein Thoraxschmerz",
         abdomen: "weich, kein Druckschmerz",
-        skin: "Schürfwunden am rechten Unterarm, Hämatom, keine große offene Wunde",
-        ekg3: "Sinusrhythmus 85/min",
-        ekg12: "Sinus, keine Auffälligkeiten",
-        befast: "ohne Auffälligkeiten",
+        skin: "rosig, lokal Hämatom/Schwellung am Unterarm",
+        ekg12: "Sinusrhythmus 80/min",
+        befast: "unauffällig",
         lkw: "nicht relevant",
-        pain: { nrs: 8, ort: "rechter Unterarm", charakter: "stechend, pulsierend" },
-        injuries: ["vermutete distale Unterarmfraktur rechts"],
-        vitals_baseline: { RR: "128/78", SpO2: 98, AF: 16, Puls: 80, BZ: 102, Temp: 36.7, GCS: 15 }
+        pain: { nrs:6, ort:"rechter Unterarm", charakter:"stechend/ziehend" },
+        injuries: ["Fehlstellung rechter Unterarm", "Schwellung, Druckschmerz"],
+        vitals_baseline: { RR:"125/78", SpO2:99, AF:14, Puls:76, BZ:104, Temp:36.8, GCS:15 }
       }
     }),
 
@@ -425,53 +340,45 @@ function buildLocalCase(spec, role, difficulty) {
       specialty: "pädiatrisch",
       role,
       difficulty,
-      story: "9 Monate alter Säugling mit Husten und erschwerter Atmung seit gestern, heute deutliche Verschlechterung.",
-      target_outcome: "Respiratorische Situation einschätzen, Oxygenierung verbessern, Transport mit Monitoring in Kinderklinik.",
-      key_findings: ["Tachypnoe", "Einziehungen", "Nasenflügeln", "geringe Trinkmenge", "Fieber"],
-      red_flags: ["Apnoen", "Zyanose", "Erschöpfung", "SpO₂ < 92 % trotz O₂"],
-      vitals: { RR: "110/70", SpO2: 90, AF: 42, Puls: 168, BZ: 96, Temp: 38.7, GCS: 15 },
+      story: "8 Monate alter Säugling mit Husten, Tachypnoe und Trinkschwäche. Eltern berichten von Fieber seit gestern.",
+      target_outcome: "Schweregrad der Atemwegsinfektion einschätzen, ggf. O₂/Monitoring, zügiger Transport in Kinderklinik.",
+      key_findings: ["Tachypnoe", "Einziehungen", "Giemen/Brummen", "Fieber", "Trinkschwäche"],
+      red_flags: ["Atempausen", "Zyanose", "Erschöpfung", "SpO₂ < 92 %"],
+      vitals: { RR:"110/70", SpO2:91, AF:48, Puls:168, BZ:92, Temp:38.5, GCS:14 },
       scene_4s: {
-        sicherheit: "Wohnung, keine akute Gefährdung. Eltern anwesend.",
-        szene: "Kind liegt im Bettchen, wirkt erschöpft, atmet schnell.",
+        sicherheit: "Wohnung, keine akute Fremd-/Eigengefährdung, Eltern anwesend.",
+        szene: "Kind liegt auf dem Arm der Mutter, wirkt erschöpft, trinkt schlecht.",
         sichtung_personen: "1 Kind, Eltern anwesend.",
-        support_empfehlung: "NA / Kinderarzt bei drohender respiratorischer Erschöpfung oder Apnoen."
+        support_empfehlung: "Bei respiratorischer Verschlechterung NA/ITW nachfordern."
       },
       anamnesis: {
         SAMPLER: {
-          S: "Husten, schnelle Atmung, trinkt schlecht",
-          A: "keine bekannt",
-          M: "Fiebersaft heute Morgen",
-          P: "Frühgeboren 36+0, sonst unauffällig",
-          L: "keine Krankenhausaufenthalte",
-          E: "seit 2 Tagen Husten und Schnupfen, seit heute deutlich schlechter",
-          R: "kein Auslandsaufenthalt, Kontakt zu erkälteten Geschwistern"
+          S: "Husten, schnelle Atmung, Trinkschwäche",
+          A: "keine bekannten Allergien",
+          M: "Paracetamol-Zäpfchen nach Bedarf",
+          P: "gesund, reif geboren",
+          L: "letzte Mahlzeit vor ca. 4 Stunden, trinkt weniger",
+          E: "Infekt in der Familie, seit 1–2 Tagen Husten/Fieber",
+          R: "kein Rauchen in der Wohnung"
         },
-        vorerkrankungen: ["Frühgeburt 36+0"],
-        medikation: ["Paracetamol-Saft nach Bedarf"],
+        vorerkrankungen: [],
+        medikation: ["Paracetamol nach Bedarf"],
         allergien: [],
         antikoagulation: false,
-        OPQRST: {
-          O: "schleichender Beginn vor 2 Tagen",
-          P: "Lagewechsel kaum Einfluss, Sitzen auf dem Arm bessert etwas",
-          Q: "kein Schmerz, eher Luftnot/Unruhe",
-          R: "-",
-          S: "-",
-          T: "progredient"
-        }
+        OPQRST: {}
       },
       hidden: {
-        pupils: "isokor, altersentsprechend, prompt",
-        mouth: "Nasen-Rachenraum mit klarem Sekret, kein Stridor",
-        lung: "beidseits giemende und pfeifende Atemgeräusche, verlängertes Exspirium, leichte Einziehungen",
-        abdomen: "weich, kein Druckschmerz",
-        skin: "leicht febril, etwas blass, periphere Zyanose bei Belastung",
-        ekg3: "Sinusrhythmus, altersentsprechende HF",
-        ekg12: "nicht routinemäßig abgeleitet; kein Hinweis auf kardiale Problematik",
-        befast: "nicht relevant",
-        lkw: "nicht relevant",
-        pain: { nrs: 3, ort: "unklar (Kind kann es nicht äußern)", charakter: "Unruhe, Quengeln" },
+        pupils: "isokor, prompt",
+        mouth: "leichter Nasenausfluss, kein Stridor",
+        lung: "Giemen/Brummen beidseits, verlängertes Exspirium, Einziehungen subcostal",
+        abdomen: "weich, keine Abwehrspannung",
+        skin: "leicht blass, Warm-feucht, keine Zyanose",
+        ekg12: "Sinustachykardie altersentsprechend",
+        befast: "nicht anwendbar (pädiatrischer Patient)",
+        lkw: "nicht dokumentiert",
+        pain: { nrs:null, ort:"—", charakter:"Unruhe/Weinen" },
         injuries: [],
-        vitals_baseline: { RR: "105/65", SpO2: 95, AF: 32, Puls: 150, BZ: 96, Temp: 37.8, GCS: 15 }
+        vitals_baseline: { RR:"100/60", SpO2:95, AF:32, Puls:140, BZ:92, Temp:37.5, GCS:15 }
       }
     })
   };
@@ -484,7 +391,7 @@ function buildLocalCase(spec, role, difficulty) {
   return c;
 }
 
-// ------- Fall starten -------
+// ===== Fallstart =====
 async function startCase() {
   clearVisibleVitals();
   resetProgress();
@@ -496,18 +403,16 @@ async function startCase() {
   try {
     const res = await fetch(API_CASE_NEW, {
       method: 'POST',
-      headers: { 'Content-Type':'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         specialty: selectedSpec,
         role: roleSel?.value || 'RS',
         difficulty: 'mittel'
       })
     });
-
-    if (!res.ok) throw new Error('Status ' + res.status);
+    if (!res.ok) throw new Error(`Status ${res.status}`);
     const data = await res.json();
-    if (!data || data.error) throw new Error(data?.error || 'Ungültige Antwort.');
-
+    if (!data || data.error) throw new Error(data?.error || 'Ungültige Antwort vom Server.');
     caseState = data.case || data;
   } catch (e) {
     usedFallback = true;
@@ -523,39 +428,31 @@ async function startCase() {
   }
 
   clearVisibleVitals();
-  setStatus(`Fall aktiv (${selectedSpec})`);
-  setScore(caseState.score);
-  renderProgress(caseState.steps_done);
+  setStatus(`Fall aktiv (${caseState.specialty || selectedSpec})`);
+  setScore(caseState.score ?? 0);
+  renderProgress(caseState.steps_done || []);
   showHint('Starte mit X und arbeite dich nach XABCDE durch.');
-
-  addMsg(`<strong>Fallstart${usedFallback ? ' (lokal)' : ''}:</strong> ${caseState.story || '—'}`);
+  addMsg(`<strong>Fallstart${usedFallback ? ' (lokal)' : ''}:</strong> ${caseState?.story || '—'}`);
 }
 
-// ------- Schritt ausführen -------
+// ===== Schritt ausführen =====
 async function stepCase(phrase) {
   if (!caseState) return;
   try {
     const res = await fetch(API_CASE_STEP, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        case_state: caseState,
-        user_action: phrase,
-        role: caseState.role || roleSel?.value || 'RS'
-      })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ case_state: caseState, user_action: phrase, role: caseState.role || 'RS' })
     });
     const data = await res.json();
 
-    // Vitals aktualisieren
+    // 1) sichtbare Vitals MERGEN (nur keys, die zurückkommen)
     if (data.updated_vitals) {
-      Object.entries(data.updated_vitals).forEach(([k,v]) => {
-        visibleVitals[k] = v;
-      });
-      markMonitor(Object.keys(data.updated_vitals));
+      Object.entries(data.updated_vitals).forEach(([k,v]) => { visibleVitals[k] = v; });
       renderVitalsFromVisible();
     }
 
-    // Chat-Ausgabe
+    // 2) Feedback & Progress
     const badges = [];
     if (data.accepted)      badges.push('✓ akzeptiert');
     if (data.outside_scope) badges.push('⚠ außerhalb Kompetenz');
@@ -563,7 +460,7 @@ async function stepCase(phrase) {
 
     let vitalsMini = '';
     if (data.updated_vitals && Object.keys(data.updated_vitals).length) {
-      const parts = Object.entries(data.updated_vitals).map(([k,v]) => `${k}: <b>${v}</b>`);
+      const parts = Object.entries(data.updated_vitals).map(([k,v])=>`${k}: <b>${v}</b>`);
       vitalsMini = `<div class="small">🔎 ${parts.join(' · ')}</div>`;
     }
 
@@ -573,51 +470,177 @@ async function stepCase(phrase) {
       ${data.evaluation ? `<div>${String(data.evaluation).replace(/\n/g,'<br>')}</div>` : ''}
       ${data.finding ? `<div class="small">${String(data.finding).replace(/\n/g,'<br>')}</div>` : ''}
       ${vitalsMini}
-      ${data.next_hint ? `<div class="small">💡 ${data.next_hint}</div>` : ''}
+      ${data.next_hint ? `<div class="small">💡 ${String(data.next_hint).replace(/\n/g,'<br>')}</div>` : ''}
     `);
 
     caseState = data.case_state || caseState;
-    setScore(caseState.score);
-    renderProgress(caseState.steps_done);
+    setScore(caseState?.score ?? 0);
+    renderProgress(caseState?.steps_done || []);
     showHint(data.next_hint || '');
 
     if (data.done) {
       setStatus('Fall abgeschlossen.');
-      showHint('—');
-      caseState = null;
+      if (data.found) addMsg(`<strong>Ergebnis:</strong> ${data.found}`);
+      showHint('—'); resetProgress(); caseState = null;
     }
   } catch (e) {
-    addMsg(`<div class="small">⚠️ Fehler bei Schritt: ${e.message}</div>`);
+    addMsg(`⚠️ Schrittfehler: <span class="small">${e.message}</span>`);
   }
 }
 
-// ------- Debriefing -------
-async function openDebrief() {
-  if (!caseState) {
-    addMsg('<div class="small">Kein aktiver Fall für Debriefing.</div>');
-    return;
-  }
-  try {
+// ===== MODAL HELPERS =====
+const $id = (x)=>document.getElementById(x);
+function openModal(id){ $id('modalBackdrop').classList.remove('hidden'); $id(id).classList.remove('hidden'); }
+function closeModal(id){ $id('modalBackdrop').classList.add('hidden'); $id(id).classList.add('hidden'); }
+
+// Vereinfachte AF-Erhebung: kein 30s-Zähler mehr
+function openAFCounter(){
+  // vereinfachte Version: AF einmal messen ohne 30-Sekunden-Zähler
+  if (!caseState) return;
+  stepCase('AF messen');
+}
+
+// ---- BE-FAST ----
+function openBEFAST(){
+  const infoBox = document.getElementById('befastInfo');
+  const fetchBtn = document.getElementById('befastFetch');
+  if (fetchBtn) fetchBtn.onclick = async ()=>{
     const res = await fetch(API_CASE_STEP, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ case_state: caseState, user_action:'Debriefing', role: caseState.role || 'RS' })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'BEFAST Info', role: caseState?.role || 'RS' })
     });
     const data = await res.json();
-    if (data.debrief || data.evaluation) {
-      addMsg(`<strong>Debriefing</strong><div class="small">${String(data.debrief || data.evaluation).replace(/\n/g,'<br>')}</div>`);
-      caseState = data.case_state || caseState;
-      setScore(caseState.score);
-      return;
-    }
-  } catch (e) {
-    addMsg(`<div class="small">⚠️ Debriefing nicht abrufbar (${e.message}).</div>`);
-  }
+    infoBox.textContent = data.finding || data.evaluation || 'Keine neurologischen Hinweise.';
+  };
+
+  document.getElementById('befastOk').onclick = ()=>{
+    const data={
+      B:document.getElementById('b_face').checked,
+      E:document.getElementById('e_eyes').checked,
+      F:document.getElementById('f_face').checked,
+      A:document.getElementById('a_arm').checked,
+      S:document.getElementById('s_speech').checked,
+      T:document.getElementById('t_time').value||''
+    };
+    const parts=[]; if(data.B) parts.push('Balance'); if(data.E) parts.push('Eyes'); if(data.F) parts.push('Face'); if(data.A) parts.push('Arm'); if(data.S) parts.push('Speech');
+    const msg=`BEFAST: ${parts.join(', ') || 'unauffällig'}${data.T?` | Last known well: ${data.T}`:''}`;
+    stepCase(msg);
+    closeModal('modalBEFAST');
+  };
+  document.getElementById('befastCancel').onclick = ()=> closeModal('modalBEFAST');
+  openModal('modalBEFAST');
 }
 
-// ------- Diagnose & Transport -------
-function $id(id){ return document.getElementById(id); }
+// ---- SAMPLER ----
+function openSampler(){
+  const infoBox = document.getElementById('samplerInfo');
+  if (infoBox) infoBox.textContent = '';
 
+  // Eingabefelder leeren
+  ['s_sympt','s_allerg','s_med','s_hist','s_last','s_events','s_risk'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  // Infos aus dem Fall holen und Felder vorbefüllen
+  const fetchBtn = document.getElementById('samplerFetch');
+  if (fetchBtn) {
+    fetchBtn.onclick = async ()=>{
+      if (!caseState) return;
+      await stepCase('SAMPLER Info');
+      const a = caseState.anamnesis || {};
+      const S = a.SAMPLER || {};
+      const m = (id, val)=>{ const el = document.getElementById(id); if (el && val) el.value = val; };
+      m('s_sympt',  S.S || '');
+      m('s_allerg', S.A || '');
+      m('s_med',    S.M || '');
+      m('s_hist',   S.P || '');
+      m('s_last',   S.L || '');
+      m('s_events', S.E || '');
+      m('s_risk',   S.R || '');
+    };
+  }
+
+  const okBtn = document.getElementById('samplerOk');
+  if (okBtn) {
+    okBtn.onclick = ()=>{
+      const data = {
+        S: document.getElementById('s_sympt')?.value  || '',
+        A: document.getElementById('s_allerg')?.value || '',
+        M: document.getElementById('s_med')?.value    || '',
+        P: document.getElementById('s_hist')?.value   || '',
+        L: document.getElementById('s_last')?.value   || '',
+        E: document.getElementById('s_events')?.value || '',
+        R: document.getElementById('s_risk')?.value   || ''
+      };
+      const parts = [];
+      Object.entries(data).forEach(([k,v])=>{ if (v) parts.push(`${k}:${v}`); });
+      const msg = parts.length ? `SAMPLER dokumentiert (${parts.join(' | ')})` : 'SAMPLER dokumentiert';
+      stepCase(msg);
+      closeModal('modalSampler');
+    };
+  }
+
+  const cancelBtn = document.getElementById('samplerCancel');
+  if (cancelBtn) cancelBtn.onclick = ()=> closeModal('modalSampler');
+
+  openModal('modalSampler');
+}
+
+// ---- 4S ----
+function openFourS(){
+  const infoBox = document.getElementById('s4Info');
+  document.getElementById('s4Fetch')?.addEventListener('click', async ()=>{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: '4S Info', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    infoBox.textContent = data.finding || data.evaluation || 'Keine zusätzlichen Hinweise.';
+  }, { once:true });
+
+  document.getElementById('s4Ok').onclick = ()=>{
+    const parts=[];
+    if(document.getElementById('s1').checked) parts.push('Sicherheit');
+    if(document.getElementById('s2').checked) parts.push('Szene');
+    if(document.getElementById('s3').checked) parts.push('Sichtung');
+    if(document.getElementById('s4').checked) parts.push('Support');
+    const msg = parts.length ? `4S dokumentiert (${parts.join(', ')})` : '4S dokumentiert';
+    stepCase(msg);
+    closeModal('modal4S');
+  };
+  document.getElementById('s4Cancel').onclick = ()=> closeModal('modal4S');
+  openModal('modal4S');
+}
+
+// ---- NRS ----
+function openNRS(){
+  const range = document.getElementById('nrsRange');
+  const val   = document.getElementById('nrsVal');
+  const info  = document.getElementById('nrsInfo');
+  if (!range || !val) return;
+  range.value = '0'; val.textContent = '0'; info.textContent = '';
+
+  document.getElementById('nrsFetch')?.addEventListener('click', async ()=>{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'Schmerz Info', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    info.textContent = data.finding || data.evaluation || 'Keine zusätzlichen Infos.';
+  }, { once:true });
+
+  range.oninput = ()=>{ val.textContent = range.value; };
+  document.getElementById('nrsOk').onclick = ()=>{
+    const n = Number(range.value||0);
+    stepCase(`NRS ${n}`);
+    closeModal('modalNRS');
+  };
+  document.getElementById('nrsCancel').onclick = ()=> closeModal('modalNRS');
+  openModal('modalNRS');
+}
+
+// ---- Diagnose & Transport ----
 const DX_BY_SPEC = {
   internistisch: ['ACS','Asthma/Bronchialobstruktion','COPD-Exazerbation','Lungenembolie','Sepsis','Metabolische Entgleisung'],
   neurologisch:  ['Schlaganfall','Krampfanfall','Hypoglykämie','Bewusstlosigkeit unklarer Genese'],
@@ -625,19 +648,17 @@ const DX_BY_SPEC = {
   pädiatrisch:   ['Fieberkrampf','Asthmaanfall','Dehydratation','Trauma Kind']
 };
 
-function openDiagnosis() {
+function openDiagnosis(){
   const dxSpec = $id('dxSpec');
   const dxSel  = $id('dxSelect');
-  const fill = () => {
+  const fill = ()=>{
     const list = DX_BY_SPEC[dxSpec.value] || [];
-    dxSel.innerHTML = list.map(x => `<option>${x}</option>`).join('') +
-      '<option>Andere (Kommentar)</option>';
+    dxSel.innerHTML = list.map(x=>`<option>${x}</option>`).join('') + '<option>Andere (Kommentar)</option>';
   };
-  dxSpec.value = selectedSpec;
-  fill();
+  dxSpec.value = selectedSpec; fill();
   dxSpec.onchange = fill;
 
-  $id('dxOk').onclick = () => {
+  $id('dxOk').onclick = ()=>{
     const txt  = dxSel.value;
     const prio = $id('dxPrio').value;
     const note = ($id('dxNote').value || '').trim();
@@ -647,203 +668,59 @@ function openDiagnosis() {
     stepCase(`Verdachtsdiagnose: ${msg}`);
     closeModal('modalDx');
   };
-  $id('dxCancel').onclick = () => closeModal('modalDx');
+  $id('dxCancel').onclick = ()=> closeModal('modalDx');
   openModal('modalDx');
 }
 
-// ------- 4S -------
-async function openFourS() {
-  const info = document.getElementById('s4Info');
-  info.textContent = '';
-  document.getElementById('s1').checked = false;
-  document.getElementById('s2').checked = false;
-  document.getElementById('s3').checked = false;
-  document.getElementById('s4').checked = false;
-
-  document.getElementById('s4Fetch').onclick = async () => {
-    if (!caseState) return;
+// ---- Debriefing ----
+function openDebrief(){
+  // Versuche zuerst, ein Debrief vom Backend zu bekommen
+  try{
     const res = await fetch(API_CASE_STEP, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ case_state: caseState, user_action:'4S Info', role: caseState.role || 'RS' })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'Debriefing', role: caseState?.role || 'RS' })
     });
     const data = await res.json();
-    info.textContent = data.evaluation || data.finding || '';
-  };
+    if (data.debrief || data.evaluation || data.finding) {
+      const txt = String(data.debrief || data.evaluation || data.finding).replace(/\n/g,'<br>');
+      addMsg(`<strong>Debriefing</strong><div class="small">${txt}</div>`);
+      return;
+    }
+  }catch(e){ /* fallback unten */ }
 
-  document.getElementById('s4Ok').onclick = () => {
-    const parts = [];
-    if (document.getElementById('s1').checked) parts.push('Sicherheit');
-    if (document.getElementById('s2').checked) parts.push('Szene');
-    if (document.getElementById('s3').checked) parts.push('Sichtung');
-    if (document.getElementById('s4').checked) parts.push('Support');
-    const msg = parts.length ? `4S dokumentiert (${parts.join(', ')})` : '4S dokumentiert';
-    stepCase(msg);
-    closeModal('modal4S');
-  };
-  document.getElementById('s4Cancel').onclick = () => closeModal('modal4S');
-  openModal('modal4S');
+  // Fallback: Lokale Auswertung (Score, Schritte, Vitals)
+  const steps = (caseState?.steps_done || []).join(' → ') || '–';
+  const vitals = Object.entries(visibleVitals).map(([k,v])=>`${k}: ${v}`).join(' · ') || 'keine erhoben';
+  const score  = caseState?.score ?? 0;
+  addMsg(`<strong>Debriefing (lokal)</strong><div class="small">Schritte: ${steps}<br>Vitals: ${vitals}<br>Score: ${score}</div>`);
 }
 
-// ------- BE-FAST -------
-function openBEFAST() {
-  const info = document.getElementById('befastInfo');
-  info.textContent = '';
-  ['b_balance','e_eyes','f_face','a_arm','s_speech'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.checked = false;
-  });
-  document.getElementById('t_time').value = '';
-
-  document.getElementById('befastFetch').onclick = async () => {
-    if (!caseState) return;
-    const res = await fetch(API_CASE_STEP, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ case_state: caseState, user_action:'BEFAST Info', role: caseState.role || 'RS' })
-    });
-    const data = await res.json();
-    info.textContent = data.evaluation || data.finding || '';
-  };
-
-  document.getElementById('befastOk').onclick = () => {
-    const data = {
-      B: document.getElementById('b_balance').checked,
-      E: document.getElementById('e_eyes').checked,
-      F: document.getElementById('f_face').checked,
-      A: document.getElementById('a_arm').checked,
-      S: document.getElementById('s_speech').checked,
-      T: document.getElementById('t_time').value || ''
-    };
-    const parts = [];
-    if (data.B) parts.push('Balance');
-    if (data.E) parts.push('Eyes');
-    if (data.F) parts.push('Face');
-    if (data.A) parts.push('Arm');
-    if (data.S) parts.push('Speech');
-    const msg = `BEFAST: ${parts.join(', ') || 'unauffällig'}${data.T ? ' | LKW: ' + data.T : ''}`;
-    stepCase(msg);
-    closeModal('modalBEFAST');
-  };
-  document.getElementById('befastCancel').onclick = () => closeModal('modalBEFAST');
-  openModal('modalBEFAST');
-}
-
-// ------- SAMPLER -------
-function openSampler() {
-  const info = document.getElementById('samplerInfo');
-  info.textContent = '';
-  ['s_sympt','s_allerg','s_meds','s_hist','s_last','s_events','s_risk'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-
-  document.getElementById('samplerFetch').onclick = async () => {
-    if (!caseState) return;
-    const res = await fetch(API_CASE_STEP, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ case_state: caseState, user_action:'SAMPLER Info', role: caseState.role || 'RS' })
-    });
-    const data = await res.json();
-    info.textContent = data.evaluation || data.finding || '';
-  };
-
-  document.getElementById('samplerOk').onclick = () => {
-    const data = {
-      S: document.getElementById('s_sympt').value || '',
-      A: document.getElementById('s_allerg').value || '',
-      M: document.getElementById('s_meds').value || '',
-      P: document.getElementById('s_hist').value || '',
-      L: document.getElementById('s_last').value || '',
-      E: document.getElementById('s_events').value || '',
-      R: document.getElementById('s_risk').value || ''
-    };
-    const parts = [];
-    Object.entries(data).forEach(([k,v]) => { if (v) parts.push(`${k}:${v}`); });
-    const msg = parts.length ? `SAMPLER dokumentiert (${parts.join(' | ')})` : 'SAMPLER dokumentiert';
-    stepCase(msg);
-    closeModal('modalSampler');
-  };
-
-  document.getElementById('samplerCancel').onclick = () => closeModal('modalSampler');
-  openModal('modalSampler');
-}
-
-// ------- NRS / Schmerzskala -------
-function openNRS() {
-  const range = document.getElementById('nrsRange');
-  const val   = document.getElementById('nrsVal');
-  const info  = document.getElementById('nrsInfo');
-  if (!range || !val) return;
-
-  range.value = '0';
-  val.textContent = '0';
-  info.textContent = '';
-
-  range.oninput = () => { val.textContent = range.value; };
-
-  document.getElementById('nrsFetch').onclick = async () => {
-    if (!caseState) return;
-    const res = await fetch(API_CASE_STEP, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ case_state: caseState, user_action:'Schmerz Info', role: caseState.role || 'RS' })
-    });
-    const data = await res.json();
-    info.textContent = data.evaluation || data.finding || '';
-  };
-
-  document.getElementById('nrsOk').onclick = () => {
-    const n = Number(range.value || 0);
-    stepCase(`NRS ${n}`);
-    closeModal('modalNRS');
-  };
-  document.getElementById('nrsCancel').onclick = () => closeModal('modalNRS');
-  openModal('modalNRS');
-}
-
-// ------- Modals -------
-function openModal(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.remove('hidden');
-}
-function closeModal(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.add('hidden');
-}
-
-// ------- Queue-Steuerung / Buttons -------
-runBtn.addEventListener('click', async () => {
+// ===== Queue-Buttons =====
+runBtn.addEventListener('click', async ()=>{
   if (!caseState || !queue.length) return;
   runBtn.disabled = clearBtn.disabled = true;
-  try {
+  try{
     while (queue.length) {
       const { token } = queue.shift();
       renderQueue();
       await stepCase(token);
-      await new Promise(r => setTimeout(r, 120));
+      await new Promise(r=>setTimeout(r,120));
     }
-  } finally {
+  }finally{
     runBtn.disabled = clearBtn.disabled = false;
   }
 });
+clearBtn.addEventListener('click', ()=>{ queue.length=0; renderQueue(); });
 
-clearBtn.addEventListener('click', () => {
-  queue.length = 0;
-  renderQueue();
-});
-
+// ===== Setup-Buttons =====
 startBtn.addEventListener('click', startCase);
-finishBtn.addEventListener('click', () => {
-  if (caseState) stepCase('Fall beenden');
-});
+finishBtn.addEventListener('click', ()=>{ if(caseState) stepCase('Fall beenden'); });
 
-// ------- Initiale UI -------
+// Initialzustand
 clearVisibleVitals();
 setStatus('Kein Fall aktiv.');
 setScore(0);
 resetProgress();
 showHint('—');
 renderPanel('X');
-addMsg('👋 Wähle oben die Fachrichtung, starte den Fall, nutze die Button-Leiste für XABCDE und die Schemata unten. Gemessene Werte bleiben sichtbar; Maßnahmen passen die Vitalwerte an.');
+addMsg('👋 Wähle oben die Fachrichtung, starte den Fall, nutze XABCDE und die Schemata. Gemessene Vitalwerte bleiben sichtbar; Maßnahmen verändern den Verlauf.');

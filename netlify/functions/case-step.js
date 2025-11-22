@@ -1,8 +1,13 @@
 /**
  * Netlify Function: case-step
- * Processes a user action against a case_state.
- * Version: Schemas + Debrief + einfache Vital-Logik
+ * Verarbeitet eine User-Aktion gegen den aktuellen Fallzustand.
+ * Unterstützt:
+ * - XABCDE-Schritte, Vitalwerte, Interventionen
+ * - 4S, SAMPLER, BE-FAST, NRS
+ * - Verdachtsdiagnose & Transport
+ * - Debriefing inkl. Bewertung der Verdachtsdiagnose
  */
+
 exports.handler = async (event) => {
   const headers = {
     "content-type": "application/json",
@@ -15,7 +20,7 @@ exports.handler = async (event) => {
     const ua    = String(body.user_action || "").trim();
     const low   = ua.toLowerCase();
 
-    // --- Grundstruktur sicherstellen ---
+    // ---------- Grundstruktur im Fall sicherstellen ----------
     state.id         = state.id || "unknown_case";
     state.specialty  = state.specialty || body.specialty || "internistisch";
     state.role       = state.role || body.role || "RS";
@@ -23,23 +28,23 @@ exports.handler = async (event) => {
     state.vitals     = state.vitals || {};
     state.hidden     = state.hidden || {};
     state.steps_done = Array.isArray(state.steps_done) ? state.steps_done : [];
-    state.score      = typeof state.score === "number" ? state.score : 0;
-    state.history    = Array.isArray(state.history) ? state.history : [];
+    state.history    = Array.isArray(state.history)    ? state.history    : [];
+    state.score      = typeof state.score === "number" ? state.score      : 0;
 
-    // Messungen für Debriefing
     state.measurements = state.measurements || {
-      vitals: {},     // z.B. { RR:true, SpO2:true, ... }
-      schemas: {},    // z.B. { "4S":true, "SAMPLER":true, "BEFAST":true }
+      vitals: {},
+      schemas: {},
       pain: { documented:false, nrs:null },
       diagnosis: null,
-      transport: null
+      transport: null,
+      dx_eval: null       // { ok:boolean, expected:string, comment:string }
     };
-    state.measurements.vitals  = state.measurements.vitals  || {};
-    state.measurements.schemas = state.measurements.schemas || {};
-    state.measurements.pain    = state.measurements.pain    || { documented:false, nrs:null };
-
     const meas = state.measurements;
-    const H    = state.hidden;
+    meas.vitals  = meas.vitals  || {};
+    meas.schemas = meas.schemas || {};
+    meas.pain    = meas.pain    || { documented:false, nrs:null };
+
+    const H = state.hidden;
 
     if (ua) {
       state.history.push({ ts:new Date().toISOString(), action:ua });
@@ -55,36 +60,34 @@ exports.handler = async (event) => {
       next_hint: undefined,
       updated_vitals: {},
       debrief: undefined,
+      done: false,
       case_state: state
     };
 
-    // --- Helper ---
-    function text(v) {
+    // ---------- Helper ----------
+    const text = (v) => {
       if (v === undefined || v === null) return "—";
       const s = String(v).trim();
       return s === "" ? "—" : s;
-    }
-    function list(arr) {
+    };
+    const list = (arr) => {
       if (!Array.isArray(arr) || !arr.length) return "—";
       return arr.join(", ");
-    }
-    function clamp(v,min,max) {
-      return Math.max(min, Math.min(max, v));
-    }
-    function updVitals(obj) {
+    };
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+    const updVitals = (obj) => {
       state.vitals = state.vitals || {};
       for (const k in obj) {
         if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
         state.vitals[k] = obj[k];
         reply.updated_vitals[k] = obj[k];
       }
-    }
-    function markVital(name) {
-      meas.vitals[name] = true;
-    }
-    function markSchema(name) {
-      meas.schemas[name] = true;
-    }
+    };
+
+    const markVital  = (name) => { meas.vitals[name] = true; };
+    const markSchema = (name) => { meas.schemas[name] = true; };
+
     const STEP_LABEL = {
       X: "X – Exsanguination",
       A: "A – Airway",
@@ -93,7 +96,7 @@ exports.handler = async (event) => {
       D: "D – Disability",
       E: "E – Exposure"
     };
-    function touchStep(letter) {
+    const touchStep = (letter) => {
       const label = STEP_LABEL[letter];
       if (!label) return;
       if (!Array.isArray(state.steps_done)) state.steps_done = [];
@@ -101,45 +104,71 @@ exports.handler = async (event) => {
         state.steps_done.push(label);
         state.score += 1;
       }
-    }
-    function credit(pts) {
-      if (typeof pts !== "number" || !isFinite(pts)) return;
-      state.score += pts;
-    }
+    };
+    const credit = (pts) => {
+      if (typeof pts === "number" && isFinite(pts)) state.score += pts;
+    };
 
-    // --- Kein Input ---
+    const baseVitals = H.vitals_baseline || {
+      RR: "120/80",
+      SpO2: 96,
+      AF: 16,
+      Puls: 80,
+      BZ: 110,
+      Temp: 36.8,
+      GCS: 15
+    };
+
+    // =====================================================================
+    // 0) Kein Input → nur leere Antwort
+    // =====================================================================
     if (!ua) {
       reply.evaluation = "";
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 1) Debriefing
-    // =========================================================
+    // =====================================================================
+    // A) Debriefing (mit Bewertung der Verdachtsdiagnose)
+    // =====================================================================
     if (/debrief/.test(low)) {
-      const steps  = Array.isArray(state.steps_done) ? state.steps_done : [];
-      const order  = ["X","A","B","C","D","E"];
-      const open   = order.filter(l => !steps.some(x => String(x).toUpperCase().startsWith(l)));
+      const steps = Array.isArray(state.steps_done) ? state.steps_done : [];
+      const order = ["X","A","B","C","D","E"];
+      const open  = order.filter(l =>
+        !steps.some(x => String(x).toUpperCase().startsWith(l))
+      );
 
       const vitalsAll     = ["RR","SpO2","AF","Puls","BZ","Temp","GCS"];
       const vitalsDone    = vitalsAll.filter(k => meas.vitals[k]);
       const vitalsMissing = vitalsAll.filter(k => !meas.vitals[k]);
-
-      const pain = meas.pain || {};
-      let painLine = "Schmerzskala nicht erhoben.";
-      if (pain.documented) {
-        painLine = "Schmerzskala dokumentiert (NRS " + (pain.nrs != null ? pain.nrs : "—") + ").";
-      }
 
       const schemaLines = [];
       schemaLines.push(meas.schemas["4S"]      ? "4S-Schema angewandt"      : "4S-Schema nicht dokumentiert");
       schemaLines.push(meas.schemas["SAMPLER"] ? "SAMPLER-Anamnese erhoben" : "SAMPLER noch nicht genutzt");
       schemaLines.push(meas.schemas["BEFAST"]  ? "BE-FAST geprüft"          : "BE-FAST nicht dokumentiert");
 
-      let dxLine = "Verdachtsdiagnose noch nicht dokumentiert.";
-      if (meas.diagnosis) dxLine = "Verdachtsdiagnose: " + meas.diagnosis;
-      let trLine = "Transportpriorität noch nicht festgelegt.";
-      if (meas.transport) trLine = "Transportentscheidung: " + meas.transport;
+      const pain = meas.pain || {};
+      let painLine = "Schmerzskala nicht erhoben.";
+      if (pain.documented) {
+        painLine = `Schmerzskala dokumentiert (NRS ${pain.nrs ?? "—"}).`;
+      }
+
+      let dxLine    = "Verdachtsdiagnose noch nicht dokumentiert.";
+      let trLine    = "Transportpriorität noch nicht festgelegt.";
+      let dxFeedback = "";
+
+      if (meas.diagnosis) {
+        dxLine = "Verdachtsdiagnose: " + meas.diagnosis;
+        if (meas.transport) {
+          trLine = "Transportentscheidung: " + meas.transport;
+        }
+
+        const ev = meas.dx_eval || {};
+        if (ev.ok === true) {
+          dxFeedback = ev.comment || "Deine Verdachtsdiagnose passt gut zu den Leitsymptomen des Falls.";
+        } else if (ev.ok === false) {
+          dxFeedback = ev.comment || "Deine Verdachtsdiagnose weicht von der wahrscheinlichen Hauptursache ab.";
+        }
+      }
 
       const lines = [];
       lines.push("XABCDE-Fortschritt: " + (steps.length ? steps.join(" → ") : "keine Schritte dokumentiert."));
@@ -150,18 +179,20 @@ exports.handler = async (event) => {
       lines.push(painLine);
       lines.push(dxLine);
       lines.push(trLine);
+      if (dxFeedback) lines.push("Bewertung Verdachtsdiagnose: " + dxFeedback);
       lines.push("Tipp: Verknüpfe Maßnahmen mit Verlauf (O₂ → SpO₂/AF, Analgesie → NRS, Volumen → RR, Lagerung → Atmung) und dokumentiere Re-Assessments.");
 
       const txt = lines.join("\n");
       reply.accepted   = true;
       reply.debrief    = txt;
       reply.evaluation = txt;
+
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 2) 4S-Schema
-    // =========================================================
+    // =====================================================================
+    // B) 4S-Schema
+    // =====================================================================
     if (/4s info/.test(low)) {
       markSchema("4S");
       const s = state.scene_4s || {};
@@ -172,46 +203,26 @@ exports.handler = async (event) => {
         "Szene: "              + text(s.szene)             + "\n" +
         "Sichtung/Personen: "  + text(s.sichtung_personen) + "\n" +
         "Support-Empfehlung: " + text(s.support_empfehlung);
-      reply.next_hint = "Prüfe, ob du zusätzlichen Support (NA, Feuerwehr, Polizei, RTH) nachfordern möchtest.";
+      reply.next_hint = "Prüfe, ob zusätzlicher Support (NA, Feuerwehr, Polizei, RTH) nötig ist.";
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
-    if (/\b4s\b/.test(low)) {
+
+    if (/4s dokumentiert|4s abgearbeitet|\b4s\b/.test(low)) {
       markSchema("4S");
       reply.accepted   = true;
       reply.evaluation = "4S-Schema dokumentiert.";
-      reply.next_hint  = "Führe nun XABCDE durch und erhebe Vitalparameter.";
+      reply.next_hint  = "Arbeite nun strukturiert X→A→B→C→D→E ab.";
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 3) Support-Nachforderung (X / 4S)
-    // =========================================================
-    const supportMap = [
-      { re: /(na|notarzt).*nachfordern|^na nachfordern$/, type:"NA" },
-      { re: /feuerwehr.*nachfordern|fw.*nachfordern/,     type:"Feuerwehr" },
-      { re: /polizei.*nachfordern/,                       type:"Polizei" },
-      { re: /(rth|hubschrauber|helikopter).*nachfordern/, type:"RTH" }
-    ];
-    for (const s of supportMap) {
-      if (s.re.test(low)) {
-        state.support = state.support || { calls: [] };
-        state.support.calls.push({ type:s.type, time:new Date().toISOString() });
-        reply.accepted   = true;
-        reply.evaluation = s.type + " nachgefordert.";
-        reply.next_hint  = "Arbeite das XABCDE-Schema weiter ab und dokumentiere deine Befunde.";
-        credit(1);
-        return { statusCode:200, headers, body: JSON.stringify(reply) };
-      }
-    }
-
-    // =========================================================
-    // 4) SAMPLER / Anamnese
-    // =========================================================
-    if (/sampler info|anamnese\b/.test(low)) {
+    // =====================================================================
+    // C) SAMPLER-Anamnese
+    // =====================================================================
+    if (/sampler info|anamnese/.test(low)) {
       markSchema("SAMPLER");
       const a = state.anamnesis || {};
       const S = a.SAMPLER || {};
-      const O = a.OPQRST || {};
+      const O = a.OPQRST  || {};
       reply.accepted = true;
       reply.evaluation =
         "SAMPLER → " +
@@ -223,53 +234,58 @@ exports.handler = async (event) => {
         "E:" + text(S.E) + " | " +
         "R:" + text(S.R) + "\n" +
         "Vorerkrankungen: " + list(a.vorerkrankungen) + "\n" +
-        "Medikation: " + list(a.medikation) + "\n" +
-        "Allergien: " + list(a.allergien) + "\n" +
+        "Medikation: "      + list(a.medikation)      + "\n" +
+        "Allergien: "       + list(a.allergien)       + "\n" +
         "Antikoagulation: " + (a.antikoagulation ? "ja" : "nein") + "\n" +
         (O.O || O.P || O.Q || O.R || O.S || O.T
-          ? ("OPQRST → O:" + text(O.O) + " | P:" + text(O.P) + " | Q:" + text(O.Q) +
-             " | R:" + text(O.R) + " | S:" + text(O.S) + " | T:" + text(O.T))
+          ? ("OPQRST → O:" + text(O.O) + " | P:" + text(O.P) +
+             " | Q:" + text(O.Q) + " | R:" + text(O.R) +
+             " | S:" + text(O.S) + " | T:" + text(O.T))
           : "");
-      reply.next_hint = "Nutze die Informationen, um deine Verdachtsdiagnose zu schärfen und passende Untersuchungen zu planen.";
-      return { statusCode:200, headers, body: JSON.stringify(reply) };
-    }
-    if (/sampler/.test(low)) {
-      markSchema("SAMPLER");
-      reply.accepted   = true;
-      reply.evaluation = "SAMPLER-Anamnese dokumentiert.";
-      reply.next_hint  = "Führe nun körperliche Untersuchung und Vitalzeichen-Erhebung durch.";
+      reply.next_hint = "Nutze die Anamnese, um deine Verdachtsdiagnose zu schärfen.";
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 5) BE-FAST / Neurologie
-    // =========================================================
+    if (/sampler dokumentiert|sampler\b/.test(low)) {
+      markSchema("SAMPLER");
+      reply.accepted   = true;
+      reply.evaluation = "SAMPLER-Anamnese dokumentiert.";
+      reply.next_hint  = "Jetzt körperliche Untersuchung und Vitalwerte erheben.";
+      return { statusCode:200, headers, body: JSON.stringify(reply) };
+    }
+
+    // =====================================================================
+    // D) BE-FAST
+    // =====================================================================
     if (/befast info/.test(low)) {
       markSchema("BEFAST");
       reply.accepted   = true;
-      reply.evaluation = "BE-FAST: " + text(H.befast) + " | LKW: " + text(H.lkw);
-      reply.next_hint  = "Bei Schlaganfall-Verdacht zügigen Transport mit hoher Priorität in Stroke-Unit planen.";
-      return { statusCode:200, headers, body: JSON.stringify(reply) };
-    }
-    if (/befast/.test(low)) {
-      markSchema("BEFAST");
-      reply.accepted   = true;
-      reply.evaluation = "BE-FAST-Dokumentation übernommen.";
-      reply.next_hint  = "Sichere Vitalparameter und plane Transport/Stroke-Unit.";
+      reply.evaluation = "BE-FAST laut Fall: " + text(H.befast) + " | LKW: " + text(H.lkw);
+      reply.next_hint  = "Bei Verdacht auf Schlaganfall frühzeitigen Stroke-Unit-Transport planen.";
       touchStep("D");
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 6) Schmerz / NRS
-    // =========================================================
+    if (/befast:|befast dokumentiert/.test(low)) {
+      markSchema("BEFAST");
+      reply.accepted   = true;
+      reply.evaluation = "BE-FAST-Befund dokumentiert.";
+      reply.next_hint  = "Achte auf Zeitfenster und Transportziel.";
+      touchStep("D");
+      return { statusCode:200, headers, body: JSON.stringify(reply) };
+    }
+
+    // =====================================================================
+    // E) Schmerz / NRS
+    // =====================================================================
     if (/schmerz info/.test(low)) {
       const p = H.pain || {};
       reply.accepted   = true;
-      reply.evaluation = "Schmerz laut Fall: NRS " + text(p.nrs) +
+      reply.evaluation =
+        "Schmerz laut Fall: NRS " + text(p.nrs) +
         " | Ort: " + text(p.ort) +
         " | Charakter: " + text(p.charakter);
-      reply.next_hint  = "Erhebe eine eigene NRS (0–10) und denke an Analgesie nach SOP.";
+      reply.next_hint  = "Erhebe eine eigene NRS (0–10) und behandle ggf. nach SOP.";
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
@@ -280,23 +296,25 @@ exports.handler = async (event) => {
       meas.pain.nrs = n;
       reply.accepted   = true;
       reply.evaluation = "Schmerzskala dokumentiert: NRS " + n + ".";
-      reply.next_hint  = "Dokumentiere den Verlauf der Schmerzen (z. B. nach Analgesie).";
+      reply.next_hint  = "Dokumentiere auch den Verlauf nach Analgesie.";
       credit(1);
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
+
     if (/(schmerz|nrs|schmerzskala)/.test(low)) {
       const p = H.pain || {};
       reply.accepted   = true;
-      reply.evaluation = "Schmerz laut Fall: NRS " + text(p.nrs) +
+      reply.evaluation =
+        "Schmerz laut Fall: NRS " + text(p.nrs) +
         " | Ort: " + text(p.ort) +
         " | Charakter: " + text(p.charakter);
       reply.next_hint  = "Trage eine NRS (0–10) ein, z. B. 'NRS 6'.";
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 7) Körperliche Untersuchung (inkl. Bodycheck)
-    // =========================================================
+    // =====================================================================
+    // F) Körperliche Untersuchung / Bodycheck
+    // =====================================================================
     if (/bodycheck|ganzk[oö]rper/.test(low)) {
       const parts = [];
       if (H.skin)    parts.push("Haut: " + text(H.skin));
@@ -316,8 +334,8 @@ exports.handler = async (event) => {
       "pupillen": "pupils",
       "mund":     "mouth",
       "mundraum": "mouth",
-      "thorax":   "lung",
       "lunge":    "lung",
+      "thorax":   "lung",
       "abdomen":  "abdomen",
       "bauch":    "abdomen",
       "haut":     "skin",
@@ -326,30 +344,25 @@ exports.handler = async (event) => {
     };
     for (const key in examMap) {
       if (!Object.prototype.hasOwnProperty.call(examMap, key)) continue;
-      if (low.includes(key)) {
-        const field = examMap[key];
-        reply.accepted   = true;
-        reply.finding    = text(H[field]);
-        reply.evaluation = "Befund aufgenommen.";
-        reply.next_hint  = "Leite passende Maßnahmen ein und erhebe Vitalparameter.";
-        if (/pupille|gcs|bewusst/.test(key))      touchStep("D");
-        else if (/thorax|lunge/.test(key))        touchStep("B");
-        else if (/abdomen|bauch|haut/.test(key))  touchStep("E");
-        credit(1);
-        return { statusCode:200, headers, body: JSON.stringify(reply) };
-      }
+      if (!low.includes(key)) continue;
+      const field = examMap[key];
+      reply.accepted   = true;
+      reply.finding    = text(H[field]);
+      reply.evaluation = "Befund aufgenommen.";
+      reply.next_hint  = "Leite passende Maßnahmen ein und erhebe Vitalparameter.";
+      if (/pupille/.test(key))       touchStep("D");
+      else if (/lunge|thorax/.test(key))   touchStep("B");
+      else if (/abdomen|bauch|haut/.test(key)) touchStep("E");
+      credit(1);
+      return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 8) Vitalparameter
-    // =========================================================
-    const baseV = H.vitals_baseline || {
-      RR: "120/80", SpO2:96, AF:16, Puls:80, BZ:110, Temp:36.8, GCS:15
-    };
-
+    // =====================================================================
+    // G) Vitalparameter
+    // =====================================================================
     // RR
     if (/rr messen|blutdruck/.test(low)) {
-      const v = state.vitals.RR ?? baseV.RR;
+      const v = state.vitals.RR ?? baseVitals.RR;
       updVitals({ RR:v });
       markVital("RR");
       reply.accepted   = true;
@@ -363,7 +376,7 @@ exports.handler = async (event) => {
 
     // SpO2
     if (/sp[o0]2 messen/.test(low)) {
-      const v = state.vitals.SpO2 ?? baseV.SpO2;
+      const v = state.vitals.SpO2 ?? baseVitals.SpO2;
       updVitals({ SpO2:v });
       markVital("SpO2");
       reply.accepted   = true;
@@ -377,7 +390,7 @@ exports.handler = async (event) => {
 
     // AF
     if (/af messen/.test(low)) {
-      const v = state.vitals.AF ?? baseV.AF;
+      const v = state.vitals.AF ?? baseVitals.AF;
       updVitals({ AF:v });
       markVital("AF");
       reply.accepted   = true;
@@ -391,7 +404,7 @@ exports.handler = async (event) => {
 
     // Puls
     if (/puls messen|herzfrequenz|hf\b/.test(low)) {
-      const v = state.vitals.Puls ?? baseV.Puls;
+      const v = state.vitals.Puls ?? baseVitals.Puls;
       updVitals({ Puls:v });
       markVital("Puls");
       reply.accepted   = true;
@@ -405,7 +418,7 @@ exports.handler = async (event) => {
 
     // BZ
     if (/bz messen|blutzucker/.test(low)) {
-      const v = state.vitals.BZ ?? baseV.BZ;
+      const v = state.vitals.BZ ?? baseVitals.BZ;
       updVitals({ BZ:v });
       markVital("BZ");
       reply.accepted   = true;
@@ -417,9 +430,9 @@ exports.handler = async (event) => {
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // Temperatur
+    // Temp
     if (/temp messen|temperatur/.test(low)) {
-      const v = state.vitals.Temp ?? baseV.Temp;
+      const v = state.vitals.Temp ?? baseVitals.Temp;
       updVitals({ Temp:v });
       markVital("Temp");
       reply.accepted   = true;
@@ -433,7 +446,7 @@ exports.handler = async (event) => {
 
     // GCS
     if (/gcs erheben|gcs\b|glasgow/.test(low)) {
-      const v = state.vitals.GCS ?? baseV.GCS;
+      const v = state.vitals.GCS ?? baseVitals.GCS;
       updVitals({ GCS:v });
       markVital("GCS");
       reply.accepted   = true;
@@ -445,34 +458,33 @@ exports.handler = async (event) => {
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 9) Maßnahmen mit Vitaleffekt
-    // =========================================================
+    // =====================================================================
+    // H) Interventionen mit Vital-Effekt
+    // =====================================================================
     if (/o2 geben|sauerstoff/.test(low)) {
-      const baseSpO2 = Number(state.vitals.SpO2 ?? baseV.SpO2 ?? 94);
-      const baseAF   = Number(state.vitals.AF   ?? baseV.AF   ?? 20);
+      const baseSpO2 = Number(state.vitals.SpO2 ?? baseVitals.SpO2 ?? 94);
+      const baseAF   = Number(state.vitals.AF   ?? baseVitals.AF   ?? 20);
       const newSpO2  = clamp(baseSpO2 + 4, 80, 100);
-      const newAF    = clamp(baseAF - 2, 8, 40);
+      const newAF    = clamp(baseAF   - 2,  6, 40);
       updVitals({ SpO2:newSpO2, AF:newAF });
       markVital("SpO2");
       markVital("AF");
       reply.accepted   = true;
       reply.evaluation = "Sauerstoffgabe eingeleitet.";
-      reply.next_hint  = "SpO₂ und AF im Verlauf kontrollieren.";
+      reply.next_hint  = "SpO₂ und AF im Verlauf kontrollieren und dokumentieren.";
       touchStep("B");
       credit(2);
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
     if (/volumen 500/.test(low)) {
-      const baseRR = String(state.vitals.RR ?? baseV.RR ?? "100/60");
+      const baseRR = String(state.vitals.RR ?? baseVitals.RR ?? "100/60");
       const parts  = baseRR.split("/");
-      let sys = parseInt(parts[0],10);
-      let dia = parseInt(parts[1] || "60",10);
-      if (!isNaN(sys)) sys = clamp(sys + 5, 80, 200);
-      if (!isNaN(dia)) dia = clamp(dia + 3, 40, 130);
-      const newRR = sys + "/" + dia;
-      updVitals({ RR:newRR });
+      let sys = parseInt(parts[0], 10);
+      let dia = parseInt(parts[1] || "60", 10);
+      if (!isNaN(sys)) sys = clamp(sys + 5, 80, 220);
+      if (!isNaN(dia)) dia = clamp(dia + 3, 40, 140);
+      updVitals({ RR: sys + "/" + dia });
       markVital("RR");
       reply.accepted   = true;
       reply.evaluation = "500 ml Volumen gegeben.";
@@ -536,7 +548,6 @@ exports.handler = async (event) => {
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // Airway-Maßnahmen
     if (/esmarch/.test(low)) {
       reply.accepted   = true;
       reply.evaluation = "Esmarch-Handgriff angewandt.";
@@ -545,14 +556,16 @@ exports.handler = async (event) => {
       credit(1);
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
+
     if (/guedel/.test(low) || /wendel/.test(low)) {
       reply.accepted   = true;
       reply.evaluation = "Atemwegshilfe eingelegt.";
-      reply.next_hint  = "Beatmungs- und Spontanatmungssituation kontrollieren.";
+      reply.next_hint  = "Beatmung und Spontanatmung kontrollieren.";
       touchStep("A");
       credit(1);
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
+
     if (/absaugen/.test(low)) {
       reply.accepted   = true;
       reply.evaluation = "Atemwege abgesaugt.";
@@ -561,6 +574,7 @@ exports.handler = async (event) => {
       credit(1);
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
+
     if (/beutel-masken-beatmung/.test(low)) {
       reply.accepted   = true;
       reply.evaluation = "Beutel-Masken-Beatmung begonnen.";
@@ -570,9 +584,9 @@ exports.handler = async (event) => {
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 10) EKG
-    // =========================================================
+    // =====================================================================
+    // I) EKG
+    // =====================================================================
     if (/12-kanal-ekg|12 kanal ekg|ekg\b/.test(low)) {
       reply.accepted   = true;
       reply.finding    = text(H.ekg12);
@@ -583,18 +597,62 @@ exports.handler = async (event) => {
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 11) Verdachtsdiagnose & Transport
-    // =========================================================
-    if (/^verdachtsdiagnose[:]/.test(low)) {
+    // =====================================================================
+    // J) Verdachtsdiagnose & Transport
+    // =====================================================================
+    function evaluateDiagnosis(textDx) {
+      const t = textDx.toLowerCase();
+      let expected = "";
+      let ok = false;
+      let comment = "";
+
+      if (state.id.startsWith("rs_asthma")) {
+        expected = "Asthma / akute Bronchialobstruktion";
+        ok = /(asthma|bronchialobstruktion|bronchoobstruktion)/.test(t);
+        if (ok) {
+          comment = "Du hast die Bronchialobstruktion erkannt (Dyspnoe, Giemen, verlängertes Exspirium, bekannte Asthma-Anamnese).";
+        } else {
+          comment = "Im Fall stehen akute Atemnot nach Belastung, Giemen und bekannte Asthma-Anamnese im Vordergrund – das spricht eher für eine Bronchialobstruktion als z. B. für ein primäres kardiales Problem.";
+        }
+      } else if (state.id.startsWith("rs_hypoglyk")) {
+        expected = "Hypoglykämie bei Diabetes";
+        ok = /(hypo[gk]lyk|niedriger blutzucker|unterzucker)/.test(t);
+        if (ok) {
+          comment = "Du hast die Hypoglykämie erkannt (kaltschweißig, verwirrt, niedriger BZ, bekannte Diabetes-Anamnese).";
+        } else {
+          comment = "Verwirrtheit, Kaltschweißigkeit und sehr niedriger BZ bei bekanntem Diabetes passen gut zu einer Hypoglykämie – darauf sollte die Verdachtsdiagnose abzielen.";
+        }
+      } else if (state.id.startsWith("rs_trauma_unterarm")) {
+        expected = "Traumatische Unterarmfraktur / Extremitätenverletzung";
+        ok = /(fraktur|unterarm|radius|ulna|extremit[aä]tentrauma)/.test(t);
+        if (ok) {
+          comment = "Du hast die fokale Extremitätenverletzung korrekt priorisiert (lokaler Schmerz, Deformität, Mechanismus).";
+        } else {
+          comment = "Der Mechanismus (Sturz auf ausgestreckten Arm), lokaler Schmerz und Deformität sprechen in erster Linie für eine Fraktur des Unterarms.";
+        }
+      } else if (state.id.startsWith("rs_paed_bronchiolitis")) {
+        expected = "infektiöse Bronchiolitis / obstruktive Bronchitis im Säuglingsalter";
+        ok = /(bronchiolitis|obstruktive bronchitis|bronchitis|untere atemwegsinfektion)/.test(t);
+        if (ok) {
+          comment = "Du ordnest die Symptomatik korrekt als unteren Atemwegsinfekt mit Obstruktion ein (Tachypnoe, Einziehungen, Giemen, Fieber).";
+        } else {
+          comment = "Husten, Tachypnoe, Einziehungen, Giemen und Fieber beim Säugling sprechen eher für eine Bronchiolitis / obstruktive Bronchitis als für eine reine obere Infektion.";
+        }
+      }
+
+      meas.dx_eval = { ok, expected, comment };
+    }
+
+    if (/^verdachtsdiagnose[:]/.test(ua)) {
       meas.diagnosis = ua;
       const prioMatch = ua.match(/priorit[aä]t[: ]+([^|]+)/i);
-      if (prioMatch) {
-        meas.transport = prioMatch[1].trim();
-      }
+      if (prioMatch) meas.transport = prioMatch[1].trim();
+
+      evaluateDiagnosis(ua);
+
       reply.accepted   = true;
       reply.evaluation = "Verdachtsdiagnose und Transportpriorität dokumentiert.";
-      reply.next_hint  = "Prüfe, ob dein Vorgehen (Maßnahmen, Monitoring, Transportziel) dazu passt.";
+      reply.next_hint  = "Prüfe, ob Maßnahmen, Monitoring und Transportziel zu deiner Verdachtsdiagnose passen.";
       credit(2);
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
@@ -603,38 +661,41 @@ exports.handler = async (event) => {
       const spec = String(state.specialty || "").toLowerCase();
       let dx;
       if (spec === "internistisch") {
-        dx = "Klinik je nach Befunden z. B. vereinbar mit akuter Bronchialobstruktion, ACS oder metabolischer Entgleisung.";
+        dx = "Nutze Anamnese (SAMPLER), Atembefund und EKG, um zwischen Bronchialobstruktion, kardialen Ursachen und metabolischen Problemen zu unterscheiden.";
       } else if (spec === "neurologisch") {
-        dx = "Klinik kompatibel z. B. mit Schlaganfall, Krampfanfall oder metabolischer Ursache.";
+        dx = "Überlege bei veränderter Vigilanz u. a. Hypoglykämie, Schlaganfall, Epilepsie oder Intoxikation.";
       } else if (spec === "trauma") {
-        dx = "Traumatisches Geschehen mit potenziell relevanten Verletzungen – Frakturen / Blutungen / SHT bedenken.";
+        dx = "Bewerte, ob es sich um ein isoliertes Extremitätentrauma oder ein mögliches Polytrauma handelt.";
       } else if (spec === "pädiatrisch" || spec === "paediatrisch") {
-        dx = "Pädiatrischer Notfall – Atmung, Kreislauf und Bewusstsein engmaschig überwachen.";
+        dx = "Beachte bei pädiatrischen Notfällen immer zuerst Atmung, Kreislauf und Bewusstsein; häufig sind Infekte oder obstruktive Atemwegserkrankungen.";
       } else {
-        dx = "Nicht eindeutig – strukturiere Diagnose über XABCDE, SAMPLER und zielgerichtete Untersuchung.";
+        dx = "Strukturiere deine Verdachtsdiagnose über XABCDE, SAMPLER und zielgerichtete Untersuchung.";
       }
       reply.accepted   = true;
       reply.evaluation = dx;
-      reply.next_hint  = "Formuliere eine konkrete Verdachtsdiagnose über das Tool 'Verdachtsdiagnose & Transport'.";
+      reply.next_hint  = "Formuliere deine konkrete Verdachtsdiagnose über das Tool 'Verdachtsdiagnose & Transport'.";
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // 12) Fall beenden
-    // =========================================================
+    // =====================================================================
+    // K) Fall beenden
+    // =====================================================================
     if (/fall beenden/.test(low)) {
       reply.accepted   = true;
-      reply.evaluation = "Fall beendet. Du kannst nun ein Debriefing anfordern.";
+      reply.evaluation = "Fall beendet. Fordere gern ein Debriefing an.";
       reply.done       = true;
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    // =========================================================
-    // Fallback
-    // =========================================================
+    // =====================================================================
+    // L) Fallback – nicht erkannte Aktion
+    // =====================================================================
     reply.outside_scope = true;
-    reply.evaluation    = "Aktion nicht erkannt. Beispiele: '4S Info', 'SAMPLER Info', 'SpO2 messen', 'AF messen', 'BZ messen', 'NRS 6', 'Verdachtsdiagnose: …'.";
-    reply.next_hint     = "Arbeite Schritt für Schritt nach XABCDE, nutze die Schema-Buttons und erhebe vollständige Vitalparameter.";
+    reply.evaluation =
+      "Aktion nicht erkannt. Beispiele: '4S Info', 'SAMPLER Info', 'SpO2 messen', 'AF messen', 'BZ messen', 'NRS 6', 'Verdachtsdiagnose: ...'.";
+    reply.next_hint =
+      "Arbeite Schritt für Schritt nach XABCDE, nutze die Schema-Buttons und erhebe vollständige Vitalparameter.";
+
     return { statusCode:200, headers, body: JSON.stringify(reply) };
 
   } catch (err) {
