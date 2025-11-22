@@ -12,16 +12,47 @@ const API_CASE_STEP = '/.netlify/functions/case-step';
 const statusEl  = document.getElementById('caseStatus');
 const scoreEl   = document.getElementById('caseScore');
 const chips     = Array.from(document.querySelectorAll('.chip'));
-const roleSel   = document.getElementById('roleSelect');
-const startBtn  = document.getElementById('btnStart');
-const finishBtn = document.getElementById('btnFinish');
+const hintCard  = document.getElementById('hintCard');
+const hintText  = document.getElementById('hintText');
+const tabs      = Array.from(document.querySelectorAll('.tab'));
 const panel     = document.getElementById('panel');
-const hintEl    = document.getElementById('nextHint');
-const chatLog   = document.getElementById('chatLog');
-const scoreBox  = document.getElementById('scoreBox');
+const queueList = document.getElementById('queueList');
 const runBtn    = document.getElementById('btnRunQueue');
 const clearBtn  = document.getElementById('btnClearQueue');
+const startBtn  = document.getElementById('startCase');
+const finishBtn = document.getElementById('finishCase');
+const chatLog   = document.getElementById('chatLog');
 
+const roleSel   = document.getElementById('roleSel');
+let selectedSpec = 'internistisch';
+document.querySelectorAll('.spec-chip').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.spec-chip').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active');
+    selectedSpec = btn.dataset.spec;
+  });
+});
+// Tools (Buttons unter den Tabs)
+document.querySelectorAll('.schema-btn').forEach(btn=>{
+  const t = btn.dataset.tool;
+  btn.addEventListener('click', ()=>{
+    if (!caseState && t!=='DEBRIEF') {
+      addMsg('<div class="small">Bitte zuerst einen Fall starten.</div>');
+      return;
+    }
+    switch(t){
+      case 'AF':       openAFCounter(); break;
+      case 'FOUR_S':   open4S(); break;
+      case 'SAMPLER':  openSampler(); break;
+      case 'BEFAST':   openBEFAST(); break;
+      case 'NRS':      openNRS(); break;
+      case 'DIAGNOSIS':openDiagnosis(); break;
+      case 'DEBRIEF':  stepCase('Debrief'); break;
+    }
+  });
+});
+
+// Vitals – DOM + sichtbarer Zustand (nur erhobene Werte)
 const vitalsMap = {
   RR:   document.getElementById('vRR'),
   SpO2: document.getElementById('vSpO2'),
@@ -120,8 +151,152 @@ function clearVisibleVitals() {
   renderVitalsFromVisible();
 }
 
-// ... (dein restlicher UI-Code: renderPanel, Queue, startCase etc. bleibt wie gehabt,
-// nur stepCase, openAFCounter und openNRS sind angepasst – hier die geänderten Teile:)
+function addMsg(html) {
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = html;
+  chatLog.appendChild(el);
+  el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+function showHint(text) {
+  // Fallback: Wenn kein separater Hinweisbereich im DOM existiert, schreiben wir die Tipps einfach in den Chat.
+  if (!hintCard || !hintText) {
+    if (text && text.trim()) addMsg(`<div class="small">💡 ${text}</div>`);
+    return;
+  }
+  if (text && text.trim()) { hintText.textContent = text; hintCard.classList.remove('hidden'); }
+  else { hintText.textContent = '—'; hintCard.classList.add('hidden'); }
+}
+function resetProgress() { chips.forEach(c => c.classList.remove('done','active')); }
+function renderProgress(steps = []) {
+  resetProgress();
+  const done = new Set(steps.map(s => s.toUpperCase()));
+  const order = ['X','A','B','C','D','E'];
+  order.forEach(step => {
+    const el = chips.find(c => c.dataset.step === step);
+    if ([...done].some(s => s.startsWith(step))) el.classList.add('done');
+  });
+  const next = order.find(s => ![...done].some(x => x.startsWith(s)));
+  const activeEl = chips.find(c => c.dataset.step === next);
+  if (activeEl) activeEl.classList.add('active');
+}
+
+// ------- Actions -------
+const ACTIONS = {
+  X: [
+    { label: 'Druckverband', token: 'Druckverband am Unterarm rechts' },
+    { label: 'Hämostyptikum', token: 'Hämostyptika in Oberschenkel links' },
+    { label: 'Tourniquet', token: 'Tourniquet am Oberschenkel links' },
+    { label: 'Beckenschlinge', token: 'Beckenschlinge anlegen' }
+  ],
+  A: [
+    { label: 'Esmarch', token: 'Esmarch' },
+    { label: 'Absaugen', token: 'Absaugen' },
+    { label: 'Guedel', token: 'Guedel' },
+    { label: 'Wendel', token: 'Wendel' },
+    { label: 'BMV', token: 'Beutel-Masken-Beatmung' }
+  ],
+  B: [
+    { label: 'AF zählen (30s)', token: 'AF zählen' },      // öffnet Modal
+    { label: 'AF messen', token: 'AF messen' },           // einfache Messaktion
+    { label: 'SpO2 messen', token: 'SpO2 messen' },       // Messaktion
+    { label: 'Lunge auskultieren', token: 'Thorax auskultieren' },
+    { label: 'Sauerstoff geben', token: 'O2 geben' }
+  ],
+
+  C: [
+    { label: 'RR messen', token: 'RR messen' },         // Messaktion
+    { label: 'Puls messen', token: 'Puls messen' },     // Messaktion
+    { label: '12-Kanal-EKG', token: '12-Kanal-EKG' },
+    { label: 'Volumen 500 ml', token: 'Volumen 500 ml' }
+  ],
+  D: [
+    { label: 'GCS erheben', token: 'GCS erheben' },     // Messaktion
+    { label: 'Pupillen prüfen', token: 'Pupillen' },
+    { label: 'BZ messen', token: 'BZ messen' }          // Messaktion
+  ],
+  E: [
+    { label: 'Ganzkörper Check', token: 'Bodycheck' },
+    { label: 'Wärmeerhalt', token: 'Wärme' },
+    { label: 'Oberkörper hoch lagern', token: 'Oberkörper hoch lagern' }
+  ]
+};
+
+// ------- Panel Rendering -------
+function renderPanel(tab) {
+  panel.innerHTML = '';
+  const list = ACTIONS[tab] || [];
+  list.forEach((a, idx) => {
+    const card = document.createElement('button');
+    card.className = 'action-card';
+    card.innerHTML = `<div class="label">${a.label}</div>`;
+    card.dataset.idx = idx;
+    card.addEventListener('click', () => {
+      queue.push({ label: a.label, token: a.token });
+      renderQueue();
+    });
+    panel.appendChild(card);
+  });
+}
+
+// Tabs (XABCDE)
+tabs.forEach(t => t.addEventListener('click', () => renderPanel(t.dataset.tab)));
+
+// ------- Queue -------
+function renderQueue() {
+  queueList.innerHTML = '';
+  queue.forEach((item, idx) => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span>${item.label}</span>
+      <button class="btn secondary small">Entfernen</button>
+    `;
+    li.querySelector('button').addEventListener('click', () => removeFromQueue(idx));
+    queueList.appendChild(li);
+  });
+}
+function removeFromQueue(i) {
+  queue.splice(i, 1);
+  renderQueue();
+}
+
+// ------- Case handling -------
+async function startCase() {
+  if (!selectedSpec) selectedSpec = 'internistisch';
+  clearVisibleVitals();
+  caseState = null;
+  resetProgress();
+  setStatus('Fall wird geladen …');
+  startBtn.disabled = true;
+
+  addMsg('<div class="small">Neuer Fall wird erstellt …</div>');
+  try {
+    const res = await fetch(API_CASE_NEW, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        specialty: selectedSpec,       // <- vom Chip
+        difficulty: 'mittel',
+        role: roleSel?.value || 'RS'   // <- Rolle
+      })
+    });
+    const data = await res.json();
+    caseState = data.case || data;
+
+    // Wichtig: NICHT automatisch Vitals setzen -> alles auf „–“ bis gemessen
+    clearVisibleVitals();
+    setStatus(`Fall aktiv: ${caseState?.patient?.name || 'Patient/in'} (${selectedSpec})`);
+    setScore(caseState?.score ?? 0);
+    renderProgress(caseState?.steps_done || []);
+    showHint('Starte mit X: lebensbedrohliche Blutungen ausschließen/stoppen.');
+
+    addMsg(`<strong>Fallstart:</strong> ${caseState?.story || '—'}`);
+  } catch (e) {
+    addMsg(`⚠️ Konnte keinen Fall starten: <span class="small">${e.message}</span>`);
+  } finally {
+    startBtn.disabled = false;
+  }
+}
 
 async function stepCase(phrase) {
   if (!caseState) return;
@@ -170,7 +345,7 @@ async function stepCase(phrase) {
       }
     }
 
-    // 2) Feedback & Progress (unverändert)
+    // 2) Feedback & Progress
     const badges = [];
     if (data.accepted)      badges.push('✓ akzeptiert');
     if (data.outside_scope) badges.push('⚠ außerhalb Kompetenz');
@@ -199,14 +374,16 @@ async function stepCase(phrase) {
     if (data.done) {
       setStatus('Fall abgeschlossen.');
       if (data.found) addMsg(`<strong>Ergebnis:</strong> ${data.found}`);
-      showHint('—'); resetProgress(); caseState = null;
+      showHint('—');
+      resetProgress();
+      caseState = null;
     }
   } catch (e) {
     addMsg(`⚠️ Schrittfehler: <span class="small">${e.message}</span>`);
   }
 }
 
-// AF-Zähler: nur kleine Änderung -> Monitor aktivieren, wenn fertig gezählt
+// AF-Zähler
 function openAFCounter(){
   let secs = 30, count = 0, timer = null, targetAF = null;
 
@@ -224,12 +401,9 @@ function openAFCounter(){
         const m = String(data.finding).match(/AF[^0-9]*([0-9]{1,2})/i);
         if (m) targetAF = Number(m[1]);
       }
-      // Hinweis in Modal einblenden
-      const t = document.createElement('div');
-      t.className = 'small';
-      t.textContent = targetAF != null
-        ? `Erwartete AF im Fall: ca. ${targetAF}/min (±2).`
-        : 'AF-Sollwert im Fall nicht eindeutig hinterlegt.';
+      const info = targetAF!=null ? `🎯 Ziel (Erwartung): ${targetAF}/min` : `ℹ️ Zähle 30s – wir rechnen hoch.`;
+      document.getElementById('befastInfo')?.textContent; // no-op to avoid linter
+      const t = document.createElement('div'); t.className='small muted'; t.textContent = info;
       const body = document.querySelector('#modalAF .modal-body');
       body && body.appendChild(t);
     }catch(e){ /* still ok */ }
@@ -251,8 +425,8 @@ function openAFCounter(){
     if (finish){
       const perMin = Math.max(0, Math.round(count * 2));
       visibleVitals.AF = perMin;
-      markMonitor(['AF']);
       renderVitalsFromVisible();
+      markMonitor(['AF']);
 
       // Vergleich mit Ziel (±2)
       let note = '';
@@ -310,3 +484,156 @@ function openNRS(){
   document.getElementById('nrsCancel').onclick = () => closeModal('modalNRS');
   openModal('modalNRS');
 }
+
+// ---- BE-FAST ----
+function openBEFAST(){
+  const infoBox = document.getElementById('befastInfo');
+  document.getElementById('befastFetch')?.addEventListener('click', async ()=>{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'BEFAST Info', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    infoBox.textContent = data.evaluation || data.finding || 'Keine spezifische BEFAST-Information hinterlegt.';
+  }, { once:true });
+
+  document.getElementById('befastOk').onclick = ()=>{
+    const data={
+      B:document.getElementById('b_balance').checked,
+      E:document.getElementById('e_eyes').checked,
+      F:document.getElementById('f_face').checked,
+      A:document.getElementById('a_arm').checked,
+      S:document.getElementById('s_speech').checked,
+      T:document.getElementById('t_time').value||''
+    };
+    const parts=[]; if(data.B) parts.push('Balance'); if(data.E) parts.push('Eyes');
+    if(data.F) parts.push('Face'); if(data.A) parts.push('Arm'); if(data.S) parts.push('Speech');
+    const msg=`BEFAST: ${parts.join(', ') || 'unauffällig'}${data.T?` | Last known well: ${data.T}`:''}`;
+    stepCase(msg);
+    closeModal('modalBEFAST');
+  };
+  document.getElementById('befastCancel').onclick = ()=> closeModal('modalBEFAST');
+  openModal('modalBEFAST');
+}
+
+// ---- SAMPLER ----
+function openSampler(){
+  const infoBox = document.getElementById('samplerInfo');
+  document.getElementById('samplerFetch')?.addEventListener('click', async ()=>{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: 'SAMPLER Info', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    infoBox.textContent = data.evaluation || 'Keine detaillierte SAMPLER-Anamnese im Fall hinterlegt.';
+  }, { once:true });
+
+  document.getElementById('samplerOk').onclick = ()=>{
+    const sData = {
+      S:document.getElementById('s_symptom').value||'',
+      A:document.getElementById('s_allergy').value||'',
+      M:document.getElementById('s_medication').value||'',
+      P:document.getElementById('s_past').value||'',
+      L:document.getElementById('s_last').value||'',
+      E:document.getElementById('s_events').value||'',
+      R:document.getElementById('s_risk').value||''
+    };
+    const parts=[];
+    Object.entries(sData).forEach(([k,v])=>{ if(v) parts.push(`${k}:${v}`); });
+    const msg = parts.length ? `SAMPLER dokumentiert (${parts.join(' | ')})` : 'SAMPLER dokumentiert (keine zusätzlichen Angaben).';
+    stepCase(msg);
+    closeModal('modalSAMPLER');
+  };
+  document.getElementById('samplerCancel').onclick = ()=> closeModal('modalSAMPLER');
+  openModal('modalSAMPLER');
+}
+
+// ---- 4S ----
+function open4S(){
+  const infoBox = document.getElementById('s4Info');
+  document.getElementById('s4Fetch')?.addEventListener('click', async ()=>{
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ case_state: caseState, user_action: '4S Info', role: caseState?.role || 'RS' })
+    });
+    const data = await res.json();
+    infoBox.textContent = data.evaluation || 'Keine Details zur Lagebeurteilung hinterlegt.';
+  }, { once:true });
+
+  document.getElementById('s4Ok').onclick = ()=>{
+    const flags=[
+      document.getElementById('s1').checked,
+      document.getElementById('s2').checked,
+      document.getElementById('s3').checked,
+      document.getElementById('s4').checked
+    ];
+    const parts=[];
+    if(flags[0]) parts.push('Sicherheit');
+    if(flags[1]) parts.push('Szene');
+    if(flags[2]) parts.push('Sichtung');
+    if(flags[3]) parts.push('Support');
+    const msg = parts.length ? `4S abgearbeitet (${parts.join(', ')})` : '4S abgefragt (ohne Details).';
+    stepCase(msg);
+    closeModal('modal4S');
+  };
+  document.getElementById('s4Cancel').onclick = ()=> closeModal('modal4S');
+  openModal('modal4S');
+}
+
+// ---- Diagnose & Transport ----
+const DX_BY_SPEC = {
+  internistisch: ['ACS','Asthma/Bronchialobstruktion','COPD-Exazerbation','Lungenembolie','Sepsis','Metabolische Entgleisung'],
+  neurologisch:  ['Schlaganfall','Krampfanfall','Hypoglykämie','Bewusstlosigkeit unklarer Genese'],
+  trauma:        ['Polytrauma','Schädel-Hirn-Trauma','Thoraxtrauma','Fraktur/Blutung'],
+  paediatrisch:  ['Fieberkrampf','Asthmaanfall','Dehydratation','Trauma Kind']
+};
+function openDiagnosis(){
+  const dxSpec=$id('dxSpec'), dxSel=$id('dxSelect');
+  const fill=()=>{
+    const list=DX_BY_SPEC[dxSpec.value]||[];
+    dxSel.innerHTML = list.map(x=>`<option>${x}</option>`).join('') + `<option>Andere (Kommentar)</option>`;
+  };
+  dxSpec.value = (selectedSpec || 'internistisch');
+  fill();
+  dxSpec.onchange=fill;
+  $id('dxOk').onclick=()=>{
+    const txt = dxSel.value;
+    const prio= $id('dxPrio').value;
+    const note= ($id('dxNote').value||'').trim();
+    const parts=[`Verdachtsdiagnose: ${txt}`, `Priorität: ${prio}`];
+    if(note) parts.push(`Kommentar: ${note}`);
+    const msg = parts.join(' | ');
+    stepCase(`Verdachtsdiagnose: ${msg}`);
+    closeModal('modalDx');
+  };
+  $id('dxCancel').onclick=()=> closeModal('modalDx');
+  openModal('modalDx');
+}
+
+// ------- Modal Helpers -------
+function $id(id){ return document.getElementById(id); }
+
+function openModal(id){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('hidden');
+}
+function closeModal(id){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('hidden');
+}
+
+// ------- Events/Init -------
+runBtn.addEventListener('click', runQueue);
+clearBtn.addEventListener('click', () => { queue.length = 0; renderQueue(); });
+startBtn.addEventListener('click', startCase);
+finishBtn.addEventListener('click', () => { if (caseState) stepCase('Fall beenden'); });
+
+clearVisibleVitals();
+setStatus('Kein Fall aktiv.');
+setScore(0);
+resetProgress();
+showHint('—');
+renderPanel('X');
+addMsg('👋 Wähle oben die Fachrichtung, starte den Fall, erhebe Werte per Buttons. Gemessene Werte bleiben sichtbar; Interventionen passen Vitals an.');
