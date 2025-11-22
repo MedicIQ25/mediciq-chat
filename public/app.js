@@ -5,8 +5,8 @@
 // - Fachrichtungs-/Rollenwahl vor Start
 // ===============================================================
 
-const API_CASE_NEW  = '/.netlify/functions/case-new';
-const API_CASE_STEP = '/.netlify/functions/case-step';
+const API_CASE_NEW  = '/case-new';
+const API_CASE_STEP = '/case-step';
 
 // ------- UI -------
 const statusEl  = document.getElementById('caseStatus');
