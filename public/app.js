@@ -1,53 +1,66 @@
 // ===============================================================
-// medicIQ – Click-UI (nur Klicks) mit:
-// - sichtbaren Vitalen erst nach Messung
-// - persistierenden Messwerten
-// - Fachrichtungs-/Rollenwahl vor Start
+// medicIQ – Fallbeispiele (Click-UI, nur Buttons)
+// - XABCDE als Tabs
+// - Schemata: 4S, SAMPLER, BE-FAST, NRS, Verdachtsdiagnose, Debrief
+// - Vitalwerte werden erst nach Messung angezeigt
+// - AF: einfache Messung (kein 30-Sekunden-Zähler)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
 const API_CASE_STEP = '/.netlify/functions/case-step';
 
-// ------- UI -------
-const statusEl  = document.getElementById('caseStatus');
-const scoreEl   = document.getElementById('caseScore');
-const chips     = Array.from(document.querySelectorAll('.chip'));
-const hintCard  = document.getElementById('hintCard');
-const hintText  = document.getElementById('hintText');
-const tabs      = Array.from(document.querySelectorAll('.tab'));
-const panel     = document.getElementById('panel');
-const queueList = document.getElementById('queueList');
-const runBtn    = document.getElementById('btnRunQueue');
-const clearBtn  = document.getElementById('btnClearQueue');
-const startBtn  = document.getElementById('startCase');
-const finishBtn = document.getElementById('finishCase');
-const chatLog   = document.getElementById('chatLog');
+// ------- UI Elemente -------
+const statusEl   = document.getElementById('caseStatus');
+const scoreEl    = document.getElementById('caseScore');
+const chatLog    = document.getElementById('chatLog');
+const queueList  = document.getElementById('queueList');
+const runBtn     = document.getElementById('btnRunQueue');
+const clearBtn   = document.getElementById('btnClearQueue');
+const startBtn   = document.getElementById('startCase');
+const finishBtn  = document.getElementById('finishCase');
+const roleSel    = document.getElementById('roleSel');
 
-const roleSel   = document.getElementById('roleSel');
+const chips      = Array.from(document.querySelectorAll('.chip'));
+const tabs       = Array.from(document.querySelectorAll('.tab'));
+const panel      = document.getElementById('panel');
+const hintCard   = document.getElementById('hintCard');
+const hintText   = document.getElementById('hintText');
+
+const specButtons = Array.from(document.querySelectorAll('.spec-chip'));
 let selectedSpec = 'internistisch';
-document.querySelectorAll('.spec-chip').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.spec-chip').forEach(x=>x.classList.remove('active'));
+
+specButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    specButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    selectedSpec = btn.dataset.spec;
+    selectedSpec = btn.dataset.spec || 'internistisch';
   });
 });
 
-// Tools (Buttons unter den Tabs)
-document.querySelectorAll('.schema-btn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
+// Schemata / Tools
+document.querySelectorAll('.schema-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
     const tool = btn.dataset.tool;
-    if (tool === 'AF_COUNTER') openAFCounter();
-    if (tool === 'NRS')        openNRS();
-    if (tool === 'BEFAST')     openBEFAST();
-    if (tool === 'SAMPLER')    openSampler();
-    if (tool === 'FOUR_S')     openFourS();
-    if (tool === 'DIAGNOSIS')  openDiagnosis();
-    if (tool === 'DEBRIEF')    openDebrief();
+    if (tool === 'AF_SIMPLE') {
+      // einfache AF-Messung ohne Zähler
+      stepCase('AF messen');
+    } else if (tool === 'FOUR_S') {
+      openFourS();
+    } else if (tool === 'SAMPLER') {
+      openSampler();
+    } else if (tool === 'BEFAST') {
+      openBEFAST();
+    } else if (tool === 'NRS') {
+      openNRS();
+    } else if (tool === 'DIAGNOSIS') {
+      openDiagnosis();
+    } else if (tool === 'DEBRIEF') {
+      openDebrief();
+    }
   });
 });
 
-// Vitals – DOM + sichtbarer Zustand (nur erhobene Werte)
+// Vital-Anzeige
 const vitalsMap = {
   RR:   document.getElementById('vRR'),
   SpO2: document.getElementById('vSpO2'),
@@ -57,94 +70,77 @@ const vitalsMap = {
   Temp: document.getElementById('vTemp'),
   GCS:  document.getElementById('vGCS')
 };
-const visibleVitals = {}; // <- persistiert Messungen
-const monitorEnabled = { RR:false, SpO2:false, AF:false, Puls:false, BZ:false, Temp:false, GCS:false };
-
-// Monitor-Steuerung: welche Vitalparameter sollen „live“ nachlaufen?
-function markMonitor(keys){
-  keys.forEach(k => {
-    if (Object.prototype.hasOwnProperty.call(monitorEnabled, k)) {
-      monitorEnabled[k] = true;
-    }
-  });
-}
-
-// sanfte Dynamik der Vitals – nähert sich den Fallwerten an, kleine Schwankungen
-function vitalMonitorTick(){
-  if (!caseState) return;
-  const target = caseState.vitals || {};
-
-  // Blutdruck separat behandeln (RR = SYS/DIA)
-  if (monitorEnabled.RR && (visibleVitals.RR || target.RR)) {
-    const base = String(visibleVitals.RR || target.RR).split('/');
-    const tgt  = String(target.RR || visibleVitals.RR || '').split('/');
-    if (base.length === 2 && tgt.length === 2) {
-      let [cSys, cDia] = base.map(v => parseInt(v,10));
-      const [tSys, tDia] = tgt.map(v => parseInt(v,10));
-      if (!isNaN(cSys) && !isNaN(cDia) && !isNaN(tSys) && !isNaN(tDia)) {
-        const stepSys = cSys < tSys ? 2 : cSys > tSys ? -2 : 0;
-        const stepDia = cDia < tDia ? 2 : cDia > tDia ? -2 : 0;
-        cSys += stepSys;
-        cDia += stepDia;
-        visibleVitals.RR = `${cSys}/${cDia}`;
-      }
-    }
-  }
-
-  // alle anderen Vitals (numerisch)
-  ["SpO2","AF","Puls","BZ","Temp","GCS"].forEach(key => {
-    if (!monitorEnabled[key]) return;
-    const curRaw = visibleVitals[key];
-    const tgtRaw = target[key];
-    if (curRaw == null || tgtRaw == null) return;
-    let cur = Number(curRaw);
-    let tgt = Number(tgtRaw);
-    if (Number.isNaN(cur) || Number.isNaN(tgt)) return;
-
-    const diff = tgt - cur;
-    if (Math.abs(diff) <= 1) {
-      // leichte zufällige Schwankung
-      if (Math.random() < 0.3) {
-        cur += Math.random() < 0.5 ? -1 : 1;
-      }
-    } else {
-      const step = Math.sign(diff) * Math.max(1, Math.round(Math.abs(diff) / 3));
-      cur += step;
-    }
-    visibleVitals[key] = Math.round(cur);
-  });
-
-  renderVitalsFromVisible();
-}
-
-// „Monitor“ alle 5 Sekunden laufen lassen
-setInterval(vitalMonitorTick, 5000);
-
-// ------- State -------
-let caseState = null;
-const queue = []; // [{label, token}]
-
-// ------- Helpers -------
-const setStatus = t => statusEl.textContent = t;
-const setScore  = n => scoreEl.textContent  = `Score: ${n ?? 0}`;
+const visibleVitals   = {};
+const monitorEnabled  = { RR:false, SpO2:false, AF:false, Puls:false, BZ:false, Temp:false, GCS:false };
+let   caseState       = null;
 
 function renderVitalsFromVisible() {
-  // Erst „–“ überall…
-  for (const el of Object.values(vitalsMap)) el.textContent = '–';
-  // …dann nur erhobene/aktualisierte Werte schreiben
+  Object.values(vitalsMap).forEach(el => { el.textContent = '–'; });
   for (const [k, v] of Object.entries(visibleVitals)) {
     if (v != null && vitalsMap[k]) vitalsMap[k].textContent = v;
   }
 }
 function clearVisibleVitals() {
-  for (const k of Object.keys(visibleVitals)) delete visibleVitals[k];
-  for (const k in monitorEnabled) {
-    if (Object.prototype.hasOwnProperty.call(monitorEnabled, k)) {
-      monitorEnabled[k] = false;
-    }
-  }
+  for (const k in visibleVitals) delete visibleVitals[k];
+  for (const k in monitorEnabled) monitorEnabled[k] = false;
   renderVitalsFromVisible();
 }
+function markMonitor(keys) {
+  keys.forEach(k => {
+    if (Object.prototype.hasOwnProperty.call(monitorEnabled, k)) monitorEnabled[k] = true;
+  });
+}
+
+// kleine Dynamik: nähert Messwerte den Fallvitalen an
+function vitalMonitorTick() {
+  if (!caseState) return;
+  const target = caseState.vitals || {};
+
+  // RR
+  if (monitorEnabled.RR && (visibleVitals.RR || target.RR)) {
+    const curStr = String(visibleVitals.RR || target.RR);
+    const tgtStr = String(target.RR || curStr);
+    const c = curStr.split('/');
+    const t = tgtStr.split('/');
+    if (c.length === 2 && t.length === 2) {
+      let cSys = parseInt(c[0], 10);
+      let cDia = parseInt(c[1], 10);
+      const tSys = parseInt(t[0], 10);
+      const tDia = parseInt(t[1], 10);
+      if (!isNaN(cSys) && !isNaN(tSys)) {
+        if (cSys < tSys) cSys += 2;
+        else if (cSys > tSys) cSys -= 2;
+      }
+      if (!isNaN(cDia) && !isNaN(tDia)) {
+        if (cDia < tDia) cDia += 2;
+        else if (cDia > tDia) cDia -= 2;
+      }
+      visibleVitals.RR = cSys + '/' + cDia;
+    }
+  }
+
+  ['SpO2','AF','Puls','BZ','Temp','GCS'].forEach(k => {
+    if (!monitorEnabled[k]) return;
+    const cur = Number(visibleVitals[k] ?? target[k]);
+    const tgt = Number(target[k] ?? cur);
+    if (!isFinite(cur) || !isFinite(tgt)) return;
+    let next = cur;
+    const diff = tgt - cur;
+    if (Math.abs(diff) > 1) {
+      next = cur + Math.sign(diff) * Math.max(1, Math.round(Math.abs(diff)/3));
+    } else if (Math.random() < 0.3) {
+      next = cur + (Math.random() < 0.5 ? -1 : 1);
+    }
+    visibleVitals[k] = Math.round(next * 10) / 10;
+  });
+
+  renderVitalsFromVisible();
+}
+setInterval(vitalMonitorTick, 5000);
+
+// ------- Helfer fürs UI -------
+function setStatus(t) { statusEl.textContent = t; }
+function setScore(n)  { scoreEl.textContent  = 'Score: ' + (n ?? 0); }
 
 function addMsg(html) {
   const el = document.createElement('div');
@@ -153,85 +149,89 @@ function addMsg(html) {
   chatLog.appendChild(el);
   el.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
-function showHint(text) {
-  if (text && text.trim()) { hintText.textContent = text; hintCard.classList.remove('hidden'); }
-  else { hintText.textContent = '—'; hintCard.classList.add('hidden'); }
+function showHint(t) {
+  if (t && t.trim()) {
+    hintText.textContent = t;
+    hintCard.classList.remove('hidden');
+  } else {
+    hintText.textContent = '—';
+    hintCard.classList.add('hidden');
+  }
 }
+
 function resetProgress() { chips.forEach(c => c.classList.remove('done','active')); }
-function renderProgress(steps = []) {
+function renderProgress(steps) {
+  steps = Array.isArray(steps) ? steps : [];
   resetProgress();
-  const done = new Set(steps.map(s => s.toUpperCase()));
+  const done = new Set(steps.map(s => String(s).toUpperCase()));
   const order = ['X','A','B','C','D','E'];
   order.forEach(step => {
     const el = chips.find(c => c.dataset.step === step);
+    if (!el) return;
     if ([...done].some(s => s.startsWith(step))) el.classList.add('done');
   });
-  const next = order.find(s => ![...done].some(x => x.startsWith(s)));
+  const next = order.find(step => ![...done].some(s => s.startsWith(step)));
   const activeEl = chips.find(c => c.dataset.step === next);
   if (activeEl) activeEl.classList.add('active');
 }
 
-// ------- Actions -------
+// ------- Maßnahmen-Panel (XABCDE) -------
 const ACTIONS = {
   X: [
-    { label: 'Druckverband', token: 'Druckverband am Unterarm rechts' },
-    { label: 'Hämostyptikum', token: 'Hämostyptika in Oberschenkel links' },
-    { label: 'Tourniquet', token: 'Tourniquet am Oberschenkel links' },
-    { label: 'Beckenschlinge', token: 'Beckenschlinge anlegen' }
+    { label: 'Druckverband',           token: 'Druckverband' },
+    { label: 'Hämostyptikum',          token: 'Hämostyptikum' },
+    { label: 'Tourniquet',             token: 'Tourniquet' },
+    { label: 'Beckenschlinge',         token: 'Beckenschlinge' }
   ],
   A: [
-    { label: 'Esmarch', token: 'Esmarch' },
-    { label: 'Absaugen', token: 'Absaugen' },
-    { label: 'Guedel', token: 'Guedel' },
-    { label: 'Wendel', token: 'Wendel' },
-    { label: 'BMV', token: 'Beutel-Masken-Beatmung' }
+    { label: 'Esmarch',                token: 'Esmarch' },
+    { label: 'Absaugen',               token: 'Absaugen' },
+    { label: 'Guedel',                 token: 'Guedel' },
+    { label: 'Wendel',                 token: 'Wendel' },
+    { label: 'Beutel-Masken-Beatmung', token: 'Beutel-Masken-Beatmung' }
   ],
   B: [
-    { label: 'AF zählen (30s)', token: 'AF zählen' },
-    { label: 'AF messen', token: 'AF messen' },
-    { label: 'SpO2 messen', token: 'SpO2 messen' },
-    { label: 'Lunge auskultieren', token: 'Thorax auskultieren' },
-    { label: 'Sauerstoff geben', token: 'O2 geben' }
+    { label: 'AF messen',              token: 'AF messen' },
+    { label: 'SpO₂ messen',            token: 'SpO2 messen' },
+    { label: 'Lunge auskultieren',     token: 'Lunge auskultieren' },
+    { label: 'Sauerstoff geben',       token: 'O2 geben' }
   ],
   C: [
-    { label: 'RR messen', token: 'RR messen' },
-    { label: 'Puls messen', token: 'Puls messen' },
-    { label: '12-Kanal-EKG', token: '12-Kanal-EKG' },
-    { label: 'Volumen 500 ml', token: 'Volumen 500 ml' }
+    { label: 'RR messen',              token: 'RR messen' },
+    { label: 'Puls messen',            token: 'Puls messen' },
+    { label: '12-Kanal-EKG',           token: '12-Kanal-EKG' },
+    { label: 'Volumen 500 ml',         token: 'Volumen 500 ml' }
   ],
   D: [
-    { label: 'GCS erheben', token: 'GCS erheben' },
-    { label: 'Pupillen prüfen', token: 'Pupillen' },
-    { label: 'BZ messen', token: 'BZ messen' }
+    { label: 'GCS erheben',            token: 'GCS erheben' },
+    { label: 'Pupillen prüfen',        token: 'Pupillen' },
+    { label: 'BZ messen',              token: 'BZ messen' }
   ],
   E: [
-    { label: 'Ganzkörper Check', token: 'Bodycheck' },
-    { label: 'Wärmeerhalt', token: 'Wärme' },
+    { label: 'Bodycheck',              token: 'Bodycheck' },
+    { label: 'Wärmeerhalt',            token: 'Wärmeerhalt' },
     { label: 'Oberkörper hoch lagern', token: 'Oberkörper hoch lagern' }
   ]
 };
 
-// ------- Panel Rendering -------
 function renderPanel(tab) {
   panel.innerHTML = '';
   const list = ACTIONS[tab] || [];
-  list.forEach((a, idx) => {
-    const card = document.createElement('button');
-    card.className = 'action-card';
-    card.innerHTML = `<div class="label">${a.label}</div>`;
-    card.dataset.idx = idx;
-    card.addEventListener('click', () => {
+  list.forEach((a) => {
+    const btn = document.createElement('button');
+    btn.className = 'action-card';
+    btn.innerHTML = `<div class="label">${a.label}</div>`;
+    btn.addEventListener('click', () => {
       queue.push({ label: a.label, token: a.token });
       renderQueue();
     });
-    panel.appendChild(card);
+    panel.appendChild(btn);
   });
 }
-
-// Tabs (XABCDE)
 tabs.forEach(t => t.addEventListener('click', () => renderPanel(t.dataset.tab)));
 
 // ------- Queue -------
+const queue = [];
 function renderQueue() {
   queueList.innerHTML = '';
   queue.forEach((item, idx) => {
@@ -240,18 +240,15 @@ function renderQueue() {
       <span>${item.label}</span>
       <button class="btn secondary small">Entfernen</button>
     `;
-    li.querySelector('button').addEventListener('click', () => removeFromQueue(idx));
+    li.querySelector('button').addEventListener('click', () => {
+      queue.splice(idx, 1);
+      renderQueue();
+    });
     queueList.appendChild(li);
   });
 }
-function removeFromQueue(i) {
-  queue.splice(i, 1);
-  renderQueue();
-}
 
-// ====================================================================
-// Lokaler Fallsimulator (Fallback, falls Netlify-Function nicht geht)
-// ====================================================================
+// ------- Fallback-Fallsimulator (wenn case-new nicht erreichbar) -------
 function buildLocalCase(spec, role, difficulty) {
   spec = (spec || 'internistisch').toLowerCase();
   role = role || 'RS';
@@ -423,7 +420,7 @@ function buildLocalCase(spec, role, difficulty) {
       }
     }),
 
-    paediatrisch: () => ({
+    pädiatrisch: () => ({
       id: "rs_paed_bronchiolitis_01",
       specialty: "pädiatrisch",
       role,
@@ -482,54 +479,40 @@ function buildLocalCase(spec, role, difficulty) {
   const createCase = cases[spec] || cases.internistisch;
   const c = createCase();
   c.steps_done = c.steps_done || [];
-  c.history = c.history || [];
-  c.score = typeof c.score === 'number' ? c.score : 0;
+  c.history    = c.history    || [];
+  c.score      = typeof c.score === 'number' ? c.score : 0;
   return c;
 }
 
-// ------- Case handling / Start -------
+// ------- Fall starten -------
 async function startCase() {
-  if (!selectedSpec) selectedSpec = 'internistisch';
-
-  // UI-Reset
   clearVisibleVitals();
   resetProgress();
   caseState = null;
   setStatus('Fall wird geladen …');
-
   startBtn.disabled = true;
-  addMsg('<div class="small">Neuer Fall wird erstellt …</div>');
 
   let usedFallback = false;
   try {
     const res = await fetch(API_CASE_NEW, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({
         specialty: selectedSpec,
-        difficulty: 'mittel',
-        role: roleSel?.value || 'RS'
+        role: roleSel?.value || 'RS',
+        difficulty: 'mittel'
       })
     });
 
-    if (!res.ok) {
-      throw new Error('Backend antwortet mit Status ' + res.status);
-    }
-
-    const data = await res.json().catch(() => {
-      throw new Error('Antwort konnte nicht als JSON gelesen werden.');
-    });
-
-    if (!data || data.error) {
-      throw new Error(data && data.error ? data.error : 'Ungültige Antwort vom Backend.');
-    }
+    if (!res.ok) throw new Error('Status ' + res.status);
+    const data = await res.json();
+    if (!data || data.error) throw new Error(data?.error || 'Ungültige Antwort.');
 
     caseState = data.case || data;
   } catch (e) {
-    // Fallback: lokale Fallsimulation
     usedFallback = true;
     caseState = buildLocalCase(selectedSpec, roleSel?.value || 'RS', 'mittel');
-    addMsg(`<div class="small">⚠️ Backend nicht erreichbar, verwende lokalen Fallsimulator (${e.message}).</div>`);
+    addMsg(`<div class="small">⚠️ Backend nicht erreichbar (${e.message}), verwende lokalen Fallsimulator.</div>`);
   } finally {
     startBtn.disabled = false;
   }
@@ -540,61 +523,39 @@ async function startCase() {
   }
 
   clearVisibleVitals();
-  setStatus(`Fall aktiv: ${caseState?.patient?.name || 'Patient/in'} (${selectedSpec})`);
-  setScore(caseState?.score ?? 0);
-  renderProgress(caseState?.steps_done || []);
-  showHint('Starte mit X: lebensbedrohliche Blutungen ausschließen/stoppen.');
+  setStatus(`Fall aktiv (${selectedSpec})`);
+  setScore(caseState.score);
+  renderProgress(caseState.steps_done);
+  showHint('Starte mit X und arbeite dich nach XABCDE durch.');
 
-  addMsg(`<strong>Fallstart${usedFallback ? ' (lokal)' : ''}:</strong> ${caseState?.story || '—'}`);
+  addMsg(`<strong>Fallstart${usedFallback ? ' (lokal)' : ''}:</strong> ${caseState.story || '—'}`);
 }
 
+// ------- Schritt ausführen -------
 async function stepCase(phrase) {
   if (!caseState) return;
   try {
     const res = await fetch(API_CASE_STEP, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ case_state: caseState, user_action: phrase, role: caseState.role || 'RS' })
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        case_state: caseState,
+        user_action: phrase,
+        role: caseState.role || roleSel?.value || 'RS'
+      })
     });
     const data = await res.json();
 
-    // 1) sichtbare Vitals MERGEN (nur keys, die zurückkommen)
+    // Vitals aktualisieren
     if (data.updated_vitals) {
-      Object.entries(data.updated_vitals).forEach(([k,v]) => { visibleVitals[k] = v; });
+      Object.entries(data.updated_vitals).forEach(([k,v]) => {
+        visibleVitals[k] = v;
+      });
       markMonitor(Object.keys(data.updated_vitals));
       renderVitalsFromVisible();
     }
 
-    // 1b) Messwerte aus Textbefunden extrahieren (z. B. "RR: 120/80")
-    if (data.finding) {
-      const f = String(data.finding);
-      const patterns = [
-        { key: 'RR',   re: /RR:\s*([0-9]{2,3}\/[0-9]{2,3})/i },
-        { key: 'SpO2', re: /SpO[²2]?:?\s*([0-9]{2,3})/i },
-        { key: 'AF',   re: /\bAF:\s*([0-9]{1,2})/i },
-        { key: 'Puls', re: /Puls:\s*([0-9]{2,3})/i },
-        { key: 'BZ',   re: /BZ:\s*([0-9]{2,3})/i },
-        { key: 'Temp', re: /Temp:\s*([0-9]{2,3}(?:[.,][0-9])?)/i },
-        { key: 'GCS',  re: /GCS:\s*([0-9]{1,2})/i }
-      ];
-      const newly = [];
-      patterns.forEach(p => {
-        const m = f.match(p.re);
-        if (!m) return;
-        if (p.key === 'Temp') {
-          visibleVitals[p.key] = parseFloat(m[1].replace(',', '.'));
-        } else {
-          visibleVitals[p.key] = m[1];
-        }
-        newly.push(p.key);
-      });
-      if (newly.length) {
-        markMonitor(newly);
-        renderVitalsFromVisible();
-      }
-    }
-
-    // 2) Feedback & Progress
+    // Chat-Ausgabe
     const badges = [];
     if (data.accepted)      badges.push('✓ akzeptiert');
     if (data.outside_scope) badges.push('⚠ außerhalb Kompetenz');
@@ -602,119 +563,236 @@ async function stepCase(phrase) {
 
     let vitalsMini = '';
     if (data.updated_vitals && Object.keys(data.updated_vitals).length) {
-      const parts = Object.entries(data.updated_vitals).map(([k,v])=>`${k}: <b>${v}</b>`);
+      const parts = Object.entries(data.updated_vitals).map(([k,v]) => `${k}: <b>${v}</b>`);
       vitalsMini = `<div class="small">🔎 ${parts.join(' · ')}</div>`;
     }
 
     addMsg(`
       <div><strong>Aktion:</strong> ${phrase}</div>
       ${badges.length ? `<div class="small">${badges.join(' · ')}</div>` : ''}
-      ${data.evaluation ? `<div>${data.evaluation}</div>` : ''}
-      ${data.finding ? `<div class="small">${data.finding}</div>` : ''}
+      ${data.evaluation ? `<div>${String(data.evaluation).replace(/\n/g,'<br>')}</div>` : ''}
+      ${data.finding ? `<div class="small">${String(data.finding).replace(/\n/g,'<br>')}</div>` : ''}
       ${vitalsMini}
       ${data.next_hint ? `<div class="small">💡 ${data.next_hint}</div>` : ''}
     `);
 
     caseState = data.case_state || caseState;
-    setScore(caseState?.score ?? 0);
-    renderProgress(caseState?.steps_done || []);
+    setScore(caseState.score);
+    renderProgress(caseState.steps_done);
     showHint(data.next_hint || '');
 
     if (data.done) {
       setStatus('Fall abgeschlossen.');
-      if (data.found) addMsg(`<strong>Ergebnis:</strong> ${data.found}`);
       showHint('—');
-      resetProgress();
       caseState = null;
     }
   } catch (e) {
-    addMsg(`⚠️ Schrittfehler: <span class="small">${e.message}</span>`);
+    addMsg(`<div class="small">⚠️ Fehler bei Schritt: ${e.message}</div>`);
   }
 }
 
-// AF-Zähler
-function openAFCounter(){
-  let secs = 30, count = 0, timer = null, targetAF = null;
-
-  // 1) Zielwert aus dem Fall holen (ohne Anzeige ändern)
-  (async ()=>{
-    try{
-      const res = await fetch(API_CASE_STEP, {
-        method: 'POST', headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ case_state: caseState, user_action: 'AF Info', role: caseState?.role || 'RS' })
-      });
-      const data = await res.json();
-      // Wir akzeptieren AF in updated_vitals oder im Text (z.B. "AF: 12/min")
-      if (data.updated_vitals?.AF) targetAF = Number(String(data.updated_vitals.AF).replace(/\D/g,''));
-      else if (data.finding) {
-        const m = String(data.finding).match(/AF[^0-9]*([0-9]{1,2})/i);
-        if (m) targetAF = Number(m[1]);
-      }
-      const info = targetAF!=null ? `🎯 Ziel (Erwartung): ${targetAF}/min` : `ℹ️ Zähle 30s – wir rechnen hoch.`;
-      document.getElementById('befastInfo')?.textContent; // no-op
-      const t = document.createElement('div'); t.className='small muted'; t.textContent = info;
-      const body = document.querySelector('#modalAF .modal-body');
-      body && body.appendChild(t);
-    }catch(e){ /* still ok */ }
-  })();
-
-  document.getElementById('afTimer').textContent = secs;
-  document.getElementById('afCount').textContent = count;
-
-  const tick = () => {
-    secs--; document.getElementById('afTimer').textContent = secs;
-    if (secs <= 0) stop(true);
-  };
-
-  function stop(finish){
-    clearInterval(timer); timer = null;
-    document.getElementById('afStart').disabled = false;
-    document.getElementById('afTap').disabled = true;
-
-    if (finish){
-      const perMin = Math.max(0, Math.round(count * 2));
-      visibleVitals.AF = perMin;
-      renderVitalsFromVisible();
-      markMonitor(['AF']);
-      stepCase(`AF messen ${perMin}/min`);
-      closeModal('modalAF');
-    }
+// ------- Debriefing -------
+async function openDebrief() {
+  if (!caseState) {
+    addMsg('<div class="small">Kein aktiver Fall für Debriefing.</div>');
+    return;
   }
-
-  document.getElementById('afStart').onclick = ()=>{
-    if (timer) return;
-    secs = 30; count = 0;
-    document.getElementById('afTimer').textContent = secs;
-    document.getElementById('afCount').textContent = count;
-    timer = setInterval(tick, 1000);
-    document.getElementById('afStart').disabled = true;
-    document.getElementById('afTap').disabled = false;
-  };
-  document.getElementById('afTap').onclick = ()=>{ if (!timer) return; count++; document.getElementById('afCount').textContent = count; };
-  document.getElementById('afCancel').onclick = ()=>{ stop(false); closeModal('modalAF'); };
-  document.getElementById('afTap').disabled = true;
-
-  openModal('modalAF');
-}
-
-// ---- NRS / Schmerzskala ----
-function openNRS(){
-  const infoBox = document.getElementById('nrsInfo');
-  document.getElementById('nrsFetch')?.addEventListener('click', async ()=>{
+  try {
     const res = await fetch(API_CASE_STEP, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ case_state: caseState, user_action: 'Schmerz Info', role: caseState?.role || 'RS' })
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ case_state: caseState, user_action:'Debriefing', role: caseState.role || 'RS' })
     });
     const data = await res.json();
-    infoBox.textContent = data.finding || data.evaluation || 'Schmerzangabe nicht verfügbar – erfrage aktiv.';
-  }, { once:true });
+    if (data.debrief || data.evaluation) {
+      addMsg(`<strong>Debriefing</strong><div class="small">${String(data.debrief || data.evaluation).replace(/\n/g,'<br>')}</div>`);
+      caseState = data.case_state || caseState;
+      setScore(caseState.score);
+      return;
+    }
+  } catch (e) {
+    addMsg(`<div class="small">⚠️ Debriefing nicht abrufbar (${e.message}).</div>`);
+  }
+}
 
+// ------- Diagnose & Transport -------
+function $id(id){ return document.getElementById(id); }
+
+const DX_BY_SPEC = {
+  internistisch: ['ACS','Asthma/Bronchialobstruktion','COPD-Exazerbation','Lungenembolie','Sepsis','Metabolische Entgleisung'],
+  neurologisch:  ['Schlaganfall','Krampfanfall','Hypoglykämie','Bewusstlosigkeit unklarer Genese'],
+  trauma:        ['Polytrauma','Schädel-Hirn-Trauma','Thoraxtrauma','Fraktur/Blutung'],
+  pädiatrisch:   ['Fieberkrampf','Asthmaanfall','Dehydratation','Trauma Kind']
+};
+
+function openDiagnosis() {
+  const dxSpec = $id('dxSpec');
+  const dxSel  = $id('dxSelect');
+  const fill = () => {
+    const list = DX_BY_SPEC[dxSpec.value] || [];
+    dxSel.innerHTML = list.map(x => `<option>${x}</option>`).join('') +
+      '<option>Andere (Kommentar)</option>';
+  };
+  dxSpec.value = selectedSpec;
+  fill();
+  dxSpec.onchange = fill;
+
+  $id('dxOk').onclick = () => {
+    const txt  = dxSel.value;
+    const prio = $id('dxPrio').value;
+    const note = ($id('dxNote').value || '').trim();
+    const parts = [`Verdachtsdiagnose: ${txt}`, `Priorität: ${prio}`];
+    if (note) parts.push(`Kommentar: ${note}`);
+    const msg = parts.join(' | ');
+    stepCase(`Verdachtsdiagnose: ${msg}`);
+    closeModal('modalDx');
+  };
+  $id('dxCancel').onclick = () => closeModal('modalDx');
+  openModal('modalDx');
+}
+
+// ------- 4S -------
+async function openFourS() {
+  const info = document.getElementById('s4Info');
+  info.textContent = '';
+  document.getElementById('s1').checked = false;
+  document.getElementById('s2').checked = false;
+  document.getElementById('s3').checked = false;
+  document.getElementById('s4').checked = false;
+
+  document.getElementById('s4Fetch').onclick = async () => {
+    if (!caseState) return;
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ case_state: caseState, user_action:'4S Info', role: caseState.role || 'RS' })
+    });
+    const data = await res.json();
+    info.textContent = data.evaluation || data.finding || '';
+  };
+
+  document.getElementById('s4Ok').onclick = () => {
+    const parts = [];
+    if (document.getElementById('s1').checked) parts.push('Sicherheit');
+    if (document.getElementById('s2').checked) parts.push('Szene');
+    if (document.getElementById('s3').checked) parts.push('Sichtung');
+    if (document.getElementById('s4').checked) parts.push('Support');
+    const msg = parts.length ? `4S dokumentiert (${parts.join(', ')})` : '4S dokumentiert';
+    stepCase(msg);
+    closeModal('modal4S');
+  };
+  document.getElementById('s4Cancel').onclick = () => closeModal('modal4S');
+  openModal('modal4S');
+}
+
+// ------- BE-FAST -------
+function openBEFAST() {
+  const info = document.getElementById('befastInfo');
+  info.textContent = '';
+  ['b_balance','e_eyes','f_face','a_arm','s_speech'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = false;
+  });
+  document.getElementById('t_time').value = '';
+
+  document.getElementById('befastFetch').onclick = async () => {
+    if (!caseState) return;
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ case_state: caseState, user_action:'BEFAST Info', role: caseState.role || 'RS' })
+    });
+    const data = await res.json();
+    info.textContent = data.evaluation || data.finding || '';
+  };
+
+  document.getElementById('befastOk').onclick = () => {
+    const data = {
+      B: document.getElementById('b_balance').checked,
+      E: document.getElementById('e_eyes').checked,
+      F: document.getElementById('f_face').checked,
+      A: document.getElementById('a_arm').checked,
+      S: document.getElementById('s_speech').checked,
+      T: document.getElementById('t_time').value || ''
+    };
+    const parts = [];
+    if (data.B) parts.push('Balance');
+    if (data.E) parts.push('Eyes');
+    if (data.F) parts.push('Face');
+    if (data.A) parts.push('Arm');
+    if (data.S) parts.push('Speech');
+    const msg = `BEFAST: ${parts.join(', ') || 'unauffällig'}${data.T ? ' | LKW: ' + data.T : ''}`;
+    stepCase(msg);
+    closeModal('modalBEFAST');
+  };
+  document.getElementById('befastCancel').onclick = () => closeModal('modalBEFAST');
+  openModal('modalBEFAST');
+}
+
+// ------- SAMPLER -------
+function openSampler() {
+  const info = document.getElementById('samplerInfo');
+  info.textContent = '';
+  ['s_sympt','s_allerg','s_meds','s_hist','s_last','s_events','s_risk'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  document.getElementById('samplerFetch').onclick = async () => {
+    if (!caseState) return;
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ case_state: caseState, user_action:'SAMPLER Info', role: caseState.role || 'RS' })
+    });
+    const data = await res.json();
+    info.textContent = data.evaluation || data.finding || '';
+  };
+
+  document.getElementById('samplerOk').onclick = () => {
+    const data = {
+      S: document.getElementById('s_sympt').value || '',
+      A: document.getElementById('s_allerg').value || '',
+      M: document.getElementById('s_meds').value || '',
+      P: document.getElementById('s_hist').value || '',
+      L: document.getElementById('s_last').value || '',
+      E: document.getElementById('s_events').value || '',
+      R: document.getElementById('s_risk').value || ''
+    };
+    const parts = [];
+    Object.entries(data).forEach(([k,v]) => { if (v) parts.push(`${k}:${v}`); });
+    const msg = parts.length ? `SAMPLER dokumentiert (${parts.join(' | ')})` : 'SAMPLER dokumentiert';
+    stepCase(msg);
+    closeModal('modalSampler');
+  };
+
+  document.getElementById('samplerCancel').onclick = () => closeModal('modalSampler');
+  openModal('modalSampler');
+}
+
+// ------- NRS / Schmerzskala -------
+function openNRS() {
   const range = document.getElementById('nrsRange');
   const val   = document.getElementById('nrsVal');
+  const info  = document.getElementById('nrsInfo');
   if (!range || !val) return;
 
-  val.textContent = range.value;
+  range.value = '0';
+  val.textContent = '0';
+  info.textContent = '';
+
   range.oninput = () => { val.textContent = range.value; };
+
+  document.getElementById('nrsFetch').onclick = async () => {
+    if (!caseState) return;
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ case_state: caseState, user_action:'Schmerz Info', role: caseState.role || 'RS' })
+    });
+    const data = await res.json();
+    info.textContent = data.evaluation || data.finding || '';
+  };
 
   document.getElementById('nrsOk').onclick = () => {
     const n = Number(range.value || 0);
@@ -725,191 +803,18 @@ function openNRS(){
   openModal('modalNRS');
 }
 
-// ---- BE-FAST ----
-function openBEFAST(){
-  const infoBox = document.getElementById('befastInfo');
-  document.getElementById('befastFetch')?.addEventListener('click', async ()=>{
-    const res = await fetch(API_CASE_STEP, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ case_state: caseState, user_action: 'BEFAST Info', role: caseState?.role || 'RS' })
-    });
-    const data = await res.json();
-    infoBox.textContent = data.evaluation || data.finding || 'Keine spezifische BEFAST-Information hinterlegt.';
-  }, { once:true });
-
-  document.getElementById('befastOk').onclick = ()=>{
-    const data={
-      B:document.getElementById('b_balance').checked,
-      E:document.getElementById('e_eyes').checked,
-      F:document.getElementById('f_face').checked,
-      A:document.getElementById('a_arm').checked,
-      S:document.getElementById('s_speech').checked,
-      T:document.getElementById('t_time').value||''
-    };
-    const parts=[]; if(data.B) parts.push('Balance'); if(data.E) parts.push('Eyes');
-    if(data.F) parts.push('Face'); if(data.A) parts.push('Arm'); if(data.S) parts.push('Speech');
-    const msg=`BEFAST: ${parts.join(', ') || 'unauffällig'}${data.T?` | Last known well: ${data.T}`:''}`;
-    stepCase(msg);
-    closeModal('modalBEFAST');
-  };
-  document.getElementById('befastCancel').onclick = ()=> closeModal('modalBEFAST');
-  openModal('modalBEFAST');
-}
-
-// ---- SAMPLER ----
-function openSampler(){
-  const infoBox = document.getElementById('samplerInfo');
-  document.getElementById('samplerFetch')?.addEventListener('click', async ()=>{
-    const res = await fetch(API_CASE_STEP, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ case_state: caseState, user_action: 'SAMPLER Info', role: caseState?.role || 'RS' })
-    });
-    const data = await res.json();
-    infoBox.textContent = data.evaluation || 'Keine detaillierte SAMPLER-Anamnese im Fall hinterlegt.';
-  }, { once:true });
-
-  document.getElementById('samplerOk').onclick = ()=>{
-    const sData = {
-      S:document.getElementById('s_symptom').value||'',
-      A:document.getElementById('s_allergy').value||'',
-      M:document.getElementById('s_medication').value||'',
-      P:document.getElementById('s_past').value||'',
-      L:document.getElementById('s_last').value||'',
-      E:document.getElementById('s_events').value||'',
-      R:document.getElementById('s_risk').value||''
-    };
-    const parts=[];
-    Object.entries(sData).forEach(([k,v])=>{ if(v) parts.push(`${k}:${v}`); });
-    const msg = parts.length ? `SAMPLER dokumentiert (${parts.join(' | ')})` : 'SAMPLER dokumentiert (keine zusätzlichen Angaben).';
-    stepCase(msg);
-    closeModal('modalSAMPLER');
-  };
-  document.getElementById('samplerCancel').onclick = ()=> closeModal('modalSAMPLER');
-  openModal('modalSAMPLER');
-}
-
-// ---- 4S ----
-function openFourS(){
-  const infoBox = document.getElementById('s4Info');
-  document.getElementById('s4Fetch')?.addEventListener('click', async ()=>{
-    const res = await fetch(API_CASE_STEP, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ case_state: caseState, user_action: '4S Info', role: caseState?.role || 'RS' })
-    });
-    const data = await res.json();
-    infoBox.textContent = data.evaluation || 'Keine Details zur Lagebeurteilung hinterlegt.';
-  }, { once:true });
-
-  document.getElementById('s4Ok').onclick = ()=>{
-    const flags=[
-      document.getElementById('s1').checked,
-      document.getElementById('s2').checked,
-      document.getElementById('s3').checked,
-      document.getElementById('s4').checked
-    ];
-    const parts=[];
-    if(flags[0]) parts.push('Sicherheit');
-    if(flags[1]) parts.push('Szene');
-    if(flags[2]) parts.push('Sichtung');
-    if(flags[3]) parts.push('Support');
-    const msg = parts.length ? `4S abgearbeitet (${parts.join(', ')})` : '4S abgefragt (ohne Details).';
-    stepCase(msg);
-    closeModal('modal4S');
-  };
-  document.getElementById('s4Cancel').onclick = ()=> closeModal('modal4S');
-  openModal('modal4S');
-}
-
-// ---- Diagnose & Transport ----
-const DX_BY_SPEC = {
-  internistisch: ['ACS','Asthma/Bronchialobstruktion','COPD-Exazerbation','Lungenembolie','Sepsis','Metabolische Entgleisung'],
-  neurologisch:  ['Schlaganfall','Krampfanfall','Hypoglykämie','Bewusstlosigkeit unklarer Genese'],
-  trauma:        ['Polytrauma','Schädel-Hirn-Trauma','Thoraxtrauma','Fraktur/Blutung'],
-  paediatrisch:  ['Fieberkrampf','Asthmaanfall','Dehydratation','Trauma Kind']
-};
-function openDiagnosis(){
-  const dxSpec=$id('dxSpec'), dxSel=$id('dxSelect');
-  const fill=()=>{
-    const list=DX_BY_SPEC[dxSpec.value]||[];
-    dxSel.innerHTML = list.map(x=>`<option>${x}</option>`).join('') + `<option>Andere (Kommentar)</option>`;
-  };
-  dxSpec.value = (selectedSpec || 'internistisch');
-  fill();
-  dxSpec.onchange=fill;
-  $id('dxOk').onclick=()=>{
-    const txt = dxSel.value;
-    const prio= $id('dxPrio').value;
-    const note= ($id('dxNote').value||'').trim();
-    const parts=[`Verdachtsdiagnose: ${txt}`, `Priorität: ${prio}`];
-    if(note) parts.push(`Kommentar: ${note}`);
-    const msg = parts.join(' | ');
-    stepCase(`Verdachtsdiagnose: ${msg}`);
-    closeModal('modalDx');
-  };
-  $id('dxCancel').onclick=()=> closeModal('modalDx');
-  openModal('modalDx');
-}
-
-// ---- Debrief / Zusammenfassung ----
-async function openDebrief(){
-  // Versuche zuerst, ein Debrief vom Backend zu bekommen
-  try{
-    const res = await fetch(API_CASE_STEP, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ case_state: caseState, user_action: 'Debriefing', role: caseState?.role || 'RS' })
-    });
-    const data = await res.json();
-    if (data.debrief || data.evaluation || data.finding) {
-      addMsg(`<strong>Debriefing</strong><div class="small">${data.debrief || data.evaluation || data.finding}</div>`);
-      return;
-    }
-  }catch(e){ /* fallback unten */ }
-
-  // Fallback: ganz grobe Auswertung auf Basis von caseState
-  if (!caseState) {
-    addMsg('<div class="small">Kein aktiver Fall für ein Debriefing.</div>');
-    return;
-  }
-  const s   = caseState;
-  const v   = s.measurements?.vitals || {};
-  const sch = s.measurements?.schemas || {};
-  const pain = s.measurements?.pain || {};
-  const steps = s.steps_done || [];
-
-  const vitalsAll     = ['RR','SpO2','AF','Puls','BZ','Temp','GCS'];
-  const vitalsDone    = vitalsAll.filter(k => v[k]);
-  const vitalsMissing = vitalsAll.filter(k => !v[k]);
-  const openXABCDE    = ['X','A','B','C','D','E'].filter(letter => !steps.some(x=>String(x).toUpperCase().startsWith(letter)));
-
-  const bullets = [];
-  bullets.push(`XABCDE: erledigt → ${steps.length ? steps.join(' → ') : 'keine Schritte dokumentiert'}`);
-  if (openXABCDE.length) bullets.push(`Offen: ${openXABCDE.join(', ')}`);
-  bullets.push(`Vitals erhoben: ${vitalsDone.length ? vitalsDone.join(', ') : 'keine vollständigen Vitalzeichen'}`);
-  if (vitalsMissing.length) bullets.push(`Vitals fehlen: ${vitalsMissing.join(', ')}`);
-  bullets.push(`4S: ${sch['4S'] ? 'durchgeführt' : 'nicht dokumentiert'}`);
-  bullets.push(`SAMPLER: ${sch['SAMPLER'] ? 'dokumentiert' : 'fehlt'}`);
-  bullets.push(`BE-FAST: ${sch['BEFAST'] ? 'geprüft' : 'nicht dokumentiert'}`);
-  bullets.push(`Schmerzskala: ${pain.documented ? `NRS ${pain.nrs ?? '—'}` : 'nicht erhoben'}`);
-
-  addMsg(`<strong>Debriefing (lokal)</strong><ul class="small"><li>${bullets.join('</li><li>')}</li></ul>`);
-}
-
-// ------- Modal Helpers -------
-function $id(id){ return document.getElementById(id); }
-
-function openModal(id){
+// ------- Modals -------
+function openModal(id) {
   const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.remove('hidden');
+  if (el) el.classList.remove('hidden');
 }
-function closeModal(id){
+function closeModal(id) {
   const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.add('hidden');
+  if (el) el.classList.add('hidden');
 }
 
-// ------- Queue ausführen -------
-async function runQueue() {
+// ------- Queue-Steuerung / Buttons -------
+runBtn.addEventListener('click', async () => {
   if (!caseState || !queue.length) return;
   runBtn.disabled = clearBtn.disabled = true;
   try {
@@ -922,18 +827,23 @@ async function runQueue() {
   } finally {
     runBtn.disabled = clearBtn.disabled = false;
   }
-}
+});
 
-// ------- Events/Init -------
-runBtn.addEventListener('click', runQueue);
-clearBtn.addEventListener('click', () => { queue.length = 0; renderQueue(); });
+clearBtn.addEventListener('click', () => {
+  queue.length = 0;
+  renderQueue();
+});
+
 startBtn.addEventListener('click', startCase);
-finishBtn.addEventListener('click', () => { if (caseState) stepCase('Fall beenden'); });
+finishBtn.addEventListener('click', () => {
+  if (caseState) stepCase('Fall beenden');
+});
 
+// ------- Initiale UI -------
 clearVisibleVitals();
 setStatus('Kein Fall aktiv.');
 setScore(0);
 resetProgress();
 showHint('—');
 renderPanel('X');
-addMsg('👋 Wähle oben die Fachrichtung, starte den Fall, erhebe Werte per Buttons. Gemessene Werte bleiben sichtbar; Interventionen passen Vitals an.');
+addMsg('👋 Wähle oben die Fachrichtung, starte den Fall, nutze die Button-Leiste für XABCDE und die Schemata unten. Gemessene Werte bleiben sichtbar; Maßnahmen passen die Vitalwerte an.');
