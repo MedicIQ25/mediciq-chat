@@ -706,6 +706,26 @@ async function openDebrief() {
     return `<ul class="debrief-list small">${items}</ul>`;
   }
 
+  // Bewertungsfunktion: Bestanden?/Teilweise?/Nicht?
+  function evaluateCaseQuality() {
+    const steps = new Set((caseState?.steps_done || []).map(s => String(s)[0].toUpperCase()));
+    const all = ['X','A','B','C','D','E'];
+    const missing = all.filter(s => !steps.has(s));
+
+    const score    = caseState?.score ?? 0;
+    const vitCount = Object.keys(visibleVitals).length;
+    const diagOk   = caseState?.diagnosis_ok === true; // falls du das später noch setzt
+
+    // einfache Kriterien – kannst du jederzeit anpassen
+    if (missing.length === 0 && score >= 8 && vitCount >= 4 && diagOk) {
+      return { status: 'pass', label: '🟢 Fall bestanden', color: 'pass' };
+    }
+    if (missing.length <= 2 && score >= 4) {
+      return { status: 'partial', label: '🟡 Teilweise bestanden', color: 'warn' };
+    }
+    return { status: 'fail', label: '🔴 Wichtige Schritte fehlen', color: 'fail' };
+  }
+
   // 1) Versuche zuerst, ein Debrief vom Backend zu bekommen
   try {
     const res = await fetch(API_CASE_STEP, {
@@ -723,6 +743,8 @@ async function openDebrief() {
       const raw = data.debrief || data.evaluation || data.finding;
       if (raw) {
         const html = formatDebrief(raw);
+        const evalData = evaluateCaseQuality();
+        addMsg(`<div class="debrief-result debrief-${evalData.color}">${evalData.label}</div>`);
         addMsg(`<strong>Debriefing</strong>${html}`);
         return;
       }
@@ -745,8 +767,11 @@ async function openDebrief() {
   ].join('\n');
 
   const html = formatDebrief(fallbackText);
+  const evalData = evaluateCaseQuality();
+  addMsg(`<div class="debrief-result debrief-${evalData.color}">${evalData.label}</div>`);
   addMsg(`<strong>Debriefing (lokal)</strong>${html}`);
 }
+
 
 // ===== Queue-Buttons =====
 runBtn.addEventListener('click', async ()=>{

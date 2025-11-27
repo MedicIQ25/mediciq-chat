@@ -118,3 +118,27 @@ h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand
 .nrs-val{margin-top:6px}
 .small.muted{ color:#6b7280; margin:6px 0 4px; }
 .modal-actions .btn.secondary{ opacity:.95 }
+/* Debriefing-Ergebnis-Banner */
+.debrief-result {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 15px;
+  border: 1px solid transparent;
+}
+.debrief-pass {
+  background: #d4f7df;
+  border-color: #88d59b;
+  color: #085c2e;
+}
+.debrief-warn {
+  background: #fff7d0;
+  border-color: #e0c35b;
+  color: #665200;
+}
+.debrief-fail {
+  background: #ffd9d9;
+  border-color: #cf6b6b;
+  color: #6b0000;
+}
