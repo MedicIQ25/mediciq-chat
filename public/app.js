@@ -404,6 +404,9 @@ function buildLocalCase(spec, role, difficulty) {
 
 // ===== Fallstart =====
 async function startCase() {
+  chatLog.innerHTML = '';
+  queue.length = 0;
+  renderQueue();
   clearVisibleVitals();
   resetProgress();
   caseState = null;
