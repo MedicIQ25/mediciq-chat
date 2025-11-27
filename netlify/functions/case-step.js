@@ -348,11 +348,19 @@ exports.handler = async (event) => {
       const field = examMap[key];
       reply.accepted   = true;
       reply.finding    = text(H[field]);
-      reply.evaluation = "Befund aufgenommen.";
+    reply.evaluation = "Befund aufgenommen.";
       reply.next_hint  = "Leite passende Maßnahmen ein und erhebe Vitalparameter.";
-      if (/pupille/.test(key))       touchStep("D");
-      else if (/lunge|thorax/.test(key))   touchStep("B");
-      else if (/abdomen|bauch|haut/.test(key)) touchStep("E");
+
+      if (/pupille/.test(key)) {
+        touchStep("D");
+      } else if (/mund/.test(key)) {
+        touchStep("A");
+      } else if (/lunge|thorax/.test(key)) {
+        touchStep("B");
+      } else if (/abdomen|bauch|haut/.test(key)) {
+        touchStep("E");
+      }
+
       credit(1);
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
@@ -512,6 +520,16 @@ exports.handler = async (event) => {
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
+    // --- NEU: X ohne Befund abschließen ---
+    if (/x unauff[aä]llig|kein[e]? (akute|bedrohliche)?\s*blutung/.test(low)) {
+      reply.accepted   = true;
+      reply.evaluation = "Keine bedrohliche äußere Blutung festgestellt.";
+      reply.next_hint  = "Fahre mit A – Airway fort.";
+      touchStep("X");
+      credit(1);
+      return { statusCode:200, headers, body: JSON.stringify(reply) };
+    }
+
     if (/druckverband/.test(low)) {
       reply.accepted   = true;
       reply.evaluation = "Druckverband angelegt, Blutung kontrolliert.";
@@ -643,21 +661,38 @@ exports.handler = async (event) => {
       meas.dx_eval = { ok, expected, comment };
     }
 
-    if (/^verdachtsdiagnose[:]/.test(ua)) {
+    if (/^verdachtsdiagnose[:]/i.test(ua)) {
       meas.diagnosis = ua;
       const prioMatch = ua.match(/priorit[aä]t[: ]+([^|]+)/i);
       if (prioMatch) meas.transport = prioMatch[1].trim();
 
+      // Verdachtsdiagnose gegen den Fall prüfen
       evaluateDiagnosis(ua);
+      const ev = meas.dx_eval || {};
 
-      reply.accepted   = true;
-      reply.evaluation = "Verdachtsdiagnose und Transportpriorität dokumentiert.";
-      reply.next_hint  = "Prüfe, ob Maßnahmen, Monitoring und Transportziel zu deiner Verdachtsdiagnose passen.";
-      credit(2);
+      reply.accepted = true;
+
+      if (ev.ok === true) {
+        // Diagnose passt zum Fall → klares positives Feedback
+        reply.evaluation = ev.comment || "Deine Verdachtsdiagnose passt gut zu den Leitsymptomen des Falls.";
+        reply.next_hint  = "✔️ Sehr gut! Prüfe noch, ob Monitoring, Maßnahmen und Transportziel zu dieser Diagnose passen.";
+        credit(4);
+      } else if (ev.ok === false) {
+        // Diagnose eher nicht passend
+        reply.evaluation = ev.comment || "Deine Verdachtsdiagnose weicht von der wahrscheinlichen Hauptursache ab.";
+        reply.next_hint  = "Überdenke Anamnese, Leitsymptome und Verlauf und passe ggf. Diagnose oder Priorität an.";
+        credit(2);
+      } else {
+        // Falls der Fall (noch) keine definierte Ziel-Diagnose hat
+        reply.evaluation = "Verdachtsdiagnose und Transportpriorität dokumentiert.";
+        reply.next_hint  = "Prüfe, ob Maßnahmen, Monitoring und Transportziel zu deiner Verdachtsdiagnose passen.";
+        credit(2);
+      }
+
       return { statusCode:200, headers, body: JSON.stringify(reply) };
     }
 
-    if (/diagnose|was ist los|verdacht/.test(low)) {
+    if (/diagnose|was ist los|verdacht/.test(low) && !/^verdachtsdiagnose[:]/i.test(low)) {
       const spec = String(state.specialty || "").toLowerCase();
       let dx;
       if (spec === "internistisch") {

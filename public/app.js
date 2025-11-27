@@ -119,6 +119,7 @@ function renderProgress(steps = []) {
 // ------- Maßnahmen-Kacheln pro Tab -------
 const ACTIONS = {
   X: [
+    { label: 'Kein bedrohlicher Blutverlust', token: 'X unauffällig' },
     { label: 'Druckverband',           token: 'Druckverband' },
     { label: 'Hämostyptikum',          token: 'Hämostyptikum' },
     { label: 'Tourniquet',             token: 'Tourniquet' },
@@ -127,6 +128,7 @@ const ACTIONS = {
   A: [
     { label: 'Esmarch',                token: 'Esmarch' },
     { label: 'Absaugen',               token: 'Absaugen' },
+    { label: 'Mundraumkontrolle',      token: 'Mundraumkontrolle' },
     { label: 'Guedel',                 token: 'Guedel' },
     { label: 'Wendel',                 token: 'Wendel' },
     { label: 'Beutel-Masken-Beatmung', token: 'Beutel-Masken-Beatmung' }
@@ -151,6 +153,7 @@ const ACTIONS = {
   E: [
     { label: 'Bodycheck',              token: 'Bodycheck' },
     { label: 'Wärmeerhalt',            token: 'Wärmeerhalt' },
+    { label: 'Temperatur messen',      token: 'Temperatur messen' },
     { label: 'Oberkörper hoch lagern', token: 'Oberkörper hoch lagern' }
   ]
 };
@@ -681,42 +684,65 @@ function openDiagnosis(){
 }
 
 // ---- Debriefing ----
-async function openDebrief(){
-  // Versuche zuerst, ein Debriefing vom Backend zu bekommen
-  try{
+async function openDebrief() {
+  // Hilfsfunktion: Rohtext in hübsche Liste mit Labels umwandeln
+  function formatDebrief(raw) {
+    if (!raw) return '';
+    const lines = String(raw).split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return '';
+
+    const items = lines.map(line => {
+      const [label, ...restParts] = line.split(':');
+      if (restParts.length) {
+        const rest = restParts.join(':').trim();
+        return `<li><span class="debrief-label">${label}:</span> <span class="debrief-value">${rest}</span></li>`;
+      }
+      return `<li>${line}</li>`;
+    }).join('');
+
+    return `<ul class="debrief-list small">${items}</ul>`;
+  }
+
+  // 1) Versuche zuerst, ein Debrief vom Backend zu bekommen
+  try {
     const res = await fetch(API_CASE_STEP, {
-      method:'POST', 
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ 
-        case_state: caseState, 
-        user_action: 'Debriefing', 
-        role: caseState?.role || 'RS' 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        case_state: caseState,
+        user_action: 'Debriefing',
+        role: caseState?.role || 'RS'
       })
     });
 
-    const data = await res.json();
-    if (data.debrief || data.evaluation || data.finding) {
-      const txt = String(data.debrief || data.evaluation || data.finding).replace(/\n/g,'<br>');
-      addMsg(`<strong>Debriefing</strong><div class="small">${txt}</div>`);
-      return;
+    if (res.ok) {
+      const data = await res.json();
+      const raw = data.debrief || data.evaluation || data.finding;
+      if (raw) {
+        const html = formatDebrief(raw);
+        addMsg(`<strong>Debriefing</strong>${html}`);
+        return;
+      }
     }
-  }catch(e){
-    console.warn("Kein Backend-Debrief verfügbar, nutze lokalen Fallback");
+  } catch (e) {
+    console.warn('Debriefing vom Backend nicht verfügbar, nutze lokalen Fallback.', e);
   }
 
-  // --- Lokaler Fallback ---
-  const steps = (caseState?.steps_done || []).join(' → ') || '–';
-  const vitals = Object.entries(visibleVitals).map(([k,v]) => `${k}: ${v}`).join(' · ') || 'keine erhoben';
+  // 2) Fallback: Lokale Auswertung (Score, Schritte, Vitals)
+  const steps  = (caseState?.steps_done || []).join(' → ') || '–';
+  const vitals = Object.entries(visibleVitals)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(' · ') || 'keine erhoben';
   const score  = caseState?.score ?? 0;
 
-  addMsg(
-    `<strong>Debriefing (lokal)</strong>
-     <div class="small">
-       Schritte: ${steps}<br>
-       Vitals: ${vitals}<br>
-       Score: ${score}
-     </div>`
-  );
+  const fallbackText = [
+    `XABCDE-Fortschritt: ${steps}`,
+    `Vitals erhoben: ${vitals}`,
+    `Score: ${score}`
+  ].join('\n');
+
+  const html = formatDebrief(fallbackText);
+  addMsg(`<strong>Debriefing (lokal)</strong>${html}`);
 }
 
 // ===== Queue-Buttons =====

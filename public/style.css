@@ -76,6 +76,21 @@ h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand
 .msg { background: var(--bubble-ai); border-radius: 12px; padding: 10px 12px; border: 1px solid #e3e8f2; }
 .msg .small { color: var(--muted); }
 
+/* Debriefing-Layout im Chat */
+.msg ul.debrief-list {
+  margin: 6px 0 0;
+  padding-left: 1.1rem;
+}
+.msg ul.debrief-list li {
+  margin-bottom: 2px;
+}
+.msg .debrief-label {
+  font-weight: 600;
+}
+.msg .debrief-value {
+  color: var(--muted);
+}
+
 /* Footer */
 .legal { margin: 14px 6px 0; color: var(--muted); text-align: left; font-size: .95rem; }
 /* Setup-Zeile (Fachrichtung / Rolle) */
