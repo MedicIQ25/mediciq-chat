@@ -99,13 +99,21 @@ function renderProgress(steps = []) {
   resetProgress();
   const done = new Set(steps.map(s => s.toUpperCase()));
   const order = ['X','A','B','C','D','E'];
+
+  // Markiere erledigte Schritte
   order.forEach(step => {
     const el = chips.find(c => c.dataset.step === step);
-    if ([...done].some(s => s.startsWith(step))) el.classList.add('done');
+    if ([...done].some(s => s.startsWith(step))) {
+      el.classList.add('done');
+    }
   });
+
+  // Markiere nächsten Schritt
   const next = order.find(s => ![...done].some(x => x.startsWith(s)));
   const activeEl = chips.find(c => c.dataset.step === next);
-  if (activeEl) activeEl.classList.add('active');
+  if (activeEl) {
+    activeEl.classList.add('active');
+  }
 }
 
 // ------- Maßnahmen-Kacheln pro Tab -------
@@ -673,26 +681,42 @@ function openDiagnosis(){
 }
 
 // ---- Debriefing ----
-function openDebrief(){
-  // Versuche zuerst, ein Debrief vom Backend zu bekommen
+async function openDebrief(){
+  // Versuche zuerst, ein Debriefing vom Backend zu bekommen
   try{
     const res = await fetch(API_CASE_STEP, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ case_state: caseState, user_action: 'Debriefing', role: caseState?.role || 'RS' })
+      method:'POST', 
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ 
+        case_state: caseState, 
+        user_action: 'Debriefing', 
+        role: caseState?.role || 'RS' 
+      })
     });
+
     const data = await res.json();
     if (data.debrief || data.evaluation || data.finding) {
       const txt = String(data.debrief || data.evaluation || data.finding).replace(/\n/g,'<br>');
       addMsg(`<strong>Debriefing</strong><div class="small">${txt}</div>`);
       return;
     }
-  }catch(e){ /* fallback unten */ }
+  }catch(e){
+    console.warn("Kein Backend-Debrief verfügbar, nutze lokalen Fallback");
+  }
 
-  // Fallback: Lokale Auswertung (Score, Schritte, Vitals)
+  // --- Lokaler Fallback ---
   const steps = (caseState?.steps_done || []).join(' → ') || '–';
-  const vitals = Object.entries(visibleVitals).map(([k,v])=>`${k}: ${v}`).join(' · ') || 'keine erhoben';
+  const vitals = Object.entries(visibleVitals).map(([k,v]) => `${k}: ${v}`).join(' · ') || 'keine erhoben';
   const score  = caseState?.score ?? 0;
-  addMsg(`<strong>Debriefing (lokal)</strong><div class="small">Schritte: ${steps}<br>Vitals: ${vitals}<br>Score: ${score}</div>`);
+
+  addMsg(
+    `<strong>Debriefing (lokal)</strong>
+     <div class="small">
+       Schritte: ${steps}<br>
+       Vitals: ${vitals}<br>
+       Score: ${score}
+     </div>`
+  );
 }
 
 // ===== Queue-Buttons =====
