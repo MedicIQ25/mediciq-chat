@@ -1,6 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic
-// Updates: UI Toggle (Setup vs Active), Safe Clicks
+// medicIQ – App Logic (Fix: Buttons & Layout)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -16,14 +15,12 @@ const queueList = document.getElementById('queueList');
 const chatLog   = document.getElementById('chatLog');
 
 // Controls
-const setupArea      = document.getElementById('setupArea');
-const activeControls = document.getElementById('activeControls');
-const startBtn       = document.getElementById('startCase');
-const finishBtn      = document.getElementById('finishCase');
-const runBtn         = document.getElementById('btnRunQueue');
-const clearBtn       = document.getElementById('btnClearQueue');
-
-const roleSel = document.getElementById('roleSel');
+const specRow   = document.getElementById('specRow');
+const startBtn  = document.getElementById('startCase');
+const finishBtn = document.getElementById('finishCase');
+const runBtn    = document.getElementById('btnRunQueue');
+const clearBtn  = document.getElementById('btnClearQueue');
+const roleSel   = document.getElementById('roleSel');
 const specButtons = Array.from(document.querySelectorAll('.spec-chip'));
 let selectedSpec  = 'internistisch';
 
@@ -44,11 +41,13 @@ const vitalsMap = {
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
   renderPanel('X');
+  updateUI(false);
 });
 
 // Spec Selection
 specButtons.forEach(btn => {
   btn.addEventListener('click', () => {
+    if(caseState) return; // Gesperrt während Fall läuft
     specButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     selectedSpec = btn.dataset.spec || 'internistisch';
@@ -151,6 +150,21 @@ function renderQueue() {
 
 // ------- CORE LOGIC -------
 
+function updateUI(running) {
+  if (running) {
+    specRow.classList.add('hidden');
+    startBtn.classList.add('hidden');
+    finishBtn.classList.remove('hidden');
+    roleSel.disabled = true;
+  } else {
+    specRow.classList.remove('hidden');
+    startBtn.classList.remove('hidden');
+    finishBtn.classList.add('hidden');
+    roleSel.disabled = false;
+    startBtn.disabled = false;
+  }
+}
+
 async function startCase() {
   chatLog.innerHTML = '';
   queue.length = 0;
@@ -158,10 +172,9 @@ async function startCase() {
   for(let k in visibleVitals) delete visibleVitals[k];
   renderVitals();
   
-  // UI TOGGLE
-  setupArea.classList.add('hidden');
-  activeControls.classList.remove('hidden');
+  updateUI(true); // UI auf "Laufend" schalten
   
+  const chips = Array.from(document.querySelectorAll('.chip'));
   chips.forEach(c => c.classList.remove('done','active'));
   setStatus('Lade Fall...');
   hintCard.classList.add('hidden');
@@ -223,19 +236,13 @@ async function stepCase(txt) {
     
     if(d.done) {
       openDebrief();
-      endCaseUI(); // Reset UI
+      caseState = null;
+      updateUI(false); // Zurücksetzen
+      setStatus('Fall beendet.');
     }
   } catch(e) {
     addMsg(`Fehler: ${e.message}`);
   }
-}
-
-function endCaseUI() {
-  caseState = null;
-  setStatus('Fall beendet.');
-  // UI TOGGLE BACK
-  setupArea.classList.remove('hidden');
-  activeControls.classList.add('hidden');
 }
 
 // ------- Helpers -------
@@ -247,16 +254,16 @@ function renderVitals() {
 function renderProgress(doneList) {
   const s = new Set((doneList||[]).map(x=>x[0]));
   ['X','A','B','C','D','E'].forEach(l => {
-    const el = chips.find(c => c.dataset.step === l);
+    const el = Array.from(document.querySelectorAll('.chip')).find(c => c.dataset.step === l);
     if(el) {
       el.classList.toggle('done', s.has(l));
       el.classList.remove('active');
     }
   });
-  // Active marker logic simplified
+  // Active marker
   const next = ['X','A','B','C','D','E'].find(l => !s.has(l));
   if(next) {
-    const el = chips.find(c => c.dataset.step === next);
+    const el = Array.from(document.querySelectorAll('.chip')).find(c => c.dataset.step === next);
     if(el) el.classList.add('active');
   }
 }
@@ -272,10 +279,22 @@ function addMsg(h) {
   d.scrollIntoView({block:'end', behavior:'smooth'});
 }
 
-// ------- Modals -------
+// ------- Modals (Safe Handling) -------
 const $id = (id) => document.getElementById(id);
-function openModal(id) { $id('modalBackdrop').classList.remove('hidden'); $id(id).classList.remove('hidden'); }
-function closeModal(id) { $id('modalBackdrop').classList.add('hidden'); $id(id).classList.add('hidden'); }
+const backdrop = $id('modalBackdrop');
+
+function openModal(id) { 
+  const el = $id(id);
+  if(!el) return;
+  backdrop.style.display = 'block';
+  el.style.display = 'block';
+}
+function closeModal(id) { 
+  const el = $id(id);
+  if(!el) return;
+  backdrop.style.display = 'none';
+  el.style.display = 'none';
+}
 
 // Handlers
 runBtn.onclick = async () => {
@@ -292,8 +311,6 @@ startBtn.onclick = startCase;
 finishBtn.onclick = async () => {
   if(caseState) {
     await openDebrief();
-    // stepCase('Fall beenden') logic triggers endCaseUI via backend response
-    // But we call it manually to be safe if debrief fails
     stepCase('Fall beenden');
   }
 };
@@ -315,7 +332,7 @@ function openNA() {
   $id('naCancel').onclick=()=>closeModal('modalNA');
   openModal('modalNA');
 }
-function openAFCounter() { if(caseState) stepCase('AF messen'); } // Simplified
+function openAFCounter() { if(caseState) stepCase('AF messen'); }
 function openNRS() {
   const r=$id('nrsRange'), v=$id('nrsVal'); r.value=0; v.textContent='0';
   r.oninput=()=>v.textContent=r.value;
@@ -339,14 +356,16 @@ function openBEFAST() {
   openModal('modalBEFAST');
 }
 function openSampler() {
-  // Clear inputs...
   $id('samplerFetch').onclick=async()=>{
     await stepCase('SAMPLER Info');
     const S = caseState?.anamnesis?.SAMPLER || {};
     if($id('s_sympt')) $id('s_sympt').value = S.S||'';
     if($id('s_allerg')) $id('s_allerg').value = S.A||'';
     if($id('s_med')) $id('s_med').value = S.M||'';
-    // ... others ...
+    if($id('s_hist')) $id('s_hist').value = S.P||'';
+    if($id('s_last')) $id('s_last').value = S.L||'';
+    if($id('s_events')) $id('s_events').value = S.E||'';
+    if($id('s_risk')) $id('s_risk').value = S.R||'';
   };
   $id('samplerOk').onclick=()=>{ stepCase('SAMPLER doku'); closeModal('modalSampler'); };
   $id('samplerCancel').onclick=()=>closeModal('modalSampler');
@@ -363,7 +382,6 @@ function openFourS() {
   openModal('modal4S');
 }
 function openDiagnosis() {
-  // Fill Select...
   const dxSel = $id('dxSelect');
   const list = ['ACS','Asthma/Bronchialobstruktion','COPD-Exazerbation','Lungenembolie','Sepsis','Metabolische Entgleisung','Schlaganfall','Krampfanfall','Hypoglykämie','Polytrauma','Fraktur','Fieberkrampf'];
   dxSel.innerHTML = list.map(x=>`<option>${x}</option>`).join('');

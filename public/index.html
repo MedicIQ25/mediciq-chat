@@ -13,28 +13,36 @@
   <section class="chat-container" aria-label="Fallbeispiele (Click-UI)">
     <h1>medicIQ – Fallbeispiele</h1>
 
-    <!-- BEREICH 1: Setup (Sichtbar wenn KEIN Fall läuft) -->
-    <div id="setupArea" class="setup-row">
-      <div class="setup-left">
-        <span class="setup-label">Fachrichtung:</span>
-        <button class="spec-chip active" data-spec="internistisch">Internistisch</button>
-        <button class="spec-chip" data-spec="neurologisch">Neurologisch</button>
-        <button class="spec-chip" data-spec="trauma">Trauma</button>
-        <button class="spec-chip" data-spec="paediatrisch">Pädiatrisch</button>
+    <!-- Setup & Steuerung -->
+    <div class="setup-container">
+      
+      <!-- Zeile 1: Fachrichtung -->
+      <div class="setup-row" id="specRow">
+        <div class="setup-left">
+          <span class="setup-label">Fachrichtung:</span>
+          <button class="spec-chip active" data-spec="internistisch">Internistisch</button>
+          <button class="spec-chip" data-spec="neurologisch">Neurologisch</button>
+          <button class="spec-chip" data-spec="trauma">Trauma</button>
+          <button class="spec-chip" data-spec="paediatrisch">Pädiatrisch</button>
+        </div>
       </div>
-      <div class="setup-right">
-        <label class="setup-label" for="roleSel">Rolle:</label>
-        <select id="roleSel" class="role-select">
-          <option value="RS" selected>RS</option>
-          <option value="NotSan">NotSan</option>
-        </select>
-        <button id="startCase" class="btn">Neuen Fall starten</button>
-      </div>
-    </div>
 
-    <!-- BEREICH 2: Laufender Fall (Sichtbar WENN Fall läuft) -->
-    <div id="activeControls" class="setup-row hidden" style="justify-content: flex-end;">
-      <button id="finishCase" class="btn danger">Fall beenden</button>
+      <!-- Zeile 2: Rolle & Start/Stop -->
+      <div class="setup-row control-row">
+        <div class="setup-left">
+          <label class="setup-label" for="roleSel">Rolle:</label>
+          <select id="roleSel" class="role-select">
+            <option value="RS" selected>RS</option>
+            <option value="NotSan">NotSan</option>
+          </select>
+        </div>
+        <div class="setup-right">
+          <!-- Button Gruppe: Wir schalten per CSS/JS um -->
+          <button id="startCase" class="btn">Neuen Fall starten</button>
+          <button id="finishCase" class="btn danger hidden">Fall beenden</button>
+        </div>
+      </div>
+
     </div>
 
     <!-- Status -->
@@ -80,9 +88,7 @@
       <button class="tab" data-tab="E">E – Exposure</button>
       
       <!-- Global Notarzt -->
-      <button id="btnGlobalNA" style="border:1px solid #fecaca; background:#fef2f2; color:#b91c1c; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:bold; margin-left:6px;">
-        📞 Notarzt
-      </button>
+      <button id="btnGlobalNA" class="na-btn">📞 Notarzt</button>
     </div>
     
     <div id="panel" class="action-grid" aria-live="polite"></div>
@@ -123,9 +129,10 @@
 </main>
 
 <!-- ===== MODALS ===== -->
-<div id="modalBackdrop" class="modal-backdrop hidden"></div>
+<!-- Sicherheits-Fix: style="display:none" damit es beim Laden garantiert weg ist -->
+<div id="modalBackdrop" class="modal-backdrop" style="display:none;"></div>
 
-<div id="modalAF" class="modal hidden">
+<div id="modalAF" class="modal" style="display:none;">
   <div class="modal-head">Atemfrequenz zählen (30s)</div>
   <div class="modal-body">
     <div class="af-ui"><div><span id="afTimer">30</span>s</div><div><span id="afCount">0</span> x</div></div>
@@ -137,7 +144,7 @@
   </div>
 </div>
 
-<div id="modalNRS" class="modal hidden">
+<div id="modalNRS" class="modal" style="display:none;">
   <div class="modal-head">Schmerzskala (NRS 0–10)</div>
   <div class="modal-body">
     <div id="nrsInfo" class="small muted"></div>
@@ -151,7 +158,7 @@
   </div>
 </div>
 
-<div id="modalBEFAST" class="modal hidden">
+<div id="modalBEFAST" class="modal" style="display:none;">
   <div class="modal-head">BE-FAST Check</div>
   <div class="modal-body befast-grid">
     <div id="befastInfo" class="small muted"></div>
@@ -164,12 +171,12 @@
   </div>
   <div class="modal-actions">
     <button id="befastFetch" class="btn secondary">Infos abrufen</button>
-    <button id="befastOk" class="btn">Doku</button>
+    <button id="befastOk" class="btn">Dokumentieren</button>
     <button id="befastCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
 
-<div id="modalSampler" class="modal hidden">
+<div id="modalSampler" class="modal" style="display:none;">
   <div class="modal-head">SAMPLER</div>
   <div class="modal-body form-grid">
     <div id="samplerInfo" class="small muted"></div>
@@ -183,12 +190,12 @@
   </div>
   <div class="modal-actions">
     <button id="samplerFetch" class="btn secondary">Infos abrufen</button>
-    <button id="samplerOk" class="btn">Doku</button>
+    <button id="samplerOk" class="btn">Dokumentieren</button>
     <button id="samplerCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
 
-<div id="modal4S" class="modal hidden">
+<div id="modal4S" class="modal" style="display:none;">
   <div class="modal-head">4S-Schema</div>
   <div class="modal-body form-grid">
     <div id="s4Info" class="small muted"></div>
@@ -199,12 +206,12 @@
   </div>
   <div class="modal-actions">
     <button id="s4Fetch" class="btn secondary">Infos abrufen</button>
-    <button id="s4Ok" class="btn">Doku</button>
+    <button id="s4Ok" class="btn">Dokumentieren</button>
     <button id="s4Cancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
 
-<div id="modalO2" class="modal hidden">
+<div id="modalO2" class="modal" style="display:none;">
   <div class="modal-head">Sauerstoffgabe</div>
   <div class="modal-body form-grid">
     <label>Gerät:
@@ -225,7 +232,7 @@
   </div>
 </div>
 
-<div id="modalNA" class="modal hidden">
+<div id="modalNA" class="modal" style="display:none;">
   <div class="modal-head">Notarzt nachfordern</div>
   <div class="modal-body">
     <p>Begründung:</p>
@@ -237,7 +244,7 @@
   </div>
 </div>
 
-<div id="modalDx" class="modal hidden">
+<div id="modalDx" class="modal" style="display:none;">
   <div class="modal-head">Verdachtsdiagnose</div>
   <div class="modal-body form-grid">
     <select id="dxSpec"><option value="internistisch">Internistisch</option><option value="neurologisch">Neurologisch</option><option value="trauma">Trauma</option><option value="paediatrisch">Pädiatrisch</option></select>
