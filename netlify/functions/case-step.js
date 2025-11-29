@@ -1,6 +1,6 @@
 /**
  * Netlify Function: case-step
- * Fixes: Lagerung-Regex erweitert, O2-Logik, Trends
+ * Fixes: Diagnose-Bug (Prio 'hoch'), SAMPLER-Text, Lagerung-Split, SpO2-Sichtbarkeit
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -40,9 +40,46 @@ exports.handler = async (event) => {
       }
     };
     const touchStep = (l) => { if(!state.steps_done.includes(l.toUpperCase())) { state.steps_done.push(l.toUpperCase()); state.score+=1; } };
-    
-    // Funktion für Standard-Antwort
+    const text = (v) => (v === undefined || v === null || v === "") ? "—" : String(v).trim();
     function ok(body) { return { statusCode: 200, headers, body: JSON.stringify(body) }; }
+
+    // =================================================================
+    // 0. PRIORITÄT: DIAGNOSE & DEBRIEF (Bevor andere Keywords greifen!)
+    // =================================================================
+    if (ua.includes("Verdachtsdiagnose") || ua.includes("Verdacht:")) { 
+      state.measurements.diagnosis = ua; 
+      reply.accepted = true; 
+      reply.evaluation = "Verdachtsdiagnose & Priorität dokumentiert.";
+      return ok(reply); 
+    }
+
+    if (/debrief|fall beenden/.test(low)) {
+      reply.done = true;
+      const stepsAll = ["X","A","B","C","D","E"];
+      const missingSteps = stepsAll.filter(s => !state.steps_done.includes(s));
+      const score = state.score;
+      
+      let status = "Bestanden";
+      let summary = "";
+      if (missingSteps.length > 0) {
+        status = "Nicht bestanden";
+        summary = `Es wurden nicht alle Phasen durchlaufen.\nFehlende: ${missingSteps.join(', ')}`;
+      } else if (score < 6) {
+        status = "Teilweise bestanden";
+        summary = `Struktur ok, aber zu wenig Maßnahmen (Score ${score}).`;
+      } else {
+        summary = `Sehr gut! Struktur und Maßnahmen passen (Score ${score}).`;
+      }
+
+      if (state.measurements.diagnosis) {
+        summary += `\nDiagnose gestellt: ${state.measurements.diagnosis}`;
+      } else {
+        summary += `\nHinweis: Keine Verdachtsdiagnose dokumentiert.`;
+      }
+
+      reply.debrief = `${status}\n\n${summary}\n\nEnd-Vitals: SpO2 ${state.vitals.SpO2||'-'}%, RR ${state.vitals.RR||'-'}`;
+      return ok(reply);
+    }
 
     // =================================================================
     // 1. O2 LOGIK (Gerät + Flow)
@@ -55,17 +92,11 @@ exports.handler = async (event) => {
       
       const currentSpO2 = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
       let boost = 0;
-
-      if (isReservoir && flow >= 10) {
-        boost = 15; 
-      } else if (isMaske && flow >= 5) {
-        boost = 8 + (flow - 5); 
-      } else {
-        boost = flow * 1.5; 
-      }
+      if (isReservoir && flow >= 10) boost = 15; 
+      else if (isMaske && flow >= 5) boost = 8 + (flow - 5); 
+      else boost = flow * 1.5; 
       
       const newSpO2 = Math.min(100, Math.max(currentSpO2, currentSpO2 + boost));
-      
       updVitals({ SpO2: Math.floor(newSpO2) });
       reply.accepted = true;
       reply.evaluation = `Sauerstoff: ${isReservoir?'Reservoir':isMaske?'Maske':'Brille'} mit ${flow} l/min.`;
@@ -79,60 +110,39 @@ exports.handler = async (event) => {
     // =================================================================
     const hasO2 = state.history.some(h => /o2|sauerstoff|beatmung/.test(h.action.toLowerCase()));
     const curSpO2 = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
+    
+    // Nur verschlechtern wenn kritisch und kein O2
     if (curSpO2 < 92 && !hasO2 && state.action_count % 3 === 0) {
         const newSpO2 = Math.max(70, curSpO2 - 2);
         updVitals({ SpO2: newSpO2 });
-        reply.finding = (reply.finding || "") + "\n⚠️ Patient wirkt zyanotischer (SpO₂ fällt).";
+        
+        // FIX: Wert nur anzeigen wenn gemessen
+        if (state.measurements.vitals?.SpO2) {
+             reply.finding = (reply.finding || "") + `\n⚠️ Patient wirkt zyanotischer (SpO₂ fällt auf ${newSpO2}%).`;
+        } else {
+             reply.finding = (reply.finding || "") + "\n⚠️ Patient wirkt zyanotischer (Lippenzyanose).";
+        }
     }
 
     // =================================================================
-    // 3. 4S FIX & DEBRIEFING
+    // 3. 4S, SAMPLER, NRS
     // =================================================================
-    if (/4s dokumentiert/.test(low)) {
+    if (/sampler doku/.test(low)) {
       reply.accepted = true;
-      reply.evaluation = "4S-Schema korrekt dokumentiert.";
-      state.measurements.schemas['4S'] = true;
-      if(!state.history.some(h=>h.action.includes('4S davor'))) state.score += 1; 
+      // FIX: Inhalt anzeigen
+      const s = state.anamnesis?.SAMPLER || {};
+      const content = `S: ${text(s.S)} | A: ${text(s.A)} | M: ${text(s.M)} | P: ${text(s.P)} | L: ${text(s.L)} | E: ${text(s.E)}`;
+      reply.evaluation = "SAMPLER dokumentiert.";
+      reply.finding = content;
       return ok(reply);
     }
     
-    if (/4s info/.test(low)) {
-      const s = state.scene_4s || {};
-      reply.finding = `Sicherheit: ${s.sicherheit||'-'}\nSzene: ${s.szene||'-'}`;
-      reply.accepted = true;
-      return ok(reply);
-    }
-
-    if (/debrief|fall beenden/.test(low)) {
-      reply.done = true;
-      
-      const stepsAll = ["X","A","B","C","D","E"];
-      const missingSteps = stepsAll.filter(s => !state.steps_done.includes(s));
-      const score = state.score;
-      const scoreMax = 10; 
-
-      let status = "Bestanden";
-      let summary = "";
-
-      if (missingSteps.length > 0) {
-        status = "Nicht bestanden";
-        summary = `Es wurden nicht alle Phasen des XABCDE durchlaufen.\nFehlende Phasen: ${missingSteps.join(', ')}`;
-      } else if (score < 6) {
-        status = "Teilweise bestanden";
-        summary = `Struktur eingehalten, aber zu wenig Maßnahmen getroffen (Score ${score}/${scoreMax}).\nDenke an: Re-Checks, Wärmeerhalt, Diagnostik (BZ, Temp, Pupillen).`;
-      } else {
-        status = "Bestanden";
-        summary = `Sehr gut! Struktur eingehalten und Maßnahmen getroffen (Score ${score}).`;
-      }
-
-      if (state.measurements.diagnosis) {
-        summary += `\nDiagnose gestellt: ${state.measurements.diagnosis}`;
-      } else {
-        summary += `\nHinweis: Keine Verdachtsdiagnose dokumentiert.`;
-      }
-
-      reply.debrief = `${status}\n\n${summary}\n\nEnd-Vitals: SpO2 ${state.vitals.SpO2||'-'}%, RR ${state.vitals.RR||'-'}`;
-      return ok(reply);
+    // FIX: Schmerz Info immer beantworten
+    if (/schmerz info/.test(low)) {
+        const p = H.pain || {};
+        reply.finding = `Patient angabe: NRS ${p.nrs || '?'} (${p.ort || 'unbekannt'})`;
+        reply.accepted = true;
+        return ok(reply);
     }
 
     // =================================================================
@@ -158,17 +168,13 @@ exports.handler = async (event) => {
     
     // B
     if (/spo2|sättigung/.test(low)) { 
-      updVitals({SpO2:state.vitals.SpO2||baseVitals.SpO2}); reply.accepted=true; reply.evaluation="B: SpO2 gemessen."; touchStep("B"); return ok(reply); 
+      updVitals({SpO2:state.vitals.SpO2||baseVitals.SpO2}); state.measurements.vitals.SpO2=true; reply.accepted=true; reply.evaluation="B: SpO2 gemessen."; touchStep("B"); return ok(reply); 
     }
     if (/af|atemfreq/.test(low)) { 
       updVitals({AF:state.vitals.AF||baseVitals.AF}); reply.accepted=true; reply.evaluation="B: AF gezählt."; touchStep("B"); return ok(reply); 
     }
     if (/auskultieren|lunge/.test(low)) { 
       reply.accepted=true; reply.finding=H.lung||"o.B."; reply.evaluation="B: Auskultiert."; touchStep("B"); return ok(reply); 
-    }
-    // Fallback O2
-    if (/o2|sauerstoff/.test(low)) {
-      updVitals({SpO2: Math.min(100, (state.vitals.SpO2||94)+5)}); reply.accepted=true; reply.evaluation="O2 Gabe (pauschal)."; touchStep("B"); return ok(reply);
     }
 
     // C
@@ -191,13 +197,28 @@ exports.handler = async (event) => {
     // E
     if (/bodycheck/.test(low)) { reply.accepted=true; reply.finding=(H.skin||"o.B.")+" "+(H.injuries?.join(',')||""); reply.evaluation="E: Bodycheck."; touchStep("E"); return ok(reply); }
     if (/temp/.test(low)) { updVitals({Temp:state.vitals.Temp||36.5}); reply.accepted=true; reply.evaluation="E: Temp gemessen."; touchStep("E"); return ok(reply); }
-    // FIX: Erkennt jetzt auch "lagern", "oberkörper" und "hoch"
-    if (/wärme|lagerung|lagern|oberkörper|hoch/.test(low)) { reply.accepted=true; reply.evaluation="E: Lagerung/Wärme."; touchStep("E"); return ok(reply); }
-
+    
+    // FIX: Trennung Lagerung vs. Wärme & SpO2 Effekt
+    if (/oberkörper|lagerung|lagern/.test(low) && /hoch/.test(low)) { 
+        // Physiologie: Hochlagerung verbessert Ventilation leicht
+        const cur = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
+        if(cur < 98) updVitals({ SpO2: Math.min(100, cur + 2) });
+        reply.accepted=true; 
+        reply.evaluation="E: Oberkörper hochgelagert."; 
+        reply.finding="Atmung wirkt erleichtert.";
+        touchStep("E"); 
+        return ok(reply); 
+    }
+    if (/wärme|decke|erhalt/.test(low)) { 
+        reply.accepted=true; 
+        reply.evaluation="E: Wärmeerhalt (Decke)."; 
+        touchStep("E"); 
+        return ok(reply); 
+    }
+    
     // Schemata
-    if (/sampler/.test(low)) { reply.accepted=true; reply.evaluation="SAMPLER doku."; return ok(reply); }
+    if (/4s/.test(low)) { reply.accepted=true; reply.evaluation="4S doku."; return ok(reply); }
     if (/nrs/.test(low)) { reply.accepted=true; reply.evaluation="Schmerz doku."; return ok(reply); }
-    if (ua.includes("Verdacht")) { state.measurements.diagnosis=ua; reply.accepted=true; return ok(reply); }
 
     // Fallback
     reply.outside_scope = true;

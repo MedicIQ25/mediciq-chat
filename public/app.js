@@ -349,7 +349,8 @@ function openSampler() {
     $id('s_sympt').value = S.S||''; $id('s_allerg').value=S.A||''; $id('s_med').value=S.M||'';
   };
   document.getElementById('samplerOk').onclick = () => {
-    stepCase('SAMPLER dokumentiert');
+    // FIX: Wir senden jetzt "SAMPLER doku" damit das Backend es erkennt
+    stepCase('SAMPLER doku'); 
     closeModal('modalSampler');
   };
   document.getElementById('samplerCancel').onclick = () => closeModal('modalSampler');
