@@ -1,7 +1,7 @@
 /**
  * Netlify Function: case-new
  * Erzeugt einen neuen Fall mit vollständigen, auswertbaren Feldern
- * (inkl. 4S, SAMPLER, BEFAST, Schmerz, vitals_baseline).
+ * (inkl. 4S, SAMPLER, BEFAST, Schmerz, vitals_baseline, bleeding_info).
  */
 
 exports.handler = async (event) => {
@@ -66,6 +66,9 @@ exports.handler = async (event) => {
 
         hidden: {
           diagnosis_keys: ["Asthma", "Obstruktion", "Spastik", "Atemnot"],
+          // NEU: Blutungsinfo
+          bleeding_info: "Keine äußeren Blutungen sichtbar. Kleidung trocken.",
+          
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei, kein Stridor, kein Erbrochenes",
           lung: "Giemen beidseits, verlängertes Exspirium, keine Rasselgeräusche",
@@ -128,6 +131,9 @@ exports.handler = async (event) => {
 
         hidden: {
           diagnosis_keys: ["Hypoglykämie", "Unterzucker", "Glucose", "Zucker"],
+          // NEU
+          bleeding_info: "Keine Blutungen. Patient schwitzt stark (kaltschweißig).",
+          
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei",
           lung: "vesikuläres Atemgeräusch beidseits, keine RG",
@@ -191,8 +197,11 @@ exports.handler = async (event) => {
 
         hidden: {
           diagnosis_keys: ["Fraktur", "Bruch", "Unterarm", "Radius", "Ulna"],
-          // NEU: Injury Map für visuelle Darstellung
           injury_map: ["arm_r"],
+          
+          // NEU: Spezifische Blutungsinformation für Trauma
+          bleeding_info: "Sickerblutung am Unterarm durch Schürfwunden. Keine spritzende arterielle Blutung. Kleidung sonst trocken.",
+          
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei",
           lung: "vesikulär beidseits, keine RG",
@@ -256,6 +265,9 @@ exports.handler = async (event) => {
 
         hidden: {
           diagnosis_keys: ["Bronchiolitis", "RSV", "Infekt", "Obstruktion", "Atemwegsinfekt"],
+          // NEU
+          bleeding_info: "Keine Blutungen sichtbar. Windelbereich nicht beurteilt.",
+          
           pupils: "isokor, altersentsprechend, prompt",
           mouth: "Nasen-Rachenraum mit klarem Sekret, kein Stridor",
           lung:
@@ -356,6 +368,7 @@ exports.handler = async (event) => {
     // Fallback falls diagnosis_keys vergessen wurde
     c.hidden.diagnosis_keys = Array.isArray(c.hidden.diagnosis_keys) ? c.hidden.diagnosis_keys : [];
     c.hidden.injury_map = Array.isArray(c.hidden.injury_map) ? c.hidden.injury_map : [];
+    c.hidden.bleeding_info = c.hidden.bleeding_info || "Keine äußeren Blutungen.";
 
     c.support = c.support || { calls: [] };
 

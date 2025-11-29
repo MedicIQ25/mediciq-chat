@@ -82,11 +82,14 @@ document.getElementById('btnGlobalNA')?.addEventListener('click', openNA);
 // ------- Actions Panel (Updated) -------
 const ACTIONS = {
   X: [
-    { label: 'Kein bedrohlicher Blutverlust', token: 'X unauffällig' },
-    { label: 'Druckverband', token: 'Druckverband' },
-    { label: 'Hämostyptikum', token: 'Hämostyptikum' },
-    { label: 'Tourniquet', token: 'Tourniquet' },
-    { label: 'Beckenschlinge', token: 'Beckenschlinge' }
+    // NEU: Erst untersuchen!
+    { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck' },
+    // Dann urteilen oder handeln
+    { label: 'Keine Blutung feststellbar', token: 'X unauffällig' },
+    { label: 'Druckverband anlegen', token: 'Druckverband' },
+    { label: 'Tourniquet anlegen', token: 'Tourniquet' },
+    { label: 'Beckenschlinge anlegen', token: 'Beckenschlinge' },
+    { label: 'Woundpacking', token: 'Hämostyptikum' }
   ],
   A: [
     { label: 'Esmarch-Handgriff', token: 'Esmarch' },

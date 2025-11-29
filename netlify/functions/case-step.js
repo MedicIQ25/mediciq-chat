@@ -1,8 +1,9 @@
 /**
  * Netlify Function: case-step
  * Fixes: Zugang/Volumen Logik, Notarzt, SAMPLER Info, SpO2 Visibility
- * + Neu: Intelligentes Debriefing mit Lob für Einzelmaßnahmen (Trauma-Versorgung)
+ * + Neu: Intelligentes Debriefing mit Lob für Einzelmaßnahmen
  * + Neu: pDMS Logik
+ * + Neu: X-Blutungscheck
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -19,10 +20,10 @@ exports.handler = async (event) => {
     state.history    = state.history || [];
     state.score      = state.score || 0;
     state.action_count = (state.action_count || 0) + 1;
-    // Neue Flags für Zugang & IV
+    // Neue Flags
     state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false };
     
-    // History update
+    // History
     if (ua) {
       state.history.push({ ts: new Date().toISOString(), action: ua });
       if (state.history.length > 50) state.history.shift();
@@ -36,7 +37,6 @@ exports.handler = async (event) => {
     const updVitals = (obj) => {
       for (const k in obj) {
         state.vitals[k] = obj[k];
-        // Nur wenn Wert bereits gemessen wurde oder durch die aktuelle Aktion gemessen wird, Update senden
         if (state.measurements.vitals[k]) {
             const old = parseFloat(String(state.vitals[k]||"0").match(/\d+/)?.[0]);
             const neu = parseFloat(String(obj[k]).match(/\d+/)?.[0]);
@@ -65,22 +65,18 @@ exports.handler = async (event) => {
       const missingSteps = stepsAll.filter(s => !state.steps_done.includes(s));
       const score = state.score;
       
-      // 1. Diagnose-Check
       const userDxRaw = (state.measurements.diagnosis || "").toLowerCase();
       const correctKeys = state.hidden?.diagnosis_keys || [];
       const isDxCorrect = correctKeys.some(key => userDxRaw.includes(key.toLowerCase()));
 
-      // 2. Key Actions Check (Was wurde GUT gemacht?)
       const actionsDone = state.history.map(h => h.action.toLowerCase());
       const hasImmo = actionsDone.some(a => a.includes("immobilisation"));
       const hasDMS  = actionsDone.some(a => a.includes("pdms") || a.includes("dms"));
       const hasO2   = actionsDone.some(a => a.includes("o2") || a.includes("sauerstoff"));
-      const hasAccess = state.measurements.iv_access;
 
       let status = "Bestanden";
       let summary = "";
 
-      // Logik für Status-Text (Gesamtbewertung)
       if (missingSteps.length > 0) {
         status = "Nicht bestanden (Struktur)";
         if(isDxCorrect) status = "Diagnose korrekt (Struktur fehlt)";
@@ -93,30 +89,43 @@ exports.handler = async (event) => {
         summary = `Gute Struktur und Maßnahmen (Score ${score}).`;
       }
 
-      // POSITIVES FEEDBACK (Das fehlte vorher!)
       summary += "\n\n--- Analyse der Maßnahmen ---";
-      
       if (hasImmo) summary += "\n✅ Trauma-Versorgung: Die Fraktur wurde korrekt immobilisiert.";
       else if (state.specialty === 'trauma') summary += "\n❌ Trauma: Es wurde keine Schienung durchgeführt.";
-
       if (hasDMS) summary += "\n✅ Sicherheit: pDMS-Kontrolle wurde durchgeführt.";
-      
       if (hasO2 && parseFloat(state.vitals.SpO2) < 94) summary += "\n✅ Therapie: Sauerstoffgabe war indiziert und erfolgte.";
       
-      // Diagnose Feedback
       if (state.measurements.diagnosis) {
         summary += `\n\nDeine Diagnose: ${state.measurements.diagnosis}`;
-        if (isDxCorrect) {
-            summary += `\n✅ Volltreffer! Das Krankheitsbild wurde korrekt erkannt.`;
-        } else {
-            summary += `\n⚠️ Die Diagnose weicht vom erwarteten Bild ab (Erwartet u.a.: ${correctKeys[0] || '?'}).`;
-        }
+        if (isDxCorrect) summary += `\n✅ Volltreffer! Das Krankheitsbild wurde korrekt erkannt.`;
+        else summary += `\n⚠️ Die Diagnose weicht vom erwarteten Bild ab (Erwartet u.a.: ${correctKeys[0] || '?'}).`;
       } else {
         summary += `\n\nHinweis: Keine Verdachtsdiagnose dokumentiert.`;
       }
 
       reply.debrief = `${status}\n\n${summary}\n\nEnd-Vitals: SpO2 ${state.vitals.SpO2||'-'}%, RR ${state.vitals.RR||'-'}`;
       return ok(reply);
+    }
+
+    // =================================================================
+    // 0.1 X - INSPEKTION (Blutungscheck)
+    // =================================================================
+    if (/blutungscheck|blutung suchen/.test(low)) {
+        reply.accepted = true;
+        
+        // Info aus dem Hidden-Bereich holen
+        const info = H.bleeding_info || "Keine offensichtlichen massiven Blutungen auf den ersten Blick erkennbar.";
+        
+        reply.finding = info;
+        reply.evaluation = "X: Initiale Blutungs-Inspektion durchgeführt.";
+        
+        if (info.toLowerCase().includes("spritzend") || info.toLowerCase().includes("massiv")) {
+             reply.next_hint = "Sofort Tourniquet oder Druckverband!";
+        } else if (info.toLowerCase().includes("keine")) {
+             reply.next_hint = "X scheint unauffällig -> Weiter zu A.";
+        }
+        state.score += 1; 
+        return ok(reply);
     }
 
     // =================================================================
@@ -144,11 +153,10 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // 2. REALISMUS: Verschlechterung
+    // 2. REALISMUS
     // =================================================================
     const hasO2 = state.history.some(h => /o2|sauerstoff|beatmung/.test(h.action.toLowerCase()));
     const curSpO2 = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
-    
     if (curSpO2 < 92 && !hasO2 && state.action_count % 3 === 0) {
         const newSpO2 = Math.max(70, curSpO2 - 2);
         updVitals({ SpO2: newSpO2 });
@@ -191,10 +199,10 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // 4. NEUE FEATURES: TRAUMA (Immobilisation & Visual Bodycheck & pDMS)
+    // 4. NEUE FEATURES: TRAUMA
     // =================================================================
     
-    // pDMS LOGIK
+    // pDMS
     if (/pdms|dms/.test(low) && !/immobilisation/.test(low)) {
         reply.accepted = true;
         const hasImmo = state.history.some(h => h.action.includes('Immobilisation'));
@@ -218,7 +226,7 @@ exports.handler = async (event) => {
         return ok(reply);
     }
 
-    // IMMOBILISATION LOGIK
+    // IMMOBILISATION
     if (ua.includes('Immobilisation:')) {
         const parts = ua.split(':');
         const detail = parts[1] || "";
@@ -238,7 +246,7 @@ exports.handler = async (event) => {
         return ok(reply);
     }
     
-    // VISUELLER BODYCHECK LOGIK
+    // VISUELLER BODYCHECK
     if (ua.includes('Bodycheck (visuell)')) {
         reply.accepted = true;
         reply.evaluation = "E: Detaillierter Bodycheck erfolgt.";
@@ -290,7 +298,7 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // STANDARD LOGIK (XABCDE)
+    // STANDARD LOGIK
     // =================================================================
     if (/x unauff|keine.*blutung/.test(low)) { reply.accepted=true; reply.evaluation="X: Keine bedrohliche Blutung."; touchStep("X"); return ok(reply); }
     if (/druckverband|tourniquet/.test(low)) { reply.accepted=true; reply.evaluation="X: Blutung gestoppt."; touchStep("X"); return ok(reply); }
