@@ -1,6 +1,7 @@
 /**
  * Netlify Function: case-step
  * Fixes: Zugang/Volumen Logik, Notarzt, SAMPLER Info, SpO2 Visibility
+ * + Neu: Intelligentes Debriefing (Diagnose-Check)
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -51,7 +52,8 @@ exports.handler = async (event) => {
     // 0. PRIORITÄT: DIAGNOSE & DEBRIEF
     // =================================================================
     if (ua.includes("Verdachtsdiagnose") || ua.includes("Verdacht:")) { 
-      state.measurements.diagnosis = ua; 
+      // User Eingabe speichern: "Verdachtsdiagnose: Hypoglykämie | Prio: hoch"
+      state.measurements.diagnosis = ua.replace("Verdachtsdiagnose:", "").trim(); 
       reply.accepted = true; 
       reply.evaluation = "Verdachtsdiagnose & Priorität dokumentiert.";
       return ok(reply); 
@@ -63,20 +65,42 @@ exports.handler = async (event) => {
       const missingSteps = stepsAll.filter(s => !state.steps_done.includes(s));
       const score = state.score;
       
+      // Diagnose-Check
+      const userDxRaw = (state.measurements.diagnosis || "").toLowerCase();
+      const correctKeys = state.hidden?.diagnosis_keys || [];
+      // Prüft ob eines der Keywords in der User-Diagnose vorkommt
+      const isDxCorrect = correctKeys.some(key => userDxRaw.includes(key.toLowerCase()));
+
       let status = "Bestanden";
       let summary = "";
+
+      // Logik für Status-Text
       if (missingSteps.length > 0) {
-        status = "Nicht bestanden";
+        if (isDxCorrect) {
+             status = "Diagnose korrekt (Prozess unvollständig)";
+        } else {
+             status = "Nicht bestanden";
+        }
         summary = `Es wurden nicht alle Phasen durchlaufen.\nFehlende: ${missingSteps.join(', ')}`;
       } else if (score < 6) {
-        status = "Teilweise bestanden";
+        status = isDxCorrect ? "Diagnose korrekt (Maßnahmen knapp)" : "Teilweise bestanden";
         summary = `Struktur ok, aber zu wenig Maßnahmen (Score ${score}).`;
       } else {
+        status = isDxCorrect ? "Hervorragend (Diagnose & Prozess)" : "Bestanden (Prozess sauber)";
         summary = `Sehr gut! Struktur und Maßnahmen passen (Score ${score}).`;
       }
 
-      if (state.measurements.diagnosis) summary += `\nDiagnose gestellt: ${state.measurements.diagnosis}`;
-      else summary += `\nHinweis: Keine Verdachtsdiagnose dokumentiert.`;
+      // Diagnose Feedback
+      if (state.measurements.diagnosis) {
+        summary += `\n\nDeine Diagnose: ${state.measurements.diagnosis}`;
+        if (isDxCorrect) {
+            summary += `\n✅ Volltreffer! Das Krankheitsbild wurde korrekt erkannt.`;
+        } else {
+            summary += `\n⚠️ Die Diagnose weicht vom erwarteten Bild ab (Erwartet ähnliches wie: ${correctKeys[0] || '?'}).`;
+        }
+      } else {
+        summary += `\n\nHinweis: Keine Verdachtsdiagnose dokumentiert.`;
+      }
 
       reply.debrief = `${status}\n\n${summary}\n\nEnd-Vitals: SpO2 ${state.vitals.SpO2||'-'}%, RR ${state.vitals.RR||'-'}`;
       return ok(reply);

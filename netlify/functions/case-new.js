@@ -65,6 +65,7 @@ exports.handler = async (event) => {
         },
 
         hidden: {
+          diagnosis_keys: ["Asthma", "Obstruktion", "Spastik", "Atemnot"],
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei, kein Stridor, kein Erbrochenes",
           lung: "Giemen beidseits, verlängertes Exspirium, keine Rasselgeräusche",
@@ -126,6 +127,7 @@ exports.handler = async (event) => {
         },
 
         hidden: {
+          diagnosis_keys: ["Hypoglykämie", "Unterzucker", "Glucose", "Zucker"],
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei",
           lung: "vesikuläres Atemgeräusch beidseits, keine RG",
@@ -188,6 +190,7 @@ exports.handler = async (event) => {
         },
 
         hidden: {
+          diagnosis_keys: ["Fraktur", "Bruch", "Unterarm", "Radius", "Ulna"],
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei",
           lung: "vesikulär beidseits, keine RG",
@@ -250,6 +253,7 @@ exports.handler = async (event) => {
         },
 
         hidden: {
+          diagnosis_keys: ["Bronchiolitis", "RSV", "Infekt", "Obstruktion", "Atemwegsinfekt"],
           pupils: "isokor, altersentsprechend, prompt",
           mouth: "Nasen-Rachenraum mit klarem Sekret, kein Stridor",
           lung:
@@ -346,6 +350,9 @@ exports.handler = async (event) => {
     c.hidden.lkw     = c.hidden.lkw     || "nicht ermittelbar";
     c.hidden.pain    = c.hidden.pain || { nrs: 0, ort: "—", charakter: "—" };
     c.hidden.injuries = Array.isArray(c.hidden.injuries) ? c.hidden.injuries : [];
+    
+    // Fallback falls diagnosis_keys vergessen wurde
+    c.hidden.diagnosis_keys = Array.isArray(c.hidden.diagnosis_keys) ? c.hidden.diagnosis_keys : [];
 
     c.support = c.support || { calls: [] };
 
