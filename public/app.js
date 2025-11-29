@@ -1,11 +1,12 @@
 // ===============================================================
-// medicIQ – App Logic (Updated: Echtzeit-Verschlechterung)
+// medicIQ – App Logic (High-End Version)
+// Features: Monitor-Design, Alarme, EKG-Animation, TTS, DarkMode, Trauma, Timer
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
 const API_CASE_STEP = '/.netlify/functions/case-step';
 
-// UI
+// UI Elements
 const statusEl  = document.getElementById('caseStatus');
 const scoreEl   = document.getElementById('caseScore');
 const hintCard  = document.getElementById('hintCard');
@@ -25,14 +26,19 @@ const roleSel   = document.getElementById('roleSel');
 const specButtons = Array.from(document.querySelectorAll('.spec-chip'));
 let selectedSpec  = 'internistisch';
 
+// Settings
+let soundEnabled = true; // Standard an
+let isDarkMode = false;
+
 // State
 let caseState = null;
 const queue = [];
 let timerInterval = null;
 let startTime = null;
-let lastTickTime = 0; // NEU: Für den 30s Check
+let lastTickTime = 0; 
 
 const visibleVitals = {};
+// Mapping der IDs zu den Elementen
 const vitalsMap = {
   RR:   document.getElementById('vRR'),
   SpO2: document.getElementById('vSpO2'),
@@ -49,6 +55,39 @@ document.addEventListener('DOMContentLoaded', () => {
   updateUI(false); 
 });
 
+// === High-End Features (Sound, Dark, Print) ===
+
+// Sound Toggle
+document.getElementById('btnSound')?.addEventListener('click', (e) => {
+    soundEnabled = !soundEnabled;
+    e.target.textContent = soundEnabled ? "🔊 An" : "🔇 Aus";
+});
+
+// Dark Mode Toggle
+document.getElementById('btnDark')?.addEventListener('click', () => {
+    isDarkMode = !isDarkMode;
+    document.body.classList.toggle('dark-mode', isDarkMode);
+});
+
+// Print
+document.getElementById('btnPrint')?.addEventListener('click', () => {
+    window.print();
+});
+
+// Text-to-Speech Funktion
+function speak(text) {
+    if(!soundEnabled || !window.speechSynthesis) return;
+    // Zu lange Texte (z.B. Debriefing) nicht vorlesen
+    if(text.length > 250) return; 
+    
+    window.speechSynthesis.cancel(); // Vorheriges abbrechen
+    
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'de-DE';
+    u.rate = 1.1; 
+    window.speechSynthesis.speak(u);
+}
+
 // Spec Selection
 specButtons.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -59,7 +98,7 @@ specButtons.forEach(btn => {
   });
 });
 
-// Tools & Tabs
+// Tools & Tabs Listener
 document.querySelectorAll('.schema-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const t = btn.dataset.tool;
@@ -159,11 +198,35 @@ function renderQueue() {
   });
 }
 
-// ------- CORE LOGIC (Updated Timer) -------
+// ------- MONITOR & VITALS LOGIC (High-End Update) -------
+
+function renderVitals() {
+  for(let k in vitalsMap) {
+    const el = vitalsMap[k];
+    const valStr = visibleVitals[k] || '--';
+    el.innerHTML = valStr;
+    
+    // Finde die Eltern-Box (.vital-box) für die Alarm-Farbe
+    const box = el.parentElement; 
+    if(box) {
+        box.classList.remove('critical');
+
+        // ALARM LOGIK (Grenzwerte)
+        const valNum = parseFloat(valStr.match(/\d+/)?.[0] || 0);
+        
+        if (k === 'SpO2' && valNum > 0 && valNum < 90) box.classList.add('critical');
+        if (k === 'RR' && valNum > 0 && valNum < 90) box.classList.add('critical'); // z.B. Systole < 90
+        if (k === 'Puls' && valNum > 0 && (valNum < 40 || valNum > 140)) box.classList.add('critical');
+        if (k === 'BZ' && valNum > 0 && valNum < 60) box.classList.add('critical');
+    }
+  }
+}
+
+// ------- TIMER LOGIC (Mit 30s System-Check) -------
 
 function startTimer() {
   startTime = Date.now();
-  lastTickTime = Date.now(); // Startpunkt für den 30s Intervall
+  lastTickTime = Date.now(); 
   
   timerEl.classList.remove('hidden');
   timerEl.textContent = "00:00";
@@ -177,10 +240,9 @@ function startTimer() {
     const s = (diff % 60).toString().padStart(2,'0');
     timerEl.textContent = `${m}:${s}`;
 
-    // NEU: Alle 30 Sekunden einen Realitäts-Check senden
-    if (now - lastTickTime >= 30000) { // 30000 ms = 30 sek
+    // Alle 30 Sekunden System-Check senden (Verschlechterung triggern)
+    if (now - lastTickTime >= 30000) { 
         lastTickTime = now;
-        // Sende unsichtbaren Ping an die KI, nur wenn Fall läuft
         if(caseState && !caseState.measurements?.handover_done) {
             stepCase('System-Check: 30s vergangen'); 
         }
@@ -208,12 +270,14 @@ function updateUI(running) {
   }
 }
 
+// ------- CASE CONTROL -------
+
 async function startCase() {
   chatLog.innerHTML = '';
   queue.length = 0;
   renderQueue();
   for(let k in visibleVitals) delete visibleVitals[k];
-  renderVitals();
+  renderVitals(); // Reset Monitor
   
   updateUI(true); 
   startTimer(); 
@@ -237,6 +301,7 @@ async function startCase() {
     renderProgress([]);
     showHint('Beginne mit XABCDE.');
     addMsg(`<strong>Fallstart:</strong> ${caseState.story}`);
+    speak(caseState.story); // Intro vorlesen
   } catch(e) {
     caseState = { id:'local', specialty:selectedSpec, steps_done:[], history:[], score:0, vitals:{} };
     addMsg(`⚠️ Offline/Fehler: ${e.message}. Lokaler Modus aktiv.`);
@@ -259,14 +324,13 @@ async function stepCase(txt) {
     // Updates
     if(d.updated_vitals) {
       Object.assign(visibleVitals, d.updated_vitals);
-      renderVitals();
+      renderVitals(); // Monitor aktualisieren
     }
     
-    // Wir zeigen die System-Meldung "Zeit vergangen" nur an, wenn sich wirklich was verschlechtert hat (finding ist da)
-    // oder wenn es eine normale User-Aktion ist.
     const isSystemTick = txt.includes('System-Check');
     const hasFinding = !!d.finding;
 
+    // Nur anzeigen, wenn kein SystemTick ODER wenn SystemTick echte Auswirkung hat
     if (!isSystemTick || (isSystemTick && hasFinding)) {
         let meta = [];
         if(d.accepted && !isSystemTick) meta.push('✓');
@@ -281,6 +345,11 @@ async function stepCase(txt) {
           ${d.finding ? `<div style="color:#b91c1c; margin-top:4px;">${d.finding.replace(/\n/g,'<br>')}</div>` : ''}
           ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
         `);
+        
+        // Vorlesen nur bei echten Findings, nicht bei Systemticks
+        if(d.finding && !isSystemTick) {
+            speak(d.finding);
+        }
     }
 
     caseState = d.case_state || caseState;
@@ -299,12 +368,10 @@ async function stepCase(txt) {
   }
 }
 
-// ------- Helpers & Modals (Rest bleibt gleich) -------
+// ------- Helpers & Modals -------
 function setStatus(t) { statusEl.textContent = t; }
 function setScore(n) { scoreEl.textContent = `Score: ${n}`; }
-function renderVitals() {
-  for(let k in vitalsMap) vitalsMap[k].innerHTML = visibleVitals[k] || '–';
-}
+
 function renderProgress(doneList) {
   const s = new Set((doneList||[]).map(x=>x[0]));
   ['X','A','B','C','D','E'].forEach(l => {
@@ -361,6 +428,8 @@ clearBtn.onclick = () => { queue.length=0; renderQueue(); };
 startBtn.onclick = startCase;
 finishBtn.onclick = () => { openHandover(); };
 
+// --- Feature Modals ---
+
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
@@ -385,6 +454,7 @@ function openNRS() {
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'Schmerz Info'})});
     const d = await res.json();
     $id('nrsInfo').textContent = d.finding;
+    speak(d.finding);
   };
   $id('nrsOk').onclick=()=>{ stepCase(`NRS ${r.value}`); closeModal('modalNRS'); };
   $id('nrsCancel').onclick=()=>closeModal('modalNRS');
@@ -395,6 +465,7 @@ function openBEFAST() {
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'BEFAST Info'})});
     const d = await res.json();
     $id('befastInfo').textContent = d.finding;
+    speak(d.finding);
   };
   $id('befastOk').onclick=()=>{ stepCase('BEFAST dokumentiert'); closeModal('modalBEFAST'); };
   $id('befastCancel').onclick=()=>closeModal('modalBEFAST');
@@ -421,6 +492,7 @@ function openFourS() {
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
     const d = await res.json();
     $id('s4Info').textContent = d.finding;
+    speak(d.finding);
   };
   $id('s4Ok').onclick=()=>{ stepCase('4S dokumentiert'); closeModal('modal4S'); };
   $id('s4Cancel').onclick=()=>closeModal('modal4S');
@@ -453,15 +525,18 @@ function openImmo() {
 
 function openBodyMap() {
   if(!caseState) return;
+  // Reset
   ['body_head','body_torso','body_arm_r','body_arm_l','body_leg_r','body_leg_l'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.setAttribute('fill', '#f1f5f9');
   });
+  // Colorize
   const loc = caseState.hidden?.injury_map || []; 
   loc.forEach(l => {
      const el = document.getElementById(`body_${l}`);
      if(el) el.setAttribute('fill', '#f87171'); 
   });
+  
   const txt = caseState.hidden?.injuries?.join(', ') || "Keine sichtbaren Außenverletzungen.";
   $id('bodyMapText').textContent = txt;
   $id('bodyMapClose').onclick = () => closeModal('modalBodyMap');
@@ -474,24 +549,33 @@ function openEKG() {
     const type = caseState.hidden?.ekg_pattern || "sinus";
     const line = $id('ekgLine');
     const txt  = $id('ekgText');
+    
+    // Animation Class hinzufügen (aus style.css)
+    line.classList.add('ekg-anim');
+
     let points = "";
     let yBase = 75;
     
     if(type === "sinus") {
-        for(let i=0; i<400; i+=50) {
+        for(let i=0; i<400; i+=60) {
             points += `${i},${yBase} ${i+10},${yBase} ${i+15},${yBase-10} ${i+20},${yBase+10} ${i+25},${yBase-50} ${i+30},${yBase+20} ${i+35},${yBase} ${i+45},${yBase-5} ${i+50},${yBase} `;
         }
-        txt.textContent = "Monitorbild (Ableitung II)";
+        txt.textContent = "Monitorbild (Ableitung II) - Sinus";
+        txt.style.color = "#0f766e";
     } else if (type === "vt") {
         for(let i=0; i<400; i+=30) {
              points += `${i},${yBase} ${i+10},${yBase-60} ${i+20},${yBase+60} ${i+30},${yBase} `;
         }
-        txt.textContent = "Monitorbild (Warnung!)";
+        txt.textContent = "Monitorbild - VT (Puls prüfen!)";
+        txt.style.color = "#ef4444";
     } else {
         points = `0,${yBase} 400,${yBase}`;
-        txt.textContent = "Monitorbild";
+        txt.textContent = "Monitorbild - Asystolie";
+        txt.style.color = "#ef4444";
     }
+    
     line.setAttribute('points', points);
+    
     $id('ekgClose').onclick = () => closeModal('modalEKG');
     openModal('modalEKG');
     stepCase('12-Kanal-EKG');
@@ -520,5 +604,6 @@ async function openDebrief() {
     const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
     const d = await r.json();
     addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
+    speak("Fall beendet. Hier ist dein Debriefing.");
   } catch(e){}
 }

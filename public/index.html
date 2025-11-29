@@ -49,14 +49,35 @@
       <div id="caseScore">Score: 0</div>
     </div>
 
-    <div class="vitals" aria-label="Vitalwerte">
-      <span><strong>RR</strong>   <span id="vRR">–</span></span>
-      <span><strong>SpO₂</strong> <span id="vSpO2">–</span></span>
-      <span><strong>AF</strong>   <span id="vAF">–</span></span>
-      <span><strong>Puls</strong> <span id="vPuls">–</span></span>
-      <span><strong>BZ</strong>   <span id="vBZ">–</span></span>
-      <span><strong>Temp</strong> <span id="vTemp">–</span></span>
-      <span><strong>GCS</strong>  <span id="vGCS">–</span></span>
+    <div class="vitals" aria-label="Vitalwerte Monitor">
+      <div class="vital-box v-rr">
+        <span class="vital-label">NIBP (mmHg)</span>
+        <span id="vRR" class="vital-val">--/--</span>
+      </div>
+      <div class="vital-box v-spo2">
+        <span class="vital-label">SpO₂ (%)</span>
+        <span id="vSpO2" class="vital-val">--</span>
+      </div>
+      <div class="vital-box v-hr">
+        <span class="vital-label">Puls (/min)</span>
+        <span id="vPuls" class="vital-val">--</span>
+      </div>
+      <div class="vital-box v-co2">
+        <span class="vital-label">AF (/min)</span>
+        <span id="vAF" class="vital-val">--</span>
+      </div>
+      <div class="vital-box">
+        <span class="vital-label">BZ (mg/dl)</span>
+        <span id="vBZ" class="vital-val">--</span>
+      </div>
+      <div class="vital-box">
+        <span class="vital-label">Temp (°C)</span>
+        <span id="vTemp" class="vital-val">--</span>
+      </div>
+      <div class="vital-box">
+        <span class="vital-label">GCS</span>
+        <span id="vGCS" class="vital-val">--</span>
+      </div>
     </div>
 
     <div class="progress" aria-label="XABCDE-Fortschritt">
