@@ -13,10 +13,8 @@
   <section class="chat-container" aria-label="Fallbeispiele (Click-UI)">
     <h1>medicIQ – Fallbeispiele</h1>
 
-    <!-- Setup-Bereich -->
     <div class="setup-container">
       
-      <!-- Zeile 1: Fachrichtung -->
       <div class="setup-row" id="specRow">
         <div class="setup-left">
           <span class="setup-label">Fachrichtung:</span>
@@ -27,7 +25,6 @@
         </div>
       </div>
 
-      <!-- Zeile 2: Steuerung -->
       <div class="setup-row control-row">
         <div class="setup-left">
           <label class="setup-label" for="roleSel">Rolle:</label>
@@ -37,7 +34,6 @@
           </select>
         </div>
         <div class="setup-right">
-          <!-- Wichtig: Button-IDs müssen exakt stimmen -->
           <button id="startCase" class="btn">Neuen Fall starten</button>
           <button id="finishCase" class="btn danger hidden">Fall beenden</button>
         </div>
@@ -45,13 +41,11 @@
 
     </div>
 
-    <!-- Status -->
     <div class="status-row" role="status" aria-live="polite">
       <div id="caseStatus">Kein Fall aktiv.</div>
       <div id="caseScore">Score: 0</div>
     </div>
 
-    <!-- Vitals -->
     <div class="vitals" aria-label="Vitalwerte">
       <span><strong>RR</strong>   <span id="vRR">–</span></span>
       <span><strong>SpO₂</strong> <span id="vSpO2">–</span></span>
@@ -62,7 +56,6 @@
       <span><strong>GCS</strong>  <span id="vGCS">–</span></span>
     </div>
 
-    <!-- Fortschritt -->
     <div class="progress" aria-label="XABCDE-Fortschritt">
       <div class="chip" data-step="X">X</div>
       <div class="chip" data-step="A">A</div>
@@ -72,13 +65,11 @@
       <div class="chip" data-step="E">E</div>
     </div>
 
-    <!-- Hinweis -->
     <div id="hintCard" class="hint hidden" aria-live="polite">
       <strong>Nächster Schritt:</strong>
       <div id="hintText">—</div>
     </div>
 
-    <!-- Tabs & Actions -->
     <div class="tabs">
       <button class="tab active" data-tab="X">X – Exsanguination</button>
       <button class="tab" data-tab="A">A – Airway</button>
@@ -87,13 +78,11 @@
       <button class="tab" data-tab="D">D – Disability</button>
       <button class="tab" data-tab="E">E – Exposure</button>
       
-      <!-- Global Notarzt -->
       <button id="btnGlobalNA" class="na-btn">📞 Notarzt</button>
     </div>
     
     <div id="panel" class="action-grid" aria-live="polite"></div>
 
-    <!-- Schemata -->
     <div class="schemata-row">
       <button class="schema-btn" data-tool="FOUR_S">4S-Schema</button>
       <button class="schema-btn" data-tool="SAMPLER">SAMPLER</button>
@@ -103,7 +92,6 @@
       <button class="schema-btn" data-tool="DEBRIEF">Debriefing anzeigen</button>
     </div>
 
-    <!-- Queue -->
     <div class="queue card">
       <div class="queue-head">
         <div class="h">Geplante Maßnahmen</div>
@@ -115,7 +103,6 @@
       <ul id="queueList" class="queue-list"></ul>
     </div>
 
-    <!-- Feedback -->
     <div class="card chat-wrap">
       <div class="h">Feedback</div>
       <div id="chatLog" class="chat-log"></div>
@@ -128,8 +115,6 @@
   </p>
 </main>
 
-<!-- ===== MODALS ===== -->
-<!-- WICHTIG: style="display:none" verhindert, dass der Hintergrund Klicks blockiert -->
 <div id="modalBackdrop" class="modal-backdrop" style="display:none;"></div>
 
 <div id="modalAF" class="modal" style="display:none;">
@@ -255,6 +240,56 @@
   <div class="modal-actions">
     <button id="dxOk" class="btn">Speichern</button>
     <button id="dxCancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+
+<div id="modalImmo" class="modal" style="display:none;">
+  <div class="modal-head">Immobilisation & Schienung</div>
+  <div class="modal-body form-grid">
+    <label>Ort:
+      <select id="immoLoc">
+        <option value="HWS">HWS (Hals)</option>
+        <option value="Schulter">Schulter</option>
+        <option value="Arm rechts" selected>Arm rechts</option>
+        <option value="Arm links">Arm links</option>
+        <option value="Bein rechts">Bein rechts</option>
+        <option value="Bein links">Bein links</option>
+        <option value="Becken">Becken</option>
+      </select>
+    </label>
+    <label>Material:
+      <select id="immoMat">
+        <option value="Sam-Splint">SAM-Splint</option>
+        <option value="Vakuumschiene">Vakuumschiene</option>
+        <option value="Dreiecktuch">Dreiecktuch</option>
+        <option value="Stifneck">Stifneck (HWS-Schiene)</option>
+        <option value="Beckenrundschlinge">Beckenschlinge</option>
+        <option value="Vakuummatratze">Vakuummatratze (Ganzkörper)</option>
+      </select>
+    </label>
+    <div class="small muted">Hinweis: DMS-Kontrolle erfolgt automatisch nach Anlage.</div>
+  </div>
+  <div class="modal-actions">
+    <button id="immoOk" class="btn">Anlegen</button>
+    <button id="immoCancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+
+<div id="modalBodyMap" class="modal" style="display:none;">
+  <div class="modal-head">Körper-Schema (Verletzungen)</div>
+  <div class="modal-body" style="text-align:center;">
+    <svg width="150" height="300" viewBox="0 0 100 200" style="margin:auto; display:block;">
+      <circle id="body_head" cx="50" cy="20" r="15" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+      <rect id="body_torso" x="35" y="35" width="30" height="60" rx="5" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+      <rect id="body_arm_r" x="10" y="40" width="20" height="70" rx="5" fill="#e2e8f0" stroke="#334155" stroke-width="2" transform="rotate(10 10 40)"/>
+      <rect id="body_arm_l" x="70" y="40" width="20" height="70" rx="5" fill="#e2e8f0" stroke="#334155" stroke-width="2" transform="rotate(-10 90 40)"/>
+      <rect id="body_leg_r" x="35" y="100" width="12" height="80" rx="5" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+      <rect id="body_leg_l" x="53" y="100" width="12" height="80" rx="5" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+    </svg>
+    <div id="bodyMapText" style="margin-top:10px; font-weight:bold; color:#b91c1c;"></div>
+  </div>
+  <div class="modal-actions">
+    <button id="bodyMapClose" class="btn secondary">Schließen</button>
   </div>
 </div>
 </body>

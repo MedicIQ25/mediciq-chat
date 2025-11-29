@@ -191,6 +191,8 @@ exports.handler = async (event) => {
 
         hidden: {
           diagnosis_keys: ["Fraktur", "Bruch", "Unterarm", "Radius", "Ulna"],
+          // NEU: Injury Map für visuelle Darstellung
+          injury_map: ["arm_r"],
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei",
           lung: "vesikulär beidseits, keine RG",
@@ -353,6 +355,7 @@ exports.handler = async (event) => {
     
     // Fallback falls diagnosis_keys vergessen wurde
     c.hidden.diagnosis_keys = Array.isArray(c.hidden.diagnosis_keys) ? c.hidden.diagnosis_keys : [];
+    c.hidden.injury_map = Array.isArray(c.hidden.injury_map) ? c.hidden.injury_map : [];
 
     c.support = c.support || { calls: [] };
 

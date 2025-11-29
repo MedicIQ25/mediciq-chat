@@ -2,6 +2,7 @@
  * Netlify Function: case-step
  * Fixes: Zugang/Volumen Logik, Notarzt, SAMPLER Info, SpO2 Visibility
  * + Neu: Intelligentes Debriefing (Diagnose-Check)
+ * + Neu: Trauma-Features (Immobilisation, Visueller Bodycheck)
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -186,7 +187,46 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // 4. SCHEMATA (SAMPLER, 4S)
+    // 4. NEUE FEATURES: TRAUMA (Immobilisation & Visual Bodycheck)
+    // =================================================================
+    
+    // IMMOBILISATION LOGIK
+    if (ua.includes('Immobilisation:')) {
+        // Format: "Immobilisation: [Material] an [Ort]"
+        const parts = ua.split(':');
+        const detail = parts[1] || "";
+        
+        reply.accepted = true;
+        reply.evaluation = `Maßnahme durchgeführt: ${detail}`;
+        
+        // Intelligente Antwort basierend auf Ort
+        if (detail.includes("Arm") || detail.includes("Bein")) {
+             reply.finding = "Fraktur stabilisiert. Schmerzen laut Patient deutlich gebessert (NRS sinkt). DMS intakt.";
+        } else if (detail.includes("Stifneck") || detail.includes("HWS")) {
+             reply.finding = "HWS immobilisiert. Patient toleriert die Maßnahme.";
+        } else if (detail.includes("Becken")) {
+             reply.finding = "Beckenschlinge angelegt, Kompression hergestellt. Kreislauf stabilisiert sich ggf. leicht.";
+        } else {
+             reply.finding = "Ruhigstellung erfolgt.";
+        }
+        
+        touchStep("E"); 
+        return ok(reply);
+    }
+    
+    // VISUELLER BODYCHECK LOGIK
+    if (ua.includes('Bodycheck (visuell)')) {
+        reply.accepted = true;
+        reply.evaluation = "E: Detaillierter Bodycheck erfolgt.";
+        reply.finding = (H.injuries && H.injuries.length > 0) 
+            ? `Verletzungen identifiziert: ${H.injuries.join(', ')}` 
+            : "Keine äußeren Verletzungen erkennbar.";
+        touchStep("E");
+        return ok(reply);
+    }
+
+    // =================================================================
+    // 5. SCHEMATA (SAMPLER, 4S)
     // =================================================================
     
     // SAMPLER Info (für den Modal-Button)

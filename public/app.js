@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Fix: Buttons & Layout)
+// medicIQ – App Logic (Updated: Trauma & Syntax Fix)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -41,14 +41,13 @@ const vitalsMap = {
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
   renderPanel('X');
-  // Zwinge UI in den "Start"-Modus beim Laden
   updateUI(false); 
 });
 
 // Spec Selection
 specButtons.forEach(btn => {
   btn.addEventListener('click', () => {
-    if(caseState) return; // Gesperrt während Fall läuft
+    if(caseState) return; 
     specButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     selectedSpec = btn.dataset.spec || 'internistisch';
@@ -80,7 +79,7 @@ tabs.forEach(t => t.addEventListener('click', () => {
 // Global NA
 document.getElementById('btnGlobalNA')?.addEventListener('click', openNA);
 
-// ------- Actions Panel -------
+// ------- Actions Panel (Updated E for Trauma) -------
 const ACTIONS = {
   X: [
     { label: 'Kein bedrohlicher Blutverlust', token: 'X unauffällig' },
@@ -116,7 +115,9 @@ const ACTIONS = {
     { label: 'BZ messen', token: 'BZ messen' }
   ],
   E: [
-    { label: 'Bodycheck', token: 'Bodycheck' },
+    { label: 'Bodycheck (Text)', token: 'Bodycheck' },
+    { label: 'Bodycheck (Bild)', special: 'BODYMAP' }, // NEU
+    { label: 'Immobilisation / Schienung', special: 'IMMO' }, // NEU
     { label: 'Wärmeerhalt', token: 'Wärmeerhalt' },
     { label: 'Temp messen', token: 'Temperatur messen' },
     { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' }
@@ -132,6 +133,8 @@ function renderPanel(k) {
     b.onclick = () => {
       if(a.special === 'O2') openOxygen();
       else if(a.special === 'NA') openNA();
+      else if(a.special === 'IMMO') openImmo(); // NEU
+      else if(a.special === 'BODYMAP') openBodyMap(); // NEU
       else { queue.push(a); renderQueue(); }
     };
     panel.appendChild(b);
@@ -173,7 +176,7 @@ async function startCase() {
   for(let k in visibleVitals) delete visibleVitals[k];
   renderVitals();
   
-  updateUI(true); // UI auf "Laufend" schalten
+  updateUI(true); 
   
   const chips = Array.from(document.querySelectorAll('.chip'));
   chips.forEach(c => c.classList.remove('done','active'));
@@ -238,7 +241,7 @@ async function stepCase(txt) {
     if(d.done) {
       openDebrief();
       caseState = null;
-      updateUI(false); // Zurücksetzen
+      updateUI(false); 
       setStatus('Fall beendet.');
     }
   } catch(e) {
@@ -261,7 +264,6 @@ function renderProgress(doneList) {
       el.classList.remove('active');
     }
   });
-  // Active marker
   const next = ['X','A','B','C','D','E'].find(l => !s.has(l));
   if(next) {
     const el = Array.from(document.querySelectorAll('.chip')).find(c => c.dataset.step === next);
@@ -394,6 +396,46 @@ function openDiagnosis() {
   $id('dxCancel').onclick=()=>closeModal('modalDx');
   openModal('modalDx');
 }
+
+// NEU: Trauma Funktionen
+function openImmo() {
+  if(!caseState) return;
+  $id('immoOk').onclick = () => {
+    const loc = $id('immoLoc').value;
+    const mat = $id('immoMat').value;
+    stepCase(`Immobilisation: ${mat} an ${loc}`);
+    closeModal('modalImmo');
+  };
+  $id('immoCancel').onclick = () => closeModal('modalImmo');
+  openModal('modalImmo');
+}
+
+function openBodyMap() {
+  if(!caseState) return;
+  
+  // Reset Colors
+  ['body_head','body_torso','body_arm_r','body_arm_l','body_leg_r','body_leg_l'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.setAttribute('fill', '#e2e8f0');
+  });
+
+  // Verletzungsort aus caseState holen
+  const loc = caseState.hidden?.injury_map || []; 
+  
+  loc.forEach(l => {
+     const el = document.getElementById(`body_${l}`);
+     if(el) el.setAttribute('fill', '#f87171'); // Rot
+  });
+
+  const txt = caseState.hidden?.injuries?.join(', ') || "Keine sichtbaren Außenverletzungen.";
+  $id('bodyMapText').textContent = txt;
+
+  $id('bodyMapClose').onclick = () => closeModal('modalBodyMap');
+  openModal('modalBodyMap');
+  
+  stepCase('Bodycheck (visuell)');
+}
+
 async function openDebrief() {
   try {
     const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
@@ -401,3 +443,4 @@ async function openDebrief() {
     addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
   } catch(e){}
 }
+// Klammerfehler behoben (Hier war vorher eine zu viel)
