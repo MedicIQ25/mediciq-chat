@@ -1,5 +1,6 @@
 // ===============================================================
-// medicIQ – App Logic (Sauerstoff-Modal & Schönes Debriefing)
+// medicIQ – App Logic
+// Updates: Notarzt-Modal, i.V. Zugang, Fixes für Info-Buttons
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -142,7 +143,9 @@ const ACTIONS = {
     { label: 'RR messen',              token: 'RR messen' },
     { label: 'Puls messen',            token: 'Puls messen' },
     { label: '12-Kanal-EKG',           token: '12-Kanal-EKG' },
-    { label: 'Volumen 500 ml',         token: 'Volumen 500 ml' }
+    { label: 'i.V. Zugang legen',      token: 'i.V. Zugang legen' }, // NEU
+    { label: 'Volumen 500 ml',         token: 'Volumen 500 ml' },
+    { label: 'Notarzt nachfordern',    special: 'NA' } // NEU
   ],
   D: [
     { label: 'GCS erheben',            token: 'GCS erheben' },
@@ -164,9 +167,9 @@ function renderPanel(tabKey) {
     btn.className = 'action-card';
     btn.innerHTML = `<div class="label">${action.label}</div>`;
     btn.addEventListener('click', () => {
-      if (action.special === 'O2') {
-        openOxygen();
-      } else {
+      if (action.special === 'O2') openOxygen();
+      else if (action.special === 'NA') openNA(); // NEU
+      else {
         queue.push({ label: action.label, token: action.token });
         renderQueue();
       }
@@ -259,6 +262,7 @@ async function stepCase(phrase) {
     const badges = [];
     if (data.accepted)      badges.push('✓');
     if (data.outside_scope) badges.push('⚠ ?');
+    if (data.unsafe)        badges.push('⛔'); // Zeigt Fehler an (z.B. Volumen ohne Zugang)
     
     let vitalsMini = '';
     if (data.updated_vitals && Object.keys(data.updated_vitals).length) {
@@ -281,7 +285,7 @@ async function stepCase(phrase) {
 
     if (data.done) {
       setStatus('Fall abgeschlossen.');
-      openDebrief(); // Öffnet Debriefing automatisch
+      openDebrief();
       if(setupRow) setupRow.classList.remove('collapsed');
       showHint('—'); resetProgress(); caseState = null;
     }
@@ -294,6 +298,18 @@ async function stepCase(phrase) {
 const $id = (x) => document.getElementById(x);
 function openModal(id) { $id('modalBackdrop').classList.remove('hidden'); $id(id).classList.remove('hidden'); }
 function closeModal(id) { $id('modalBackdrop').classList.add('hidden'); $id(id).classList.add('hidden'); }
+
+// NEU: Notarzt Modal
+function openNA() {
+  $id('naReason').value = '';
+  $id('naOk').onclick = () => {
+    const reason = $id('naReason').value || 'Keine Angabe';
+    stepCase(`Notarzt nachfordern: ${reason}`);
+    closeModal('modalNA');
+  };
+  $id('naCancel').onclick = () => closeModal('modalNA');
+  openModal('modalNA');
+}
 
 // O2 Modal
 function openOxygen() {
@@ -310,8 +326,7 @@ function openOxygen() {
   $id('o2Ok').onclick = () => {
     const flow = flowSlider.value;
     const dev  = deviceSel.options[deviceSel.selectedIndex].text;
-    const msg = `O2-Gabe: ${dev} mit ${flow} l/min`;
-    stepCase(msg);
+    stepCase(`O2-Gabe: ${dev} mit ${flow} l/min`);
     closeModal('modalO2');
   };
   $id('o2Cancel').onclick = () => closeModal('modalO2');
@@ -328,12 +343,6 @@ function openBEFAST() {
     info.textContent = d.finding || 'Unauffällig';
   };
   document.getElementById('befastOk').onclick = () => {
-    const parts=[];
-    if($id('b_face').checked) parts.push('Balance'); 
-    if($id('e_eyes').checked) parts.push('Eyes'); 
-    if($id('f_face').checked) parts.push('Face'); 
-    if($id('a_arm').checked)  parts.push('Arm'); 
-    if($id('s_speech').checked) parts.push('Speech');
     stepCase('BEFAST dokumentiert');
     closeModal('modalBEFAST');
   };
@@ -342,14 +351,24 @@ function openBEFAST() {
 }
 
 function openSampler() {
-  ['s_sympt','s_allerg','s_med','s_hist','s_last','s_events'].forEach(id=>$id(id).value='');
+  ['s_sympt','s_allerg','s_med','s_hist','s_last','s_events','s_risk'].forEach(id=>{
+    if($id(id)) $id(id).value='';
+  });
+  
+  // FIX: Info abrufen und Felder füllen
   document.getElementById('samplerFetch').onclick = async () => {
     await stepCase('SAMPLER Info');
+    // Wir greifen hier direkt auf die aktualisierten Daten im caseState zu
     const S = caseState?.anamnesis?.SAMPLER || {};
-    $id('s_sympt').value = S.S||''; $id('s_allerg').value=S.A||''; $id('s_med').value=S.M||'';
+    if($id('s_sympt')) $id('s_sympt').value = S.S || '';
+    if($id('s_allerg')) $id('s_allerg').value = S.A || '';
+    if($id('s_med')) $id('s_med').value = S.M || '';
+    if($id('s_hist')) $id('s_hist').value = S.P || '';
+    if($id('s_last')) $id('s_last').value = S.L || '';
+    if($id('s_events')) $id('s_events').value = S.E || '';
+    if($id('s_risk')) $id('s_risk').value = S.R || '';
   };
   document.getElementById('samplerOk').onclick = () => {
-    // FIX: Wir senden jetzt "SAMPLER doku" damit das Backend es erkennt
     stepCase('SAMPLER doku'); 
     closeModal('modalSampler');
   };
@@ -365,13 +384,7 @@ function openFourS() {
     info.textContent = d.finding || 'Unauffällig';
   };
   $id('s4Ok').onclick = () => {
-    const parts=[];
-    if($id('s1').checked) parts.push('Sicherheit');
-    if($id('s2').checked) parts.push('Szene');
-    if($id('s3').checked) parts.push('Sichtung');
-    if($id('s4').checked) parts.push('Support');
-    const msg = parts.length ? `4S dokumentiert (${parts.join(', ')})` : '4S dokumentiert';
-    stepCase(msg);
+    stepCase('4S dokumentiert');
     closeModal('modal4S');
   };
   $id('s4Cancel').onclick = () => closeModal('modal4S');
@@ -419,26 +432,18 @@ function openDiagnosis() {
 }
 
 async function openDebrief() {
-  // Verbesserte Formatierung: Leere Zeilen raus, Doppelpunkte fett
   function format(raw) {
     if(!raw) return '';
-    const cleanLines = String(raw)
-      .split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0); // Leere Zeilen filtern
-
+    const cleanLines = String(raw).split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const items = cleanLines.map(l => {
-      // Prüfen ob es ein Key:Value Paar ist
       const parts = l.split(':');
       if (parts.length > 1) {
-        // Erster Teil fett
         const key = parts[0];
         const val = parts.slice(1).join(':');
         return `<li><strong>${key}:</strong>${val}</li>`;
       }
       return `<li>${l}</li>`;
     }).join('');
-
     return `<ul class="debrief-list small">${items}</ul>`;
   }
   

@@ -1,6 +1,6 @@
 /**
  * Netlify Function: case-step
- * Fixes: SAMPLER (Layout & R), 4S (Inhalt anzeigen), Diagnose, O2, Trends
+ * Fixes: Zugang/Volumen Logik, Notarzt, SAMPLER Info, SpO2 Visibility
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -17,7 +17,8 @@ exports.handler = async (event) => {
     state.history    = state.history || [];
     state.score      = state.score || 0;
     state.action_count = (state.action_count || 0) + 1;
-    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null };
+    // Neue Flags für Zugang & IV
+    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false };
     
     // History
     if (ua) {
@@ -32,11 +33,14 @@ exports.handler = async (event) => {
     // --- Helpers ---
     const updVitals = (obj) => {
       for (const k in obj) {
-        const old = parseFloat(String(state.vitals[k]||"0").match(/\d+/)?.[0]);
         state.vitals[k] = obj[k];
-        const neu = parseFloat(String(obj[k]).match(/\d+/)?.[0]);
-        const arrow = (neu > old) ? " ⬆" : (neu < old) ? " ⬇" : "";
-        reply.updated_vitals[k] = obj[k] + arrow;
+        // Nur wenn Wert bereits gemessen wurde oder durch die aktuelle Aktion gemessen wird, Update senden
+        if (state.measurements.vitals[k]) {
+            const old = parseFloat(String(state.vitals[k]||"0").match(/\d+/)?.[0]);
+            const neu = parseFloat(String(obj[k]).match(/\d+/)?.[0]);
+            const arrow = (neu > old) ? " ⬆" : (neu < old) ? " ⬇" : "";
+            reply.updated_vitals[k] = obj[k] + arrow;
+        }
       }
     };
     const touchStep = (l) => { if(!state.steps_done.includes(l.toUpperCase())) { state.steps_done.push(l.toUpperCase()); state.score+=1; } };
@@ -71,11 +75,8 @@ exports.handler = async (event) => {
         summary = `Sehr gut! Struktur und Maßnahmen passen (Score ${score}).`;
       }
 
-      if (state.measurements.diagnosis) {
-        summary += `\nDiagnose gestellt: ${state.measurements.diagnosis}`;
-      } else {
-        summary += `\nHinweis: Keine Verdachtsdiagnose dokumentiert.`;
-      }
+      if (state.measurements.diagnosis) summary += `\nDiagnose gestellt: ${state.measurements.diagnosis}`;
+      else summary += `\nHinweis: Keine Verdachtsdiagnose dokumentiert.`;
 
       reply.debrief = `${status}\n\n${summary}\n\nEnd-Vitals: SpO2 ${state.vitals.SpO2||'-'}%, RR ${state.vitals.RR||'-'}`;
       return ok(reply);
@@ -114,6 +115,7 @@ exports.handler = async (event) => {
     if (curSpO2 < 92 && !hasO2 && state.action_count % 3 === 0) {
         const newSpO2 = Math.max(70, curSpO2 - 2);
         updVitals({ SpO2: newSpO2 });
+        // Zeige genauen Wert nur, wenn SpO2 bereits gemessen wurde
         if (state.measurements.vitals?.SpO2) {
              reply.finding = (reply.finding || "") + `\n⚠️ Patient wirkt zyanotischer (SpO₂ fällt auf ${newSpO2}%).`;
         } else {
@@ -122,48 +124,78 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // 3. SCHEMATA (SAMPLER, 4S, NRS) - Optimiertes Layout
+    // 3. I.V. ZUGANG & VOLUMEN & NOTARZT
     // =================================================================
     
-    // SAMPLER: Untereinander & mit R
+    // i.V. Zugang
+    if (/zugang/.test(low) && /legen/.test(low)) {
+        state.measurements.iv_access = true;
+        reply.accepted = true;
+        reply.evaluation = "Periphervenöser Zugang (PVZ) gelegt.";
+        touchStep("C");
+        return ok(reply);
+    }
+
+    // Volumen (Check auf Zugang)
+    if (/volumen/.test(low)) {
+        if (!state.measurements.iv_access) {
+            reply.unsafe = true;
+            reply.evaluation = "Kein Zugang vorhanden!";
+            reply.finding = "Bitte erst i.V. Zugang legen.";
+            return ok(reply);
+        }
+        reply.accepted = true;
+        reply.evaluation = "500ml Volumengabe läuft.";
+        touchStep("C");
+        return ok(reply);
+    }
+
+    // Notarzt
+    if (/notarzt/.test(low) && /nachfordern/.test(low)) {
+        // "Notarzt nachfordern: <Grund>"
+        const reason = ua.split(":")[1] || "";
+        reply.accepted = true;
+        reply.evaluation = `Notarzt (NEF) nachgefordert.`;
+        reply.finding = `Leitstelle bestätigt. Eintreffen in ca. 8-12 Min. (Grund: ${reason.trim()})`;
+        touchStep("C"); // Oder Organisation
+        return ok(reply);
+    }
+
+    // =================================================================
+    // 4. SCHEMATA (SAMPLER, 4S)
+    // =================================================================
+    
+    // SAMPLER Info (für den Modal-Button)
+    if (/sampler info/.test(low)) {
+      reply.accepted = true;
+      const s = state.anamnesis?.SAMPLER || {};
+      // Liefert die reinen Daten, keine Bewertung
+      return ok(reply);
+    }
+
+    // SAMPLER Doku (Abschluss)
     if (/sampler doku/.test(low)) {
       reply.accepted = true;
       const s = state.anamnesis?.SAMPLER || {};
       const content = [
-        `S: ${text(s.S)}`,
-        `A: ${text(s.A)}`,
-        `M: ${text(s.M)}`,
-        `P: ${text(s.P)}`,
-        `L: ${text(s.L)}`,
-        `E: ${text(s.E)}`,
-        `R: ${text(s.R)}`
+        `S: ${text(s.S)}`, `A: ${text(s.A)}`, `M: ${text(s.M)}`, `P: ${text(s.P)}`, 
+        `L: ${text(s.L)}`, `E: ${text(s.E)}`, `R: ${text(s.R)}`
       ].join('\n');
-      
       reply.evaluation = "SAMPLER dokumentiert:";
       reply.finding = content; 
       return ok(reply);
     }
 
-    // 4S: Inhalt anzeigen statt nur "doku"
     if (/4s dokumentiert/.test(low)) {
       reply.accepted = true;
       state.measurements.schemas['4S'] = true;
       if(!state.history.some(h=>h.action.includes('4S davor'))) state.score += 1;
-      
       const s4 = state.scene_4s || {};
-      const content = [
-        `Sicherheit: ${text(s4.sicherheit)}`,
-        `Szene: ${text(s4.szene)}`,
-        `Sichtung: ${text(s4.sichtung_personen)}`,
-        `Support: ${text(s4.support_empfehlung)}`
-      ].join('\n');
-
       reply.evaluation = "4S-Schema dokumentiert:";
-      reply.finding = content;
+      reply.finding = `Sicherheit: ${text(s4.sicherheit)}\nSzene: ${text(s4.szene)}\nSichtung: ${text(s4.sichtung_personen)}\nSupport: ${text(s4.support_empfehlung)}`;
       return ok(reply);
     }
     
-    // 4S Info (Button)
     if (/4s info/.test(low)) {
       const s = state.scene_4s || {};
       reply.finding = `Sicherheit: ${s.sicherheit||'-'}\nSzene: ${s.szene||'-'}`;
@@ -171,7 +203,6 @@ exports.handler = async (event) => {
       return ok(reply);
     }
     
-    // Schmerz
     if (/schmerz info/.test(low)) {
         const p = H.pain || {};
         reply.finding = `Patient angabe: NRS ${p.nrs || '?'} (${p.ort || 'unbekannt'})`;
@@ -202,9 +233,13 @@ exports.handler = async (event) => {
     
     // B
     if (/spo2|sättigung/.test(low)) { 
-      updVitals({SpO2:state.vitals.SpO2||baseVitals.SpO2}); state.measurements.vitals.SpO2=true; reply.accepted=true; reply.evaluation="B: SpO2 gemessen."; touchStep("B"); return ok(reply); 
+      // Hier Flag setzen: SpO2 ist jetzt sichtbar!
+      state.measurements.vitals.SpO2 = true;
+      updVitals({SpO2:state.vitals.SpO2||baseVitals.SpO2}); 
+      reply.accepted=true; reply.evaluation="B: SpO2 gemessen."; touchStep("B"); return ok(reply); 
     }
     if (/af|atemfreq/.test(low)) { 
+      state.measurements.vitals.AF = true;
       updVitals({AF:state.vitals.AF||baseVitals.AF}); reply.accepted=true; reply.evaluation="B: AF gezählt."; touchStep("B"); return ok(reply); 
     }
     if (/auskultieren|lunge/.test(low)) { 
@@ -213,26 +248,27 @@ exports.handler = async (event) => {
 
     // C
     if (/rr|blutdruck/.test(low)) { 
+      state.measurements.vitals.RR = true;
       updVitals({RR:state.vitals.RR||baseVitals.RR}); reply.accepted=true; reply.evaluation="C: RR gemessen."; touchStep("C"); return ok(reply); 
     }
     if (/puls/.test(low)) { 
+      state.measurements.vitals.Puls = true;
       updVitals({Puls:state.vitals.Puls||baseVitals.Puls}); reply.accepted=true; reply.evaluation="C: Puls getastet."; touchStep("C"); return ok(reply); 
     }
     if (/ekg/.test(low)) { reply.accepted=true; reply.finding=H.ekg12||"Sinus"; reply.evaluation="C: EKG geschrieben."; touchStep("C"); return ok(reply); }
-    if (/volumen/.test(low)) { reply.accepted=true; reply.evaluation="500ml infundiert."; touchStep("C"); return ok(reply); }
 
     // D
-    if (/gcs/.test(low)) { updVitals({GCS:state.vitals.GCS||15}); reply.accepted=true; reply.evaluation="D: GCS erhoben."; touchStep("D"); return ok(reply); }
+    if (/gcs/.test(low)) { state.measurements.vitals.GCS=true; updVitals({GCS:state.vitals.GCS||15}); reply.accepted=true; reply.evaluation="D: GCS erhoben."; touchStep("D"); return ok(reply); }
     if (/pupillen/.test(low)) { reply.accepted=true; reply.finding=H.pupils||"Isokor"; reply.evaluation="D: Pupillen gecheckt."; touchStep("D"); return ok(reply); }
-    if (/bz|blutzucker/.test(low)) { updVitals({BZ:state.vitals.BZ||100}); reply.accepted=true; reply.evaluation="D: BZ gemessen."; touchStep("D"); return ok(reply); }
+    if (/bz|blutzucker/.test(low)) { state.measurements.vitals.BZ=true; updVitals({BZ:state.vitals.BZ||100}); reply.accepted=true; reply.evaluation="D: BZ gemessen."; touchStep("D"); return ok(reply); }
     if (/befast info/.test(low)) { reply.accepted=true; reply.finding=H.befast||"negativ"; touchStep("D"); return ok(reply); }
     if (/befast doku/.test(low)) { reply.accepted=true; reply.evaluation="BE-FAST dokumentiert."; touchStep("D"); return ok(reply); }
 
     // E
     if (/bodycheck/.test(low)) { reply.accepted=true; reply.finding=(H.skin||"o.B.")+" "+(H.injuries?.join(',')||""); reply.evaluation="E: Bodycheck."; touchStep("E"); return ok(reply); }
-    if (/temp/.test(low)) { updVitals({Temp:state.vitals.Temp||36.5}); reply.accepted=true; reply.evaluation="E: Temp gemessen."; touchStep("E"); return ok(reply); }
+    if (/temp/.test(low)) { state.measurements.vitals.Temp=true; updVitals({Temp:state.vitals.Temp||36.5}); reply.accepted=true; reply.evaluation="E: Temp gemessen."; touchStep("E"); return ok(reply); }
     
-    // Trennung Lagerung vs. Wärme & SpO2 Effekt
+    // Trennung Lagerung vs. Wärme
     if (/oberkörper|lagerung|lagern/.test(low) && /hoch/.test(low)) { 
         const cur = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
         if(cur < 98) updVitals({ SpO2: Math.min(100, cur + 2) });
@@ -249,7 +285,6 @@ exports.handler = async (event) => {
         return ok(reply); 
     }
     
-    // NRS Fallback
     if (/nrs/.test(low)) { reply.accepted=true; reply.evaluation="Schmerz doku."; return ok(reply); }
 
     // Fallback
