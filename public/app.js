@@ -1,6 +1,6 @@
 // ===============================================================
 // medicIQ – App Logic
-// Updates: Notarzt-Modal, i.V. Zugang, Fixes für Info-Buttons
+// Updates: Notarzt global (neben Tabs), i.V. Zugang, Fixes
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -143,9 +143,9 @@ const ACTIONS = {
     { label: 'RR messen',              token: 'RR messen' },
     { label: 'Puls messen',            token: 'Puls messen' },
     { label: '12-Kanal-EKG',           token: '12-Kanal-EKG' },
-    { label: 'i.V. Zugang legen',      token: 'i.V. Zugang legen' }, // NEU
-    { label: 'Volumen 500 ml',         token: 'Volumen 500 ml' },
-    { label: 'Notarzt nachfordern',    special: 'NA' } // NEU
+    { label: 'i.V. Zugang legen',      token: 'i.V. Zugang legen' }, 
+    { label: 'Volumen 500 ml',         token: 'Volumen 500 ml' }
+    // Notarzt hier entfernt, da jetzt globaler Button
   ],
   D: [
     { label: 'GCS erheben',            token: 'GCS erheben' },
@@ -168,7 +168,7 @@ function renderPanel(tabKey) {
     btn.innerHTML = `<div class="label">${action.label}</div>`;
     btn.addEventListener('click', () => {
       if (action.special === 'O2') openOxygen();
-      else if (action.special === 'NA') openNA(); // NEU
+      else if (action.special === 'NA') openNA(); 
       else {
         queue.push({ label: action.label, token: action.token });
         renderQueue();
@@ -183,6 +183,9 @@ tabs.forEach(t => t.addEventListener('click', () => {
   t.classList.add('active');
   renderPanel(t.dataset.tab);
 }));
+
+// NEU: Listener für den Globalen Notarzt Button
+document.getElementById('btnGlobalNA')?.addEventListener('click', openNA);
 
 function renderQueue() {
   queueList.innerHTML = '';
@@ -262,7 +265,7 @@ async function stepCase(phrase) {
     const badges = [];
     if (data.accepted)      badges.push('✓');
     if (data.outside_scope) badges.push('⚠ ?');
-    if (data.unsafe)        badges.push('⛔'); // Zeigt Fehler an (z.B. Volumen ohne Zugang)
+    if (data.unsafe)        badges.push('⛔');
     
     let vitalsMini = '';
     if (data.updated_vitals && Object.keys(data.updated_vitals).length) {
@@ -299,8 +302,9 @@ const $id = (x) => document.getElementById(x);
 function openModal(id) { $id('modalBackdrop').classList.remove('hidden'); $id(id).classList.remove('hidden'); }
 function closeModal(id) { $id('modalBackdrop').classList.add('hidden'); $id(id).classList.add('hidden'); }
 
-// NEU: Notarzt Modal
+// Notarzt Modal
 function openNA() {
+  if (!caseState) return;
   $id('naReason').value = '';
   $id('naOk').onclick = () => {
     const reason = $id('naReason').value || 'Keine Angabe';
@@ -355,10 +359,8 @@ function openSampler() {
     if($id(id)) $id(id).value='';
   });
   
-  // FIX: Info abrufen und Felder füllen
   document.getElementById('samplerFetch').onclick = async () => {
     await stepCase('SAMPLER Info');
-    // Wir greifen hier direkt auf die aktualisierten Daten im caseState zu
     const S = caseState?.anamnesis?.SAMPLER || {};
     if($id('s_sympt')) $id('s_sympt').value = S.S || '';
     if($id('s_allerg')) $id('s_allerg').value = S.A || '';

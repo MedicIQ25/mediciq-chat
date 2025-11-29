@@ -7,7 +7,7 @@
 
   <link rel="stylesheet" href="./style.css" />
   <!-- kein Freitext mehr, daher kein marked nötig -->
-  <script defer src="./app.js"></script>
+  <script src="./app.js"></script>
 </head>
 <body>
 <main class="page">
@@ -67,7 +67,7 @@
       <div id="hintText">—</div>
     </div>
 
-    <!-- Tabs & Actions -->
+    <!-- Tabs & Actions (NEU: Notarzt Button hier integriert) -->
     <div class="tabs">
       <button class="tab active" data-tab="X">X – Exsanguination</button>
       <button class="tab" data-tab="A">A – Airway</button>
@@ -75,19 +75,24 @@
       <button class="tab" data-tab="C">C – Circulation</button>
       <button class="tab" data-tab="D">D – Disability</button>
       <button class="tab" data-tab="E">E – Exposure</button>
+      
+      <!-- Der Global-Button (sieht etwas anders aus) -->
+      <button id="btnGlobalNA" style="border:1px solid #fecaca; background:#fef2f2; color:#b91c1c; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:bold; margin-left:6px;">
+        📞 Notarzt
+      </button>
     </div>
+    
     <div id="panel" class="action-grid" aria-live="polite"></div>
-<!-- Schemata / Tools -->
-<div class="schemata-row">
-  
-  <button class="schema-btn" data-tool="FOUR_S">4S-Schema</button>
-  <button class="schema-btn" data-tool="SAMPLER">SAMPLER</button>
-  <button class="schema-btn" data-tool="BEFAST">BE-FAST</button>
-  <button class="schema-btn" data-tool="NRS">Schmerzskala (NRS)</button>
-  <button class="schema-btn primary" data-tool="DIAGNOSIS">Verdachtsdiagnose & Transport</button>
-  <button class="schema-btn" data-tool="DEBRIEF">Debriefing anzeigen</button>
 
-</div>
+    <!-- Schemata / Tools -->
+    <div class="schemata-row">
+      <button class="schema-btn" data-tool="FOUR_S">4S-Schema</button>
+      <button class="schema-btn" data-tool="SAMPLER">SAMPLER</button>
+      <button class="schema-btn" data-tool="BEFAST">BE-FAST</button>
+      <button class="schema-btn" data-tool="NRS">Schmerzskala (NRS)</button>
+      <button class="schema-btn primary" data-tool="DIAGNOSIS">Verdachtsdiagnose & Transport</button>
+      <button class="schema-btn" data-tool="DEBRIEF">Debriefing anzeigen</button>
+    </div>
 
     <!-- Queue -->
     <div class="queue card">
@@ -113,6 +118,7 @@
     Beachte: Lehraussagen deiner Rettungsdienstschule haben Vorrang.
   </p>
 </main>
+
 <!-- ===== MODALS ===== -->
 <div id="modalBackdrop" class="modal-backdrop hidden"></div>
 
@@ -204,6 +210,45 @@
   </div>
 </div>
 
+<!-- O2 Modal -->
+<div id="modalO2" class="modal hidden">
+  <div class="modal-head">Sauerstoffgabe</div>
+  <div class="modal-body form-grid">
+    <label>Applikationsform:
+      <select id="o2Device">
+        <option value="brille">Nasenbrille (1–6 l/min)</option>
+        <option value="maske">Einfache Maske (5–10 l/min)</option>
+        <option value="reservoir">Maske mit Reservoir (10–15 l/min)</option>
+        <option value="beatmung">Beutel-Maske (15 l/min)</option>
+      </select>
+    </label>
+    <label>Flow (Liter/min):
+      <div style="display:flex; gap:10px; align-items:center;">
+        <input id="o2Flow" type="range" min="0" max="15" step="1" value="0" style="flex:1" />
+        <span id="o2FlowVal" style="font-weight:bold; width:30px;">0</span> l
+      </div>
+    </label>
+    <p class="small muted">Hinweis: Nasenbrille max 6l, Maske mind. 5l.</p>
+  </div>
+  <div class="modal-actions">
+    <button id="o2Ok" class="btn">Verabreichen</button>
+    <button id="o2Cancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+
+<!-- Notarzt Modal -->
+<div id="modalNA" class="modal hidden">
+  <div class="modal-head">Notarzt nachfordern</div>
+  <div class="modal-body form-grid">
+    <p>Bitte Begründung angeben (Indikation):</p>
+    <textarea id="naReason" rows="3" placeholder="z. B. Analgesiebedarf, hämodynamische Instabilität..."></textarea>
+  </div>
+  <div class="modal-actions">
+    <button id="naOk" class="btn">Nachfordern</button>
+    <button id="naCancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+
 <!-- Diagnose & Transport -->
 <div id="modalDx" class="modal hidden">
   <div class="modal-head">Verdachtsdiagnose & Transport</div>
@@ -237,46 +282,6 @@
     <button id="dxCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
-<div id="modalO2" class="modal hidden">
-  <div class="modal-head">Sauerstoffgabe</div>
-  <div class="modal-body form-grid">
-    <label>Applikationsform:
-      <select id="o2Device">
-        <option value="brille">Nasenbrille (1–6 l/min)</option>
-        <option value="maske">Einfache Maske (5–10 l/min)</option>
-        <option value="reservoir">Maske mit Reservoir (10–15 l/min)</option>
-        <option value="beatmung">Beutel-Maske (15 l/min)</option>
-      </select>
-    </label>
-    <label>Flow (Liter/min):
-      <div style="display:flex; gap:10px; align-items:center;">
-        <input id="o2Flow" type="range" min="0" max="15" step="1" value="0" style="flex:1" />
-        <span id="o2FlowVal" style="font-weight:bold; width:30px;">0</span> l
-      </div>
-    </label>
-    <p class="small muted">Hinweis: Nasenbrille max 6l, Maske mind. 5l.</p>
-  </div>
-  <div class="modal-actions">
-    <button id="o2Ok" class="btn">Verabreichen</button>
-    <button id="o2Cancel" class="btn secondary">Abbrechen</button>
-  </div>
-</div>
-<!-- ... existing code ... -->
-
-<!-- Notarzt Modal (NEU) -->
-<div id="modalNA" class="modal hidden">
-  <div class="modal-head">Notarzt nachfordern</div>
-  <div class="modal-body form-grid">
-    <p>Bitte Begründung angeben (Indikation):</p>
-    <textarea id="naReason" rows="3" placeholder="z. B. Analgesiebedarf, hämodynamische Instabilität..."></textarea>
-  </div>
-  <div class="modal-actions">
-    <button id="naOk" class="btn">Nachfordern</button>
-    <button id="naCancel" class="btn secondary">Abbrechen</button>
-  </div>
-</div>
-
-<!-- ... existing code ... -->
 <!-- ===== END MODALS ===== -->
 
 </body>
