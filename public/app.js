@@ -105,6 +105,7 @@ const ACTIONS = {
   C: [
     { label: 'RR messen', token: 'RR messen' },
     { label: 'Puls messen', token: 'Puls messen' },
+    { label: 'pDMS prüfen', token: 'pDMS Kontrolle' }, // <--- NEU HIER
     { label: '12-Kanal-EKG', token: '12-Kanal-EKG' },
     { label: 'i.V. Zugang legen', token: 'i.V. Zugang legen' },
     { label: 'Volumen 500 ml', token: 'Volumen 500 ml' }
@@ -116,8 +117,9 @@ const ACTIONS = {
   ],
   E: [
     { label: 'Bodycheck (Text)', token: 'Bodycheck' },
-    { label: 'Bodycheck (Bild)', special: 'BODYMAP' }, // NEU
-    { label: 'Immobilisation / Schienung', special: 'IMMO' }, // NEU
+    { label: 'Bodycheck (Bild)', special: 'BODYMAP' },
+    { label: 'pDMS prüfen', token: 'pDMS Kontrolle' }, // <--- UND HIER AUCH SINNVOLL
+    { label: 'Immobilisation / Schienung', special: 'IMMO' },
     { label: 'Wärmeerhalt', token: 'Wärmeerhalt' },
     { label: 'Temp messen', token: 'Temperatur messen' },
     { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' }

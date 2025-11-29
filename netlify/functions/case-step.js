@@ -1,8 +1,8 @@
 /**
  * Netlify Function: case-step
  * Fixes: Zugang/Volumen Logik, Notarzt, SAMPLER Info, SpO2 Visibility
- * + Neu: Intelligentes Debriefing (Diagnose-Check)
- * + Neu: Trauma-Features (Immobilisation, Visueller Bodycheck)
+ * + Neu: Intelligentes Debriefing mit Lob für Einzelmaßnahmen (Trauma-Versorgung)
+ * + Neu: pDMS Logik
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -22,7 +22,7 @@ exports.handler = async (event) => {
     // Neue Flags für Zugang & IV
     state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false };
     
-    // History
+    // History update
     if (ua) {
       state.history.push({ ts: new Date().toISOString(), action: ua });
       if (state.history.length > 50) state.history.shift();
@@ -50,10 +50,9 @@ exports.handler = async (event) => {
     function ok(body) { return { statusCode: 200, headers, body: JSON.stringify(body) }; }
 
     // =================================================================
-    // 0. PRIORITÄT: DIAGNOSE & DEBRIEF
+    // 0. PRIORITÄT: DIAGNOSE & DEBRIEF (Mit "Key Action" Check)
     // =================================================================
     if (ua.includes("Verdachtsdiagnose") || ua.includes("Verdacht:")) { 
-      // User Eingabe speichern: "Verdachtsdiagnose: Hypoglykämie | Prio: hoch"
       state.measurements.diagnosis = ua.replace("Verdachtsdiagnose:", "").trim(); 
       reply.accepted = true; 
       reply.evaluation = "Verdachtsdiagnose & Priorität dokumentiert.";
@@ -66,38 +65,51 @@ exports.handler = async (event) => {
       const missingSteps = stepsAll.filter(s => !state.steps_done.includes(s));
       const score = state.score;
       
-      // Diagnose-Check
+      // 1. Diagnose-Check
       const userDxRaw = (state.measurements.diagnosis || "").toLowerCase();
       const correctKeys = state.hidden?.diagnosis_keys || [];
-      // Prüft ob eines der Keywords in der User-Diagnose vorkommt
       const isDxCorrect = correctKeys.some(key => userDxRaw.includes(key.toLowerCase()));
+
+      // 2. Key Actions Check (Was wurde GUT gemacht?)
+      const actionsDone = state.history.map(h => h.action.toLowerCase());
+      const hasImmo = actionsDone.some(a => a.includes("immobilisation"));
+      const hasDMS  = actionsDone.some(a => a.includes("pdms") || a.includes("dms"));
+      const hasO2   = actionsDone.some(a => a.includes("o2") || a.includes("sauerstoff"));
+      const hasAccess = state.measurements.iv_access;
 
       let status = "Bestanden";
       let summary = "";
 
-      // Logik für Status-Text
+      // Logik für Status-Text (Gesamtbewertung)
       if (missingSteps.length > 0) {
-        if (isDxCorrect) {
-             status = "Diagnose korrekt (Prozess unvollständig)";
-        } else {
-             status = "Nicht bestanden";
-        }
-        summary = `Es wurden nicht alle Phasen durchlaufen.\nFehlende: ${missingSteps.join(', ')}`;
+        status = "Nicht bestanden (Struktur)";
+        if(isDxCorrect) status = "Diagnose korrekt (Struktur fehlt)";
+        summary = `Das ABCDE-Schema wurde nicht vollständig durchlaufen.\nFehlende Phasen: ${missingSteps.join(', ')}`;
       } else if (score < 6) {
-        status = isDxCorrect ? "Diagnose korrekt (Maßnahmen knapp)" : "Teilweise bestanden";
-        summary = `Struktur ok, aber zu wenig Maßnahmen (Score ${score}).`;
+        status = "Teilweise bestanden";
+        summary = `Struktur eingehalten, aber zu wenig Maßnahmen (Score ${score}).`;
       } else {
-        status = isDxCorrect ? "Hervorragend (Diagnose & Prozess)" : "Bestanden (Prozess sauber)";
-        summary = `Sehr gut! Struktur und Maßnahmen passen (Score ${score}).`;
+        status = isDxCorrect ? "Hervorragend" : "Bestanden";
+        summary = `Gute Struktur und Maßnahmen (Score ${score}).`;
       }
 
+      // POSITIVES FEEDBACK (Das fehlte vorher!)
+      summary += "\n\n--- Analyse der Maßnahmen ---";
+      
+      if (hasImmo) summary += "\n✅ Trauma-Versorgung: Die Fraktur wurde korrekt immobilisiert.";
+      else if (state.specialty === 'trauma') summary += "\n❌ Trauma: Es wurde keine Schienung durchgeführt.";
+
+      if (hasDMS) summary += "\n✅ Sicherheit: pDMS-Kontrolle wurde durchgeführt.";
+      
+      if (hasO2 && parseFloat(state.vitals.SpO2) < 94) summary += "\n✅ Therapie: Sauerstoffgabe war indiziert und erfolgte.";
+      
       // Diagnose Feedback
       if (state.measurements.diagnosis) {
         summary += `\n\nDeine Diagnose: ${state.measurements.diagnosis}`;
         if (isDxCorrect) {
             summary += `\n✅ Volltreffer! Das Krankheitsbild wurde korrekt erkannt.`;
         } else {
-            summary += `\n⚠️ Die Diagnose weicht vom erwarteten Bild ab (Erwartet ähnliches wie: ${correctKeys[0] || '?'}).`;
+            summary += `\n⚠️ Die Diagnose weicht vom erwarteten Bild ab (Erwartet u.a.: ${correctKeys[0] || '?'}).`;
         }
       } else {
         summary += `\n\nHinweis: Keine Verdachtsdiagnose dokumentiert.`;
@@ -140,7 +152,6 @@ exports.handler = async (event) => {
     if (curSpO2 < 92 && !hasO2 && state.action_count % 3 === 0) {
         const newSpO2 = Math.max(70, curSpO2 - 2);
         updVitals({ SpO2: newSpO2 });
-        // Zeige genauen Wert nur, wenn SpO2 bereits gemessen wurde
         if (state.measurements.vitals?.SpO2) {
              reply.finding = (reply.finding || "") + `\n⚠️ Patient wirkt zyanotischer (SpO₂ fällt auf ${newSpO2}%).`;
         } else {
@@ -151,8 +162,6 @@ exports.handler = async (event) => {
     // =================================================================
     // 3. I.V. ZUGANG & VOLUMEN & NOTARZT
     // =================================================================
-    
-    // i.V. Zugang
     if (/zugang/.test(low) && /legen/.test(low)) {
         state.measurements.iv_access = true;
         reply.accepted = true;
@@ -160,8 +169,6 @@ exports.handler = async (event) => {
         touchStep("C");
         return ok(reply);
     }
-
-    // Volumen (Check auf Zugang)
     if (/volumen/.test(low)) {
         if (!state.measurements.iv_access) {
             reply.unsafe = true;
@@ -174,42 +181,59 @@ exports.handler = async (event) => {
         touchStep("C");
         return ok(reply);
     }
-
-    // Notarzt
     if (/notarzt/.test(low) && /nachfordern/.test(low)) {
-        // "Notarzt nachfordern: <Grund>"
         const reason = ua.split(":")[1] || "";
         reply.accepted = true;
         reply.evaluation = `Notarzt (NEF) nachgefordert.`;
         reply.finding = `Leitstelle bestätigt. Eintreffen in ca. 8-12 Min. (Grund: ${reason.trim()})`;
-        touchStep("C"); // Oder Organisation
+        touchStep("C"); 
         return ok(reply);
     }
 
     // =================================================================
-    // 4. NEUE FEATURES: TRAUMA (Immobilisation & Visual Bodycheck)
+    // 4. NEUE FEATURES: TRAUMA (Immobilisation & Visual Bodycheck & pDMS)
     // =================================================================
     
+    // pDMS LOGIK
+    if (/pdms|dms/.test(low) && !/immobilisation/.test(low)) {
+        reply.accepted = true;
+        const hasImmo = state.history.some(h => h.action.includes('Immobilisation'));
+        const dxKeys = (H.diagnosis_keys || []).join(' ').toLowerCase();
+        let finding = "";
+
+        if (dxKeys.includes("fraktur") || dxKeys.includes("unterarm") || dxKeys.includes("schenkel")) {
+            if (!hasImmo) {
+                finding = "DMS vor Schienung: Pulse tastbar. Motorik schmerzbedingt eingeschränkt. Sensibilität: leichtes Kribbeln/Taubheitsgefühl distal der Fraktur.";
+                reply.evaluation = "C/E: pDMS Ausgangswert erhoben.";
+            } else {
+                finding = "DMS nach Schienung: Pulse kräftig tastbar. Motorik und Sensibilität intakt (Kribbeln rückläufig). Patient gibt Schmerzlinderung an.";
+                reply.evaluation = "C/E: pDMS Verlaufskontrolle.";
+            }
+        } else {
+            finding = "DMS an allen Extremitäten unauffällig. Keine Seitendifferenz.";
+            reply.evaluation = "pDMS geprüft.";
+        }
+        reply.finding = finding;
+        touchStep("C");
+        return ok(reply);
+    }
+
     // IMMOBILISATION LOGIK
     if (ua.includes('Immobilisation:')) {
-        // Format: "Immobilisation: [Material] an [Ort]"
         const parts = ua.split(':');
         const detail = parts[1] || "";
-        
         reply.accepted = true;
         reply.evaluation = `Maßnahme durchgeführt: ${detail}`;
         
-        // Intelligente Antwort basierend auf Ort
         if (detail.includes("Arm") || detail.includes("Bein")) {
-             reply.finding = "Fraktur stabilisiert. Schmerzen laut Patient deutlich gebessert (NRS sinkt). DMS intakt.";
+             reply.finding = "Fraktur stabilisiert. Schmerzen laut Patient deutlich gebessert (NRS sinkt).";
         } else if (detail.includes("Stifneck") || detail.includes("HWS")) {
              reply.finding = "HWS immobilisiert. Patient toleriert die Maßnahme.";
         } else if (detail.includes("Becken")) {
-             reply.finding = "Beckenschlinge angelegt, Kompression hergestellt. Kreislauf stabilisiert sich ggf. leicht.";
+             reply.finding = "Beckenschlinge angelegt, Kompression hergestellt.";
         } else {
              reply.finding = "Ruhigstellung erfolgt.";
         }
-        
         touchStep("E"); 
         return ok(reply);
     }
@@ -226,18 +250,12 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // 5. SCHEMATA (SAMPLER, 4S)
+    // 5. SCHEMATA
     // =================================================================
-    
-    // SAMPLER Info (für den Modal-Button)
     if (/sampler info/.test(low)) {
       reply.accepted = true;
-      const s = state.anamnesis?.SAMPLER || {};
-      // Liefert die reinen Daten, keine Bewertung
       return ok(reply);
     }
-
-    // SAMPLER Doku (Abschluss)
     if (/sampler doku/.test(low)) {
       reply.accepted = true;
       const s = state.anamnesis?.SAMPLER || {};
@@ -249,7 +267,6 @@ exports.handler = async (event) => {
       reply.finding = content; 
       return ok(reply);
     }
-
     if (/4s dokumentiert/.test(low)) {
       reply.accepted = true;
       state.measurements.schemas['4S'] = true;
@@ -259,14 +276,12 @@ exports.handler = async (event) => {
       reply.finding = `Sicherheit: ${text(s4.sicherheit)}\nSzene: ${text(s4.szene)}\nSichtung: ${text(s4.sichtung_personen)}\nSupport: ${text(s4.support_empfehlung)}`;
       return ok(reply);
     }
-    
     if (/4s info/.test(low)) {
       const s = state.scene_4s || {};
       reply.finding = `Sicherheit: ${s.sicherheit||'-'}\nSzene: ${s.szene||'-'}`;
       reply.accepted = true;
       return ok(reply);
     }
-    
     if (/schmerz info/.test(low)) {
         const p = H.pain || {};
         reply.finding = `Patient angabe: NRS ${p.nrs || '?'} (${p.ort || 'unbekannt'})`;
@@ -277,14 +292,11 @@ exports.handler = async (event) => {
     // =================================================================
     // STANDARD LOGIK (XABCDE)
     // =================================================================
-    
-    // X
     if (/x unauff|keine.*blutung/.test(low)) { reply.accepted=true; reply.evaluation="X: Keine bedrohliche Blutung."; touchStep("X"); return ok(reply); }
     if (/druckverband|tourniquet/.test(low)) { reply.accepted=true; reply.evaluation="X: Blutung gestoppt."; touchStep("X"); return ok(reply); }
     if (/beckenschlinge/.test(low)) { reply.accepted=true; reply.evaluation="Beckenschlinge angelegt."; touchStep("C"); return ok(reply); }
     if (/hämostyptika/.test(low)) { reply.accepted=true; reply.evaluation="Hämostyptikum genutzt."; touchStep("X"); return ok(reply); }
     
-    // A
     if (/mund|mundraum/.test(low)) { reply.accepted=true; reply.finding=H.mouth||"o.B."; reply.evaluation="A: Mundraum inspiziert."; touchStep("A"); return ok(reply); }
     if (/absaugen/.test(low)) { reply.accepted=true; reply.evaluation="Atemwege abgesaugt."; touchStep("A"); return ok(reply); }
     if (/guedel/.test(low)) { reply.accepted=true; reply.evaluation="Guedel eingelegt."; touchStep("A"); return ok(reply); }
@@ -295,9 +307,7 @@ exports.handler = async (event) => {
       reply.accepted=true; reply.evaluation="Beatmung gestartet."; touchStep("A"); return ok(reply); 
     }
     
-    // B
     if (/spo2|sättigung/.test(low)) { 
-      // Hier Flag setzen: SpO2 ist jetzt sichtbar!
       state.measurements.vitals.SpO2 = true;
       updVitals({SpO2:state.vitals.SpO2||baseVitals.SpO2}); 
       reply.accepted=true; reply.evaluation="B: SpO2 gemessen."; touchStep("B"); return ok(reply); 
@@ -310,7 +320,6 @@ exports.handler = async (event) => {
       reply.accepted=true; reply.finding=H.lung||"o.B."; reply.evaluation="B: Auskultiert."; touchStep("B"); return ok(reply); 
     }
 
-    // C
     if (/rr|blutdruck/.test(low)) { 
       state.measurements.vitals.RR = true;
       updVitals({RR:state.vitals.RR||baseVitals.RR}); reply.accepted=true; reply.evaluation="C: RR gemessen."; touchStep("C"); return ok(reply); 
@@ -321,18 +330,15 @@ exports.handler = async (event) => {
     }
     if (/ekg/.test(low)) { reply.accepted=true; reply.finding=H.ekg12||"Sinus"; reply.evaluation="C: EKG geschrieben."; touchStep("C"); return ok(reply); }
 
-    // D
     if (/gcs/.test(low)) { state.measurements.vitals.GCS=true; updVitals({GCS:state.vitals.GCS||15}); reply.accepted=true; reply.evaluation="D: GCS erhoben."; touchStep("D"); return ok(reply); }
     if (/pupillen/.test(low)) { reply.accepted=true; reply.finding=H.pupils||"Isokor"; reply.evaluation="D: Pupillen gecheckt."; touchStep("D"); return ok(reply); }
     if (/bz|blutzucker/.test(low)) { state.measurements.vitals.BZ=true; updVitals({BZ:state.vitals.BZ||100}); reply.accepted=true; reply.evaluation="D: BZ gemessen."; touchStep("D"); return ok(reply); }
     if (/befast info/.test(low)) { reply.accepted=true; reply.finding=H.befast||"negativ"; touchStep("D"); return ok(reply); }
     if (/befast doku/.test(low)) { reply.accepted=true; reply.evaluation="BE-FAST dokumentiert."; touchStep("D"); return ok(reply); }
 
-    // E
     if (/bodycheck/.test(low)) { reply.accepted=true; reply.finding=(H.skin||"o.B.")+" "+(H.injuries?.join(',')||""); reply.evaluation="E: Bodycheck."; touchStep("E"); return ok(reply); }
     if (/temp/.test(low)) { state.measurements.vitals.Temp=true; updVitals({Temp:state.vitals.Temp||36.5}); reply.accepted=true; reply.evaluation="E: Temp gemessen."; touchStep("E"); return ok(reply); }
     
-    // Trennung Lagerung vs. Wärme
     if (/oberkörper|lagerung|lagern/.test(low) && /hoch/.test(low)) { 
         const cur = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
         if(cur < 98) updVitals({ SpO2: Math.min(100, cur + 2) });
@@ -348,7 +354,6 @@ exports.handler = async (event) => {
         touchStep("E"); 
         return ok(reply); 
     }
-    
     if (/nrs/.test(low)) { reply.accepted=true; reply.evaluation="Schmerz doku."; return ok(reply); }
 
     // Fallback
