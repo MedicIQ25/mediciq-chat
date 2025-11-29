@@ -12,23 +12,19 @@
 <main class="page">
   <section class="chat-container" aria-label="Fallbeispiele (Click-UI)">
     
-    <div class="header-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
-        <h1 style="margin:0; font-size:1.5rem; color:#0f766e;">medicIQ – Fallbeispiele</h1>
+    <div class="header-row">
+        <h1 class="logo-title">medicIQ – Fallbeispiele</h1>
         
-        <div class="controls-right" style="display:flex; gap:10px; align-items:center;">
-            <button id="btnSound" class="mode-toggle" title="Sprachausgabe" style="background:transparent; border:1px solid #64748b; border-radius:6px; cursor:pointer; padding:4px 8px; color:inherit;">🔇 Aus</button>
-            
-            <button id="btnDark" class="mode-toggle" title="Nachtmodus" style="background:transparent; border:1px solid #64748b; border-radius:6px; cursor:pointer; padding:4px 8px; color:inherit;">🌙</button>
-            
-            <button id="btnPrint" class="mode-toggle" title="Drucken" style="background:transparent; border:1px solid #64748b; border-radius:6px; cursor:pointer; padding:4px 8px; color:inherit;">🖨️</button>
-            
-            <div id="missionTimer" class="timer-badge hidden" style="background:#0f172a; color:#fff; font-family:monospace; padding:5px 10px; border-radius:6px; font-weight:bold;">00:00</div>
+        <div class="controls-right">
+            <button id="btnSound" class="mode-toggle" title="Sprachausgabe">🔇 Aus</button>
+            <button id="btnDark" class="mode-toggle" title="Nachtmodus">🌙</button>
+            <button id="btnPrint" class="mode-toggle" title="Drucken">🖨️</button>
+            <div id="missionTimer" class="timer-badge hidden">00:00</div>
         </div>
     </div>
 
     <div class="setup-container">
-      
-      <div class="setup-row" id="specRow">
+      <div class="setup-row mb-2">
         <div class="setup-left">
           <span class="setup-label">Fachrichtung:</span>
           <button class="spec-chip active" data-spec="internistisch">Internistisch</button>
@@ -39,23 +35,21 @@
       </div>
 
       <div class="setup-row control-row">
-        <div class="setup-left">
-          <label class="setup-label" for="roleSel">Rolle:</label>
-          <select id="roleSel" class="role-select" disabled>
-            <option value="RS" selected>RS</option>
-          </select>
+        <div class="control-group">
+            <label for="roleSel">Rolle:</label>
+            <select id="roleSel" class="role-select" disabled>
+                <option value="RS" selected>RS</option>
+            </select>
+            
+            <button id="startCase" class="btn primary">Neuen Fall starten</button>
+            <button id="finishCase" class="btn danger hidden">Fall beenden (Übergabe)</button>
         </div>
-        <div class="setup-right">
-          <button id="startCase" class="btn">Neuen Fall starten</button>
-          <button id="finishCase" class="btn danger hidden">Fall beenden (Übergabe)</button>
+        
+        <div class="status-group">
+            <span id="caseStatus" class="status-text">Kein Fall aktiv.</span>
+            <span id="caseScore" class="score-badge">Score: 0</span>
         </div>
       </div>
-
-    </div>
-
-    <div class="status-row" role="status" aria-live="polite">
-      <div id="caseStatus">Kein Fall aktiv.</div>
-      <div id="caseScore">Score: 0</div>
     </div>
 
     <div class="vitals" aria-label="Vitalwerte Monitor">
@@ -110,7 +104,6 @@
       <button class="tab" data-tab="C">C – Circulation</button>
       <button class="tab" data-tab="D">D – Disability</button>
       <button class="tab" data-tab="E">E – Exposure</button>
-      
       <button id="btnGlobalNA" class="na-btn">📞 Notarzt</button>
     </div>
     
@@ -149,216 +142,65 @@
 </main>
 
 <div id="modalBackdrop" class="modal-backdrop" style="display:none;"></div>
-
 <div id="modalAF" class="modal" style="display:none;">
   <div class="modal-head">Atemfrequenz zählen (30s)</div>
-  <div class="modal-body">
-    <div class="af-ui"><div><span id="afTimer">30</span>s</div><div><span id="afCount">0</span> x</div></div>
-  </div>
-  <div class="modal-actions">
-    <button id="afTap" class="btn secondary">Atemzug</button>
-    <button id="afStart" class="btn">Start</button>
-    <button id="afCancel" class="btn danger">Abbrechen</button>
-  </div>
+  <div class="modal-body"><div class="af-ui"><div><span id="afTimer">30</span>s</div><div><span id="afCount">0</span> x</div></div></div>
+  <div class="modal-actions"><button id="afTap" class="btn secondary">Atemzug</button><button id="afStart" class="btn">Start</button><button id="afCancel" class="btn danger">Abbrechen</button></div>
 </div>
-
 <div id="modalNRS" class="modal" style="display:none;">
   <div class="modal-head">Schmerzskala (NRS 0–10)</div>
-  <div class="modal-body">
-    <div id="nrsInfo" class="small muted"></div>
-    <input id="nrsRange" type="range" min="0" max="10" step="1" value="0" />
-    <div class="nrs-val">Wert: <b id="nrsVal">0</b></div>
-  </div>
-  <div class="modal-actions">
-    <button id="nrsFetch" class="btn secondary">Infos abrufen</button>
-    <button id="nrsOk" class="btn">Übernehmen</button>
-    <button id="nrsCancel" class="btn secondary">Abbrechen</button>
-  </div>
+  <div class="modal-body"><div id="nrsInfo" class="small muted"></div><input id="nrsRange" type="range" min="0" max="10" step="1" value="0" /><div class="nrs-val">Wert: <b id="nrsVal">0</b></div></div>
+  <div class="modal-actions"><button id="nrsFetch" class="btn secondary">Infos abrufen</button><button id="nrsOk" class="btn">Übernehmen</button><button id="nrsCancel" class="btn secondary">Abbrechen</button></div>
 </div>
-
 <div id="modalBEFAST" class="modal" style="display:none;">
   <div class="modal-head">BE-FAST Check</div>
-  <div class="modal-body befast-grid">
-    <div id="befastInfo" class="small muted"></div>
-    <label><input type="checkbox" id="b_face" /> B – Balance</label>
-    <label><input type="checkbox" id="e_eyes" /> E – Eyes</label>
-    <label><input type="checkbox" id="f_face" /> F – Face</label>
-    <label><input type="checkbox" id="a_arm"  /> A – Arm</label>
-    <label><input type="checkbox" id="s_speech" /> S – Speech</label>
-    <label>Last known well: <input type="time" id="t_time" /></label>
-  </div>
-  <div class="modal-actions">
-    <button id="befastFetch" class="btn secondary">Infos abrufen</button>
-    <button id="befastOk" class="btn">Dokumentieren</button>
-    <button id="befastCancel" class="btn secondary">Abbrechen</button>
-  </div>
+  <div class="modal-body befast-grid"><div id="befastInfo" class="small muted"></div><label><input type="checkbox" id="b_face" /> B – Balance</label><label><input type="checkbox" id="e_eyes" /> E – Eyes</label><label><input type="checkbox" id="f_face" /> F – Face</label><label><input type="checkbox" id="a_arm"  /> A – Arm</label><label><input type="checkbox" id="s_speech" /> S – Speech</label><label>Last known well: <input type="time" id="t_time" /></label></div>
+  <div class="modal-actions"><button id="befastFetch" class="btn secondary">Infos abrufen</button><button id="befastOk" class="btn">Dokumentieren</button><button id="befastCancel" class="btn secondary">Abbrechen</button></div>
 </div>
-
 <div id="modalSampler" class="modal" style="display:none;">
   <div class="modal-head">SAMPLER</div>
-  <div class="modal-body form-grid">
-    <div id="samplerInfo" class="small muted"></div>
-    <label>S - Symptome <input id="s_sympt" /></label>
-    <label>A - Allergien <input id="s_allerg" /></label>
-    <label>M - Medikamente <input id="s_med" /></label>
-    <label>P - Patientenveorgeschichte <input id="s_hist" /></label>
-    <label>L - Letzte Mahlzeit/Einnahme <input id="s_last" /></label>
-    <label>E - Ereignis <input id="s_events" /></label>
-    <label>R - Risikofaktoren <input id="s_risk" /></label>
-  </div>
-  <div class="modal-actions">
-    <button id="samplerFetch" class="btn secondary">Infos abrufen</button>
-    <button id="samplerOk" class="btn">Dokumentieren</button>
-    <button id="samplerCancel" class="btn secondary">Abbrechen</button>
-  </div>
+  <div class="modal-body form-grid"><div id="samplerInfo" class="small muted"></div><label>S - Symptome <input id="s_sympt" /></label><label>A - Allergien <input id="s_allerg" /></label><label>M - Medikamente <input id="s_med" /></label><label>P - Patientenveorgeschichte <input id="s_hist" /></label><label>L - Letzte Mahlzeit/Einnahme <input id="s_last" /></label><label>E - Ereignis <input id="s_events" /></label><label>R - Risikofaktoren <input id="s_risk" /></label></div>
+  <div class="modal-actions"><button id="samplerFetch" class="btn secondary">Infos abrufen</button><button id="samplerOk" class="btn">Dokumentieren</button><button id="samplerCancel" class="btn secondary">Abbrechen</button></div>
 </div>
-
 <div id="modal4S" class="modal" style="display:none;">
   <div class="modal-head">4S-Schema</div>
-  <div class="modal-body form-grid">
-    <div id="s4Info" class="small muted"></div>
-    <label><input type="checkbox" id="s1" /> Sicherheit</label>
-    <label><input type="checkbox" id="s2" /> Szene</label>
-    <label><input type="checkbox" id="s3" /> Sichtung</label>
-    <label><input type="checkbox" id="s4" /> Support</label>
-  </div>
-  <div class="modal-actions">
-    <button id="s4Fetch" class="btn secondary">Infos abrufen</button>
-    <button id="s4Ok" class="btn">Dokumentieren</button>
-    <button id="s4Cancel" class="btn secondary">Abbrechen</button>
-  </div>
+  <div class="modal-body form-grid"><div id="s4Info" class="small muted"></div><label><input type="checkbox" id="s1" /> Sicherheit</label><label><input type="checkbox" id="s2" /> Szene</label><label><input type="checkbox" id="s3" /> Sichtung</label><label><input type="checkbox" id="s4" /> Support</label></div>
+  <div class="modal-actions"><button id="s4Fetch" class="btn secondary">Infos abrufen</button><button id="s4Ok" class="btn">Dokumentieren</button><button id="s4Cancel" class="btn secondary">Abbrechen</button></div>
 </div>
-
 <div id="modalO2" class="modal" style="display:none;">
   <div class="modal-head">Sauerstoffgabe</div>
-  <div class="modal-body form-grid">
-    <label>Gerät:
-      <select id="o2Device">
-        <option>Nasenbrille (1–6 l/min)</option>
-        <option>Einfache Maske (5–10 l/min)</option>
-        <option>Maske mit Reservoir (10–15 l/min)</option>
-        <option>Beutel-Maske (15 l/min)</option>
-      </select>
-    </label>
-    <label>Flow: <span id="o2FlowVal">0</span> l/min
-      <input id="o2Flow" type="range" min="0" max="15" step="1" value="0" />
-    </label>
-  </div>
-  <div class="modal-actions">
-    <button id="o2Ok" class="btn">Geben</button>
-    <button id="o2Cancel" class="btn secondary">Abbrechen</button>
-  </div>
+  <div class="modal-body form-grid"><label>Gerät:<select id="o2Device"><option>Nasenbrille (1–6 l/min)</option><option>Einfache Maske (5–10 l/min)</option><option>Maske mit Reservoir (10–15 l/min)</option><option>Beutel-Maske (15 l/min)</option></select></label><label>Flow: <span id="o2FlowVal">0</span> l/min<input id="o2Flow" type="range" min="0" max="15" step="1" value="0" /></label></div>
+  <div class="modal-actions"><button id="o2Ok" class="btn">Geben</button><button id="o2Cancel" class="btn secondary">Abbrechen</button></div>
 </div>
-
 <div id="modalNA" class="modal" style="display:none;">
   <div class="modal-head">Notarzt nachfordern</div>
-  <div class="modal-body">
-    <p>Begründung:</p>
-    <textarea id="naReason" rows="3" style="width:100%"></textarea>
-  </div>
-  <div class="modal-actions">
-    <button id="naOk" class="btn">Rufen</button>
-    <button id="naCancel" class="btn secondary">Abbrechen</button>
-  </div>
+  <div class="modal-body"><p>Begründung:</p><textarea id="naReason" rows="3" style="width:100%"></textarea></div>
+  <div class="modal-actions"><button id="naOk" class="btn">Rufen</button><button id="naCancel" class="btn secondary">Abbrechen</button></div>
 </div>
-
 <div id="modalDx" class="modal" style="display:none;">
   <div class="modal-head">Verdachtsdiagnose</div>
-  <div class="modal-body form-grid">
-    <select id="dxSpec"><option value="internistisch">Internistisch</option><option value="neurologisch">Neurologisch</option><option value="trauma">Trauma</option><option value="paediatrisch">Pädiatrisch</option></select>
-    <select id="dxSelect"></select>
-    <select id="dxPrio"><option>hoch (rot)</option><option>mittel (gelb)</option><option>niedrig (grün)</option></select>
-    <textarea id="dxNote" rows="2" placeholder="Bemerkung..."></textarea>
-  </div>
-  <div class="modal-actions">
-    <button id="dxOk" class="btn">Speichern</button>
-    <button id="dxCancel" class="btn secondary">Abbrechen</button>
-  </div>
+  <div class="modal-body form-grid"><select id="dxSpec"><option value="internistisch">Internistisch</option><option value="neurologisch">Neurologisch</option><option value="trauma">Trauma</option><option value="paediatrisch">Pädiatrisch</option></select><select id="dxSelect"></select><select id="dxPrio"><option>hoch (rot)</option><option>mittel (gelb)</option><option>niedrig (grün)</option></select><textarea id="dxNote" rows="2" placeholder="Bemerkung..."></textarea></div>
+  <div class="modal-actions"><button id="dxOk" class="btn">Speichern</button><button id="dxCancel" class="btn secondary">Abbrechen</button></div>
 </div>
-
 <div id="modalImmo" class="modal" style="display:none;">
   <div class="modal-head">Immobilisation & Schienung</div>
-  <div class="modal-body form-grid">
-    <label>Ort:
-      <select id="immoLoc">
-        <option value="HWS">HWS (Hals)</option>
-        <option value="Schulter">Schulter</option>
-        <option value="Arm rechts" selected>Arm rechts</option>
-        <option value="Arm links">Arm links</option>
-        <option value="Bein rechts">Bein rechts</option>
-        <option value="Bein links">Bein links</option>
-        <option value="Becken">Becken</option>
-      </select>
-    </label>
-    <label>Material:
-      <select id="immoMat">
-        <option value="Sam-Splint">SAM-Splint</option>
-        <option value="Vakuumschiene">Vakuumschiene</option>
-        <option value="Dreiecktuch">Dreiecktuch</option>
-        <option value="Stifneck">Stifneck (HWS-Schiene)</option>
-        <option value="Beckenrundschlinge">Beckenschlinge</option>
-        <option value="Vakuummatratze">Vakuummatratze (Ganzkörper)</option>
-      </select>
-    </label>
-    <div class="small muted">Hinweis: DMS-Kontrolle erfolgt automatisch nach Anlage.</div>
-  </div>
-  <div class="modal-actions">
-    <button id="immoOk" class="btn">Anlegen</button>
-    <button id="immoCancel" class="btn secondary">Abbrechen</button>
-  </div>
+  <div class="modal-body form-grid"><label>Ort:<select id="immoLoc"><option value="HWS">HWS (Hals)</option><option value="Schulter">Schulter</option><option value="Arm rechts" selected>Arm rechts</option><option value="Arm links">Arm links</option><option value="Bein rechts">Bein rechts</option><option value="Bein links">Bein links</option><option value="Becken">Becken</option></select></label><label>Material:<select id="immoMat"><option value="Sam-Splint">SAM-Splint</option><option value="Vakuumschiene">Vakuumschiene</option><option value="Dreiecktuch">Dreiecktuch</option><option value="Stifneck">Stifneck (HWS-Schiene)</option><option value="Beckenrundschlinge">Beckenschlinge</option><option value="Vakuummatratze">Vakuummatratze (Ganzkörper)</option></select></label><div class="small muted">Hinweis: DMS-Kontrolle erfolgt automatisch nach Anlage.</div></div>
+  <div class="modal-actions"><button id="immoOk" class="btn">Anlegen</button><button id="immoCancel" class="btn secondary">Abbrechen</button></div>
 </div>
-
 <div id="modalBodyMap" class="modal" style="display:none;">
   <div class="modal-head">Körper-Schema (Verletzungen)</div>
-  <div class="modal-body" style="text-align:center;">
-    <svg width="200" height="350" viewBox="0 0 200 400" style="margin:auto; display:block; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.1));">
-      <style>
-        .body-part { stroke: #475569; stroke-width: 2; transition: fill 0.3s; cursor: pointer; }
-        .body-part:hover { opacity: 0.8; }
-      </style>
-      <path id="body_head" class="body-part" fill="#f1f5f9" d="M100,20 C85,20 75,35 75,55 C75,80 125,80 125,55 C125,35 115,20 100,20 Z" />
-      <path id="body_torso" class="body-part" fill="#f1f5f9" d="M85,85 L115,85 L125,180 L75,180 Z" />
-      <path id="body_arm_r" class="body-part" fill="#f1f5f9" d="M75,90 L45,100 L35,170 L55,175 L75,100 Z" />
-      <path id="body_arm_l" class="body-part" fill="#f1f5f9" d="M125,90 L155,100 L165,170 L145,175 L125,100 Z" />
-      <path id="body_leg_r" class="body-part" fill="#f1f5f9" d="M80,185 L70,280 L65,360 L90,360 L95,185 Z" />
-      <path id="body_leg_l" class="body-part" fill="#f1f5f9" d="M120,185 L130,280 L135,360 L110,360 L105,185 Z" />
-    </svg>
-    <div id="bodyMapText" style="margin-top:15px; font-weight:bold; color:#b91c1c; font-size:1.1rem;"></div>
-  </div>
-  <div class="modal-actions">
-    <button id="bodyMapClose" class="btn secondary">Schließen</button>
-  </div>
+  <div class="modal-body" style="text-align:center;"><svg width="200" height="350" viewBox="0 0 200 400" style="margin:auto; display:block; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.1));"><style>.body-part { stroke: #475569; stroke-width: 2; transition: fill 0.3s; cursor: pointer; }.body-part:hover { opacity: 0.8; }</style><path id="body_head" class="body-part" fill="#f1f5f9" d="M100,20 C85,20 75,35 75,55 C75,80 125,80 125,55 C125,35 115,20 100,20 Z" /><path id="body_torso" class="body-part" fill="#f1f5f9" d="M85,85 L115,85 L125,180 L75,180 Z" /><path id="body_arm_r" class="body-part" fill="#f1f5f9" d="M75,90 L45,100 L35,170 L55,175 L75,100 Z" /><path id="body_arm_l" class="body-part" fill="#f1f5f9" d="M125,90 L155,100 L165,170 L145,175 L125,100 Z" /><path id="body_leg_r" class="body-part" fill="#f1f5f9" d="M80,185 L70,280 L65,360 L90,360 L95,185 Z" /><path id="body_leg_l" class="body-part" fill="#f1f5f9" d="M120,185 L130,280 L135,360 L110,360 L105,185 Z" /></svg><div id="bodyMapText" style="margin-top:15px; font-weight:bold; color:#b91c1c; font-size:1.1rem;"></div></div>
+  <div class="modal-actions"><button id="bodyMapClose" class="btn secondary">Schließen</button></div>
 </div>
-
 <div id="modalEKG" class="modal" style="display:none;">
   <div class="modal-head">EKG Monitor (3-Kanal / 12-Kanal)</div>
-  <div class="modal-body" style="text-align:center;">
-    <svg id="ekgSvg" width="400" height="150" viewBox="0 0 400 150" style="background:#000; border:2px solid #333; margin:auto;">
-       <polyline id="ekgLine" points="" fill="none" stroke="#00ff00" stroke-width="2" />
-    </svg>
-    <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e;"></div>
-  </div>
-  <div class="modal-actions">
-    <button id="ekgClose" class="btn secondary">Schließen</button>
-  </div>
+  <div class="modal-body" style="text-align:center;"><svg id="ekgSvg" width="400" height="150" viewBox="0 0 400 150" style="background:#000; border:2px solid #333; margin:auto;"><polyline id="ekgLine" points="" fill="none" stroke="#00ff00" stroke-width="2" /></svg><div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e;"></div></div>
+  <div class="modal-actions"><button id="ekgClose" class="btn secondary">Schließen</button></div>
 </div>
-
 <div id="modalHandover" class="modal" style="display:none;">
   <div class="modal-head">Übergabe (SINNHAFT)</div>
-  <div class="modal-body form-grid">
-    <div class="small muted" style="color:#ef4444; font-weight:bold;">S - Start (Ruhe! Alle bereit?)</div>
-    <label>I - Identifikation <input id="s_ident" placeholder="Name, Alter, (Gewicht)..." /></label>
-    <label>N - Notfallereignis <input id="s_event" placeholder="Was? Wie? Wann? Wo?" /></label>
-    <label>N - Notfallpriorität <input id="s_prio" placeholder="xABCDE, Vitalparameter..." /></label>
-    <label>H - Handlungen <input id="s_action" placeholder="Durchgeführte Maßnahmen, Wirkung..." /></label>
-    <label>A - Anamnese <input id="s_anam" placeholder="SAMPLER, Besonderheiten..." /></label>
-    <div class="small muted" style="margin-top:5px; color:#3b82f6;">F - Fazit (Wiederholung) | T - Teamfragen</div>
-  </div>
-  <div class="modal-actions">
-    <button id="handoverOk" class="btn">Fall abschließen</button>
-    <button id="handoverCancel" class="btn secondary">Abbrechen</button>
-  </div>
+  <div class="modal-body form-grid"><div class="small muted" style="color:#ef4444; font-weight:bold;">S - Start (Ruhe! Alle bereit?)</div><label>I - Identifikation <input id="s_ident" placeholder="Name, Alter, (Gewicht)..." /></label><label>N - Notfallereignis <input id="s_event" placeholder="Was? Wie? Wann? Wo?" /></label><label>N - Notfallpriorität <input id="s_prio" placeholder="xABCDE, Vitalparameter..." /></label><label>H - Handlungen <input id="s_action" placeholder="Durchgeführte Maßnahmen, Wirkung..." /></label><label>A - Anamnese <input id="s_anam" placeholder="SAMPLER, Besonderheiten..." /></label><div class="small muted" style="margin-top:5px; color:#3b82f6;">F - Fazit (Wiederholung) | T - Teamfragen</div></div>
+  <div class="modal-actions"><button id="handoverOk" class="btn">Fall abschließen</button><button id="handoverCancel" class="btn secondary">Abbrechen</button></div>
 </div>
-
 </body>
 </html>

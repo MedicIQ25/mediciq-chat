@@ -20,9 +20,18 @@ body.dark-mode {
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; font: 16px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); transition: 0.3s; }
+/* FIX: 100vh erzwingt volle Höhe, damit Dark Mode unten nicht weiß wird */
+html { height: 100%; }
+body {
+  min-height: 100vh;
+  margin: 0;
+  font: 16px/1.5 system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  transition: 0.3s;
+}
 
-.page { max-width: 1000px; margin: 30px auto; padding: 0 15px 40px; }
+.page { max-width: 1000px; margin: 0 auto; padding: 20px 15px 40px; }
 .chat-container { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; position: relative; z-index: 10; }
 
 /* HEADER & CONTROLS */
@@ -30,8 +39,8 @@ html, body { height: 100%; margin: 0; font: 16px/1.5 system-ui, sans-serif; back
 h1 { margin: 0; font-size: 1.5rem; color: var(--brand); }
 
 .controls-right { display: flex; gap: 8px; align-items: center; }
-.mode-toggle { background: transparent; border: 1px solid var(--muted); color: var(--muted); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
-.mode-toggle:hover { border-color: var(--text); color: var(--text); }
+.mode-toggle { background: transparent; border: 1px solid var(--muted); color: var(--muted); border-radius: 6px; padding: 4px 8px; cursor: pointer; color:inherit !important; border-color: currentColor !important; opacity: 0.7; }
+.mode-toggle:hover { opacity: 1; }
 
 .timer-badge {
     background: #0f172a; color: #fff; font-family: monospace; font-size: 1.3rem; padding: 5px 12px; border-radius: 6px; font-weight: bold;
@@ -40,7 +49,22 @@ h1 { margin: 0; font-size: 1.5rem; color: var(--brand); }
 }
 body.dark-mode .timer-badge { background: #f1f5f9; color: #0f172a; }
 
-/* === HIGH-END MONITOR DISPLAY === */
+/* SETUP SCREEN (NEU: Button neben Select) */
+.setup-container { margin-bottom: 20px; padding: 15px; background: var(--bg); border-radius: 10px; border: 1px solid var(--muted); }
+.setup-row { margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.mb-2 { margin-bottom: 1rem; }
+
+.control-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.role-select { height: 38px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--muted); background: var(--card); color: var(--text); }
+
+.status-group { text-align: right; font-size: 0.9rem; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+.score-badge { font-weight: bold; color: var(--brand); background: var(--bubble-ai); padding: 2px 8px; border-radius: 4px; }
+
+/* Fachrichtung Chips */
+.spec-chip { border: 1px solid var(--muted); background: var(--card); color: var(--text); padding: 6px 12px; border-radius: 99px; cursor: pointer; font-size: 0.9rem; }
+.spec-chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+/* === MONITOR DISPLAY === */
 .vitals {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
@@ -70,13 +94,11 @@ body.dark-mode .timer-badge { background: #f1f5f9; color: #0f172a; }
 .vital-label { font-size: 0.75rem; text-transform: uppercase; color: #888; font-weight: bold; margin-bottom: 4px; }
 .vital-val { font-size: 1.6rem; font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: -1px; }
 
-/* Monitor Colors (Corpuls Style) */
-.v-hr .vital-val { color: #4ade80; text-shadow: 0 0 5px rgba(74, 222, 128, 0.5); } /* Grün Puls */
-.v-spo2 .vital-val { color: #38bdf8; text-shadow: 0 0 5px rgba(56, 189, 248, 0.5); } /* Blau SpO2 */
-.v-rr .vital-val { color: #f87171; } /* Rot RR */
-.v-co2 .vital-val { color: #facc15; } /* Gelb CO2/AF */
+.v-hr .vital-val { color: #4ade80; text-shadow: 0 0 5px rgba(74, 222, 128, 0.5); }
+.v-spo2 .vital-val { color: #38bdf8; text-shadow: 0 0 5px rgba(56, 189, 248, 0.5); }
+.v-rr .vital-val { color: #f87171; }
+.v-co2 .vital-val { color: #facc15; }
 
-/* Alarm Animation */
 @keyframes blinkRed { 0% { background: #111; } 50% { background: #7f1d1d; } 100% { background: #111; } }
 .vital-box.critical { animation: blinkRed 1s infinite; border-color: #ef4444; }
 
@@ -104,12 +126,20 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .schema-btn.primary { background: var(--brand); color: white; border: none; }
 
 /* CHAT & QUEUE */
-.queue { background: var(--bg); padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--muted); display: none; } /* Hidden by default if empty */
+.queue { background: var(--bg); padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--muted); display: none; }
 .queue:not(:empty) { display: block; }
+.queue-item { display: flex; justify-content: space-between; padding: 6px 10px; background: var(--card); border-radius: 6px; margin-bottom: 4px; color: var(--text); border: 1px solid var(--muted); }
 
 .chat-wrap { background: var(--bg); border-radius: 12px; padding: 15px; height: 350px; overflow-y: auto; border: 1px solid var(--muted); }
 .msg { background: var(--card); padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid var(--brand); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
 .msg div { margin-bottom: 4px; }
+
+/* BUTTONS */
+.btn { padding: 10px 20px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; background: var(--brand); color: white; }
+.btn.secondary { background: var(--muted); }
+.btn.danger { background: #dc2626; }
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* MODALS */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(3px); z-index: 2000; }
@@ -118,13 +148,7 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .modal-body { margin-bottom: 20px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
-/* FORM ELEMENTS */
-input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid var(--muted); background: var(--bg); color: var(--text); }
-.btn { padding: 10px 20px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; background: var(--brand); color: white; }
-.btn.secondary { background: var(--muted); }
-.btn.danger { background: #dc2626; }
-
-/* ANIMATED EKG LINE */
+/* EKG ANIM */
 @keyframes ekgMove { 0% { stroke-dashoffset: 400; } 100% { stroke-dashoffset: 0; } }
 .ekg-anim { stroke-dasharray: 400; animation: ekgMove 4s linear infinite; }
 
@@ -133,6 +157,12 @@ input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border-ra
 .small { font-size: 0.85rem; }
 .muted { color: var(--muted); opacity: 0.8; }
 
-/* SETUP SCREEN */
-.setup-container { margin-bottom: 20px; padding: 15px; background: var(--bg); border-radius: 10px; }
-.setup-row { margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+/* PRINT */
+@media print {
+  body { background: #fff; color: #000; }
+  .chat-container, .card, .queue, .modal { box-shadow: none; border: 1px solid #ccc; }
+  .setup-container, .tabs, .schemata-row, .modal-actions, .na-btn, .btn, .controls-right { display: none !important; }
+  .chat-wrap { max-height: none; overflow: visible; border: none; }
+  #missionTimer { border: 1px solid #000; color: #000; background: #fff; display:block !important; }
+  .msg { border: 1px solid #eee; background: #fff; color: #000; }
+}
