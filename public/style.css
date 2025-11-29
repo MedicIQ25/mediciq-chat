@@ -19,7 +19,6 @@ body {
 }
 
 .page { max-width: 980px; margin: 40px auto; padding: 0 16px 40px; }
-/* Z-Index 10 damit Container über Hintergrund liegt */
 .chat-container { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; position: relative; z-index: 10; }
 h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand); }
 
@@ -87,8 +86,26 @@ h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand
 .schema-btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
 
 /* Modals */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); z-index: 900; }
-.modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 12px; padding: 0; width: 90%; max-width: 500px; z-index: 1000; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+.modal-backdrop { 
+  position: fixed; 
+  inset: 0; 
+  background: rgba(0,0,0,0.5); 
+  backdrop-filter: blur(2px); 
+  z-index: 2147483640; /* Extrem hoch, um Netlify zu überlagern */
+}
+.modal { 
+  position: fixed; 
+  left: 50%; 
+  top: 50%; 
+  transform: translate(-50%, -50%); 
+  background: #fff; 
+  border-radius: 12px; 
+  padding: 0; 
+  width: 90%; 
+  max-width: 500px; 
+  z-index: 2147483647; /* Maximum Z-Index */
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3); 
+}
 .modal-head { padding: 12px 16px; font-weight: bold; border-bottom: 1px solid #e2e8f0; }
 .modal-body { padding: 16px; display: grid; gap: 12px; }
 .modal-actions { padding: 12px 16px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 8px; }
@@ -100,5 +117,5 @@ h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand
 .debrief-fail { color: #991b1b; background: #fee2e2; padding: 6px; border-radius: 6px; }
 ul.debrief-list { padding-left: 20px; margin: 6px 0; }
 
-/* UTILITY - MUSS GANZ UNTEN STEHEN */
+/* UTILITY */
 .hidden { display: none !important; }

@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Updated: Trauma & Syntax Fix)
+// medicIQ – App Logic (Updated: pDMS & Color Fix)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -79,7 +79,7 @@ tabs.forEach(t => t.addEventListener('click', () => {
 // Global NA
 document.getElementById('btnGlobalNA')?.addEventListener('click', openNA);
 
-// ------- Actions Panel (Updated E for Trauma) -------
+// ------- Actions Panel (Updated) -------
 const ACTIONS = {
   X: [
     { label: 'Kein bedrohlicher Blutverlust', token: 'X unauffällig' },
@@ -105,7 +105,7 @@ const ACTIONS = {
   C: [
     { label: 'RR messen', token: 'RR messen' },
     { label: 'Puls messen', token: 'Puls messen' },
-    { label: 'pDMS prüfen', token: 'pDMS Kontrolle' }, // <--- NEU HIER
+    { label: 'pDMS prüfen', token: 'pDMS Kontrolle' },
     { label: '12-Kanal-EKG', token: '12-Kanal-EKG' },
     { label: 'i.V. Zugang legen', token: 'i.V. Zugang legen' },
     { label: 'Volumen 500 ml', token: 'Volumen 500 ml' }
@@ -118,7 +118,7 @@ const ACTIONS = {
   E: [
     { label: 'Bodycheck (Text)', token: 'Bodycheck' },
     { label: 'Bodycheck (Bild)', special: 'BODYMAP' },
-    { label: 'pDMS prüfen', token: 'pDMS Kontrolle' }, // <--- UND HIER AUCH SINNVOLL
+    { label: 'pDMS prüfen', token: 'pDMS Kontrolle' },
     { label: 'Immobilisation / Schienung', special: 'IMMO' },
     { label: 'Wärmeerhalt', token: 'Wärmeerhalt' },
     { label: 'Temp messen', token: 'Temperatur messen' },
@@ -135,8 +135,8 @@ function renderPanel(k) {
     b.onclick = () => {
       if(a.special === 'O2') openOxygen();
       else if(a.special === 'NA') openNA();
-      else if(a.special === 'IMMO') openImmo(); // NEU
-      else if(a.special === 'BODYMAP') openBodyMap(); // NEU
+      else if(a.special === 'IMMO') openImmo();
+      else if(a.special === 'BODYMAP') openBodyMap();
       else { queue.push(a); renderQueue(); }
     };
     panel.appendChild(b);
@@ -399,7 +399,6 @@ function openDiagnosis() {
   openModal('modalDx');
 }
 
-// NEU: Trauma Funktionen
 function openImmo() {
   if(!caseState) return;
   $id('immoOk').onclick = () => {
@@ -418,7 +417,8 @@ function openBodyMap() {
   // Reset Colors
   ['body_head','body_torso','body_arm_r','body_arm_l','body_leg_r','body_leg_l'].forEach(id => {
     const el = document.getElementById(id);
-    if(el) el.setAttribute('fill', '#e2e8f0');
+    // Hier nutzen wir setAttribute für den SVG Fill
+    if(el) el.setAttribute('fill', '#f1f5f9');
   });
 
   // Verletzungsort aus caseState holen
@@ -445,4 +445,3 @@ async function openDebrief() {
     addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
   } catch(e){}
 }
-// Klammerfehler behoben (Hier war vorher eine zu viel)
