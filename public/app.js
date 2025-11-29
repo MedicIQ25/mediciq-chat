@@ -1,120 +1,11 @@
 // ===============================================================
-// medicIQ – App Logic (Fixed: Crash Prevention & Layout)
+// medicIQ – App Logic (Fixed Version)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
 const API_CASE_STEP = '/.netlify/functions/case-step';
 
-// UI Elements
-const statusEl  = document.getElementById('caseStatus');
-const scoreEl   = document.getElementById('caseScore');
-const hintCard  = document.getElementById('hintCard');
-const hintText  = document.getElementById('hintText');
-const panel     = document.getElementById('panel');
-const queueList = document.getElementById('queueList');
-const chatLog   = document.getElementById('chatLog');
-const timerEl   = document.getElementById('missionTimer');
-
-// Controls
-const specRow   = document.getElementById('specRow');
-const startBtn  = document.getElementById('startCase');
-const finishBtn = document.getElementById('finishCase');
-const runBtn    = document.getElementById('btnRunQueue');
-const clearBtn  = document.getElementById('btnClearQueue');
-const roleSel   = document.getElementById('roleSel');
-const specButtons = Array.from(document.querySelectorAll('.spec-chip'));
-let selectedSpec  = 'internistisch';
-
-// Settings
-let soundEnabled = false; 
-let isDarkMode = false;
-let availableVoices = [];
-
-window.speechSynthesis.onvoiceschanged = () => {
-    availableVoices = window.speechSynthesis.getVoices();
-};
-
-// State
-let caseState = null;
-const queue = [];
-let timerInterval = null;
-let startTime = null;
-let lastTickTime = 0; 
-
-const visibleVitals = {};
-const vitalsMap = {
-  RR:   document.getElementById('vRR'),
-  SpO2: document.getElementById('vSpO2'),
-  AF:   document.getElementById('vAF'),
-  Puls: document.getElementById('vPuls'),
-  BZ:   document.getElementById('vBZ'),
-  Temp: document.getElementById('vTemp'),
-  GCS:  document.getElementById('vGCS')
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-  renderPanel('X');
-  updateUI(false); 
-});
-
-// === Features ===
-document.getElementById('btnSound')?.addEventListener('click', (e) => {
-    soundEnabled = !soundEnabled;
-    e.target.textContent = soundEnabled ? "🔊 An" : "🔇 Aus";
-    if(availableVoices.length === 0) availableVoices = window.speechSynthesis.getVoices();
-});
-
-document.getElementById('btnDark')?.addEventListener('click', () => {
-    isDarkMode = !isDarkMode;
-    document.body.classList.toggle('dark-mode', isDarkMode);
-});
-
-document.getElementById('btnPrint')?.addEventListener('click', () => window.print());
-
-function speak(text) {
-    if(!soundEnabled || !window.speechSynthesis || !text) return;
-    if(text.length > 300) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'de-DE';
-    let bestVoice = availableVoices.find(v => v.lang === 'de-DE' && v.name.includes('Google'));
-    if (!bestVoice) bestVoice = availableVoices.find(v => v.lang === 'de-DE' && v.name.includes('Natural'));
-    if (!bestVoice) bestVoice = availableVoices.find(v => v.lang === 'de-DE');
-    if (bestVoice) { u.voice = bestVoice; u.pitch = 1.0; u.rate = 1.1; }
-    window.speechSynthesis.speak(u);
-}
-
-specButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    if(caseState) return; 
-    specButtons.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedSpec = btn.dataset.spec || 'internistisch';
-  });
-});
-
-document.querySelectorAll('.schema-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const t = btn.dataset.tool;
-    if(t==='AF_COUNTER') openAFCounter();
-    if(t==='NRS') openNRS();
-    if(t==='BEFAST') openBEFAST();
-    if(t==='SAMPLER') openSampler();
-    if(t==='FOUR_S') openFourS();
-    if(t==='DIAGNOSIS') openDiagnosis();
-    if(t==='DEBRIEF') openDebrief();
-  });
-});
-
-const tabs = Array.from(document.querySelectorAll('.tab'));
-tabs.forEach(t => t.addEventListener('click', () => {
-  tabs.forEach(x => x.classList.remove('active'));
-  t.classList.add('active');
-  renderPanel(t.dataset.tab);
-}));
-
-document.getElementById('btnGlobalNA')?.addEventListener('click', openNA);
-
+// Define CONSTANTS first to avoid access errors
 const ACTIONS = {
   X: [ { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck' }, { label: 'Keine Blutung feststellbar', token: 'X unauffällig' }, { label: 'Druckverband anlegen', token: 'Druckverband' }, { label: 'Tourniquet anlegen', token: 'Tourniquet' }, { label: 'Beckenschlinge anlegen', token: 'Beckenschlinge' }, { label: 'Woundpacking', token: 'Hämostyptikum' } ],
   A: [ { label: 'Esmarch-Handgriff', token: 'Esmarch' }, { label: 'Absaugen', token: 'Absaugen' }, { label: 'Mundraumkontrolle', token: 'Mundraumkontrolle' }, { label: 'Guedel-Tubus', token: 'Guedel' }, { label: 'Wendel-Tubus', token: 'Wendel' }, { label: 'Beutel-Masken-Beatmung', token: 'Beutel-Masken-Beatmung' } ],
@@ -124,87 +15,102 @@ const ACTIONS = {
   E: [ { label: 'Bodycheck (Text)', token: 'Bodycheck' }, { label: 'Bodycheck (Bild)', special: 'BODYMAP' }, { label: 'pDMS prüfen', token: 'pDMS Kontrolle' }, { label: 'Immobilisation / Schienung', special: 'IMMO' }, { label: 'Wärmeerhalt', token: 'Wärmeerhalt' }, { label: 'Temp messen', token: 'Temperatur messen' }, { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' } ]
 };
 
-function renderPanel(k) {
-  panel.innerHTML = '';
-  (ACTIONS[k]||[]).forEach(a => {
-    const b = document.createElement('button');
-    b.className = 'action-card';
-    b.textContent = a.label;
-    b.onclick = () => {
-      if(a.special === 'O2') openOxygen(); else if(a.special === 'NA') openNA(); else if(a.special === 'IMMO') openImmo(); else if(a.special === 'BODYMAP') openBodyMap(); else if(a.special === 'EKG') openEKG(); else { queue.push(a); renderQueue(); }
-    };
-    panel.appendChild(b);
-  });
-}
+// Global Vars
+let caseState = null;
+const queue = [];
+let timerInterval = null;
+let startTime = null;
+let lastTickTime = 0; 
+let soundEnabled = false; 
+let isDarkMode = false;
+let availableVoices = [];
+let selectedSpec = 'internistisch';
+const visibleVitals = {};
 
-function renderQueue() {
-  queueList.innerHTML = '';
-  queue.forEach((it, i) => {
-    const li = document.createElement('li');
-    li.className = 'queue-item';
-    li.innerHTML = `<span>${it.label}</span><button class="btn secondary small">x</button>`;
-    li.querySelector('button').onclick = () => { queue.splice(i,1); renderQueue(); };
-    queueList.appendChild(li);
-  });
-}
-
-function renderVitals() {
-  for(let k in vitalsMap) {
-    const el = vitalsMap[k];
-    const valStr = visibleVitals[k] || '--';
-    el.innerHTML = valStr;
-    const box = el.parentElement; 
-    if(box) {
-        box.classList.remove('critical');
-        const valNum = parseFloat(valStr.match(/\d+/)?.[0] || 0);
-        if (k === 'SpO2' && valNum > 0 && valNum < 90) box.classList.add('critical');
-        if (k === 'RR' && valNum > 0 && valNum < 90) box.classList.add('critical'); 
-        if (k === 'Puls' && valNum > 0 && (valNum < 40 || valNum > 140)) box.classList.add('critical');
-        if (k === 'BZ' && valNum > 0 && valNum < 60) box.classList.add('critical');
+// Wait for DOM
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Init UI
+    renderPanel('X');
+    updateUI(false); 
+    
+    // 2. Load Voices
+    if(window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = () => {
+            availableVoices = window.speechSynthesis.getVoices();
+        };
     }
-  }
+
+    // 3. Attach Listeners Safely
+    bindEvent('btnSound', 'click', (e) => {
+        soundEnabled = !soundEnabled;
+        e.target.textContent = soundEnabled ? "🔊 An" : "🔇 Aus";
+        if(availableVoices.length === 0 && window.speechSynthesis) availableVoices = window.speechSynthesis.getVoices();
+    });
+
+    bindEvent('btnDark', 'click', () => {
+        isDarkMode = !isDarkMode;
+        document.body.classList.toggle('dark-mode', isDarkMode);
+    });
+
+    bindEvent('btnPrint', 'click', () => window.print());
+    
+    bindEvent('startCase', 'click', startCase);
+    
+    bindEvent('finishCase', 'click', openHandover);
+    
+    bindEvent('btnRunQueue', 'click', async () => {
+        if(!caseState) return;
+        while(queue.length) {
+            const it = queue.shift();
+            renderQueue();
+            await stepCase(it.token);
+            await new Promise(r=>setTimeout(r,500));
+        }
+    });
+    
+    bindEvent('btnClearQueue', 'click', () => { queue.length=0; renderQueue(); });
+    
+    bindEvent('btnGlobalNA', 'click', openNA);
+
+    document.querySelectorAll('.spec-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(caseState) return; 
+        document.querySelectorAll('.spec-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedSpec = btn.dataset.spec || 'internistisch';
+      });
+    });
+
+    document.querySelectorAll('.schema-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = btn.dataset.tool;
+        if(t==='AF_COUNTER') openAFCounter();
+        if(t==='NRS') openNRS();
+        if(t==='BEFAST') openBEFAST();
+        if(t==='SAMPLER') openSampler();
+        if(t==='FOUR_S') openFourS();
+        if(t==='DIAGNOSIS') openDiagnosis();
+        if(t==='DEBRIEF') openDebrief();
+      });
+    });
+
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        renderPanel(t.dataset.tab);
+    }));
+});
+
+// Helper to bind events only if element exists
+function bindEvent(id, event, func) {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener(event, func);
 }
 
-function startTimer() {
-  startTime = Date.now();
-  lastTickTime = Date.now(); 
-  timerEl.classList.remove('hidden');
-  timerEl.textContent = "00:00";
-  if(timerInterval) clearInterval(timerInterval);
-  timerInterval = setInterval(() => {
-    const now = Date.now();
-    const diff = Math.floor((now - startTime) / 1000);
-    const m = Math.floor(diff / 60).toString().padStart(2,'0');
-    const s = (diff % 60).toString().padStart(2,'0');
-    timerEl.textContent = `${m}:${s}`;
-    if (now - lastTickTime >= 30000) { 
-        lastTickTime = now;
-        if(caseState && !caseState.measurements?.handover_done) { stepCase('System-Check: 30s vergangen'); }
-    }
-  }, 1000);
-}
-
-function stopTimer() {
-  if(timerInterval) clearInterval(timerInterval);
-}
-
-function updateUI(running) {
-  if (running) {
-    specRow.classList.add('hidden');
-    startBtn.classList.add('hidden');
-    finishBtn.classList.remove('hidden');
-    roleSel.disabled = true;
-  } else {
-    specRow.classList.remove('hidden');
-    startBtn.classList.remove('hidden');
-    finishBtn.classList.add('hidden');
-    roleSel.disabled = false;
-    startBtn.disabled = false;
-    timerEl.classList.add('hidden'); 
-  }
-}
+// --- Logic ---
 
 async function startCase() {
+  const chatLog = document.getElementById('chatLog');
   chatLog.innerHTML = '';
   queue.length = 0;
   renderQueue();
@@ -214,28 +120,30 @@ async function startCase() {
   updateUI(true); 
   startTimer(); 
   
-  const chips = Array.from(document.querySelectorAll('.chip'));
-  chips.forEach(c => c.classList.remove('done','active'));
-  setStatus('Lade Fall...');
-  hintCard.classList.add('hidden');
-  startBtn.disabled = true;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('done','active'));
+  document.getElementById('caseStatus').textContent = 'Lade Fall...';
+  document.getElementById('hintCard').classList.add('hidden');
+  document.getElementById('startCase').disabled = true;
 
   try {
     const r = await fetch(API_CASE_NEW, {
       method:'POST',
-      body: JSON.stringify({ specialty: selectedSpec, role: roleSel.value })
+      body: JSON.stringify({ specialty: selectedSpec, role: 'RS' })
     });
-    if(!r.ok) throw new Error(r.statusText);
+    
+    if(!r.ok) throw new Error("Server Fehler: " + r.statusText);
+    
     const d = await r.json();
     caseState = d.case || d;
-    setStatus(`Aktiv: ${caseState.specialty}`);
-    setScore(0);
+    
+    document.getElementById('caseStatus').textContent = `Aktiv: ${caseState.specialty}`;
+    document.getElementById('caseScore').textContent = 'Score: 0';
     renderProgress([]);
     showHint('Beginne mit XABCDE.');
     addMsg(`<strong>Fallstart:</strong> ${caseState.story}`);
     speak(caseState.story); 
   } catch(e) {
-    // FIX: Fallback hat jetzt eine Story, damit es nicht crasht
+    // FALLBACK LOCAL MODE
     caseState = { 
         id:'local', 
         specialty:selectedSpec, 
@@ -243,13 +151,14 @@ async function startCase() {
         history:[], 
         score:0, 
         vitals:{}, 
-        story: "Offline-Modus: Simulierter Fall ohne Server-Verbindung. Vitals manuell prüfen." 
+        hidden: { ekg_pattern: 'sinus' },
+        story: "⚠️ Offline-Modus: Simulierter Fall ohne Server-Verbindung. Vitals manuell prüfen." 
     };
-    addMsg(`⚠️ Offline/Fehler: ${e.message}. Lokaler Modus aktiv.`);
-    setStatus('Lokal Aktiv');
+    addMsg(`⚠️ Konnte Fall nicht laden (${e.message}). Lokaler Modus aktiv.`);
+    document.getElementById('caseStatus').textContent = 'Lokal Aktiv';
     speak(caseState.story);
   } finally {
-    startBtn.disabled = false;
+    document.getElementById('startCase').disabled = false;
   }
 }
 
@@ -290,7 +199,7 @@ async function stepCase(txt) {
     }
 
     caseState = d.case_state || caseState;
-    setScore(caseState.score||0);
+    document.getElementById('caseScore').textContent = `Score: ${caseState.score||0}`;
     renderProgress(caseState.steps_done||[]);
     
     if(d.done) {
@@ -298,43 +207,180 @@ async function stepCase(txt) {
       caseState = null;
       updateUI(false); 
       stopTimer();
-      setStatus('Fall beendet.');
+      document.getElementById('caseStatus').textContent = 'Fall beendet.';
     }
   } catch(e) {
     addMsg(`Fehler: ${e.message}`);
   }
 }
 
-// ------- Helpers & Modals -------
+function renderPanel(k) {
+  const panel = document.getElementById('panel');
+  panel.innerHTML = '';
+  (ACTIONS[k]||[]).forEach(a => {
+    const b = document.createElement('button');
+    b.className = 'action-card';
+    b.textContent = a.label;
+    b.onclick = () => {
+      if(a.special === 'O2') openOxygen();
+      else if(a.special === 'NA') openNA();
+      else if(a.special === 'IMMO') openImmo();
+      else if(a.special === 'BODYMAP') openBodyMap();
+      else if(a.special === 'EKG') openEKG();
+      else { queue.push(a); renderQueue(); }
+    };
+    panel.appendChild(b);
+  });
+}
+
+function renderVitals() {
+  const map = {
+    RR:   document.getElementById('vRR'),
+    SpO2: document.getElementById('vSpO2'),
+    AF:   document.getElementById('vAF'),
+    Puls: document.getElementById('vPuls'),
+    BZ:   document.getElementById('vBZ'),
+    Temp: document.getElementById('vTemp'),
+    GCS:  document.getElementById('vGCS')
+  };
+
+  for(let k in map) {
+    const el = map[k];
+    if(!el) continue;
+    
+    const valStr = visibleVitals[k] || '--';
+    el.innerHTML = valStr;
+    const box = el.parentElement; 
+    if(box) {
+        box.classList.remove('critical');
+        const valNum = parseFloat(valStr.match(/\d+/)?.[0] || 0);
+        if (k === 'SpO2' && valNum > 0 && valNum < 90) box.classList.add('critical');
+        if (k === 'RR' && valNum > 0 && valNum < 90) box.classList.add('critical'); 
+        if (k === 'Puls' && valNum > 0 && (valNum < 40 || valNum > 140)) box.classList.add('critical');
+        if (k === 'BZ' && valNum > 0 && valNum < 60) box.classList.add('critical');
+    }
+  }
+}
+
+function startTimer() {
+  startTime = Date.now();
+  lastTickTime = Date.now(); 
+  const el = document.getElementById('missionTimer');
+  el.classList.remove('hidden');
+  el.textContent = "00:00";
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const now = Date.now();
+    const diff = Math.floor((now - startTime) / 1000);
+    const m = Math.floor(diff / 60).toString().padStart(2,'0');
+    const s = (diff % 60).toString().padStart(2,'0');
+    el.textContent = `${m}:${s}`;
+    if (now - lastTickTime >= 30000) { 
+        lastTickTime = now;
+        if(caseState && !caseState.measurements?.handover_done) { stepCase('System-Check: 30s vergangen'); }
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  if(timerInterval) clearInterval(timerInterval);
+}
+
+function updateUI(running) {
+  const specRow = document.getElementById('specRow');
+  const startBtn = document.getElementById('startCase');
+  const finishBtn = document.getElementById('finishCase');
+  const roleSel = document.getElementById('roleSel');
+  const timerEl = document.getElementById('missionTimer');
+
+  if (running) {
+    specRow.classList.add('hidden');
+    startBtn.classList.add('hidden');
+    finishBtn.classList.remove('hidden');
+    roleSel.disabled = true;
+  } else {
+    specRow.classList.remove('hidden');
+    startBtn.classList.remove('hidden');
+    finishBtn.classList.add('hidden');
+    roleSel.disabled = true;
+    startBtn.disabled = false;
+    timerEl.classList.add('hidden'); 
+  }
+}
+
+function renderQueue() {
+  const list = document.getElementById('queueList');
+  list.innerHTML = '';
+  queue.forEach((it, i) => {
+    const li = document.createElement('li');
+    li.className = 'queue-item';
+    li.innerHTML = `<span>${it.label}</span><button class="btn secondary small">x</button>`;
+    li.querySelector('button').onclick = () => { queue.splice(i,1); renderQueue(); };
+    list.appendChild(li);
+  });
+}
+
+function renderProgress(doneList) {
+  const s = new Set((doneList||[]).map(x=>x[0]));
+  ['X','A','B','C','D','E'].forEach(l => {
+    const el = document.querySelector(`.chip[data-step="${l}"]`);
+    if(el) {
+      el.classList.toggle('done', s.has(l));
+      el.classList.remove('active');
+    }
+  });
+  const next = ['X','A','B','C','D','E'].find(l => !s.has(l));
+  if(next) {
+    const el = document.querySelector(`.chip[data-step="${next}"]`);
+    if(el) el.classList.add('active');
+  }
+}
+
+function showHint(t) {
+  document.getElementById('hintText').textContent = t;
+  document.getElementById('hintCard').classList.remove('hidden');
+}
+
+function addMsg(h) {
+  const d = document.createElement('div');
+  d.className = 'msg';
+  d.innerHTML = h;
+  const log = document.getElementById('chatLog');
+  log.appendChild(d);
+  d.scrollIntoView({block:'end', behavior:'smooth'});
+}
+
+// Modals
 const $id = (id) => document.getElementById(id);
-const backdrop = $id('modalBackdrop');
+const modalBackdrop = document.getElementById('modalBackdrop');
 
 function openModal(id) { 
   const el = $id(id);
   if(!el) return;
-  backdrop.style.display = 'block';
+  modalBackdrop.style.display = 'block';
   el.style.display = 'block';
 }
 function closeModal(id) { 
   const el = $id(id);
   if(!el) return;
-  backdrop.style.display = 'none';
+  modalBackdrop.style.display = 'none';
   el.style.display = 'none';
 }
 
-runBtn.onclick = async () => {
-  if(!caseState) return;
-  while(queue.length) {
-    const it = queue.shift();
-    renderQueue();
-    await stepCase(it.token);
-    await new Promise(r=>setTimeout(r,500));
-  }
-};
-clearBtn.onclick = () => { queue.length=0; renderQueue(); };
-startBtn.onclick = startCase;
-finishBtn.onclick = () => { openHandover(); };
+function speak(text) {
+    if(!soundEnabled || !window.speechSynthesis || !text) return;
+    if(text.length > 300) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'de-DE';
+    let bestVoice = availableVoices.find(v => v.lang === 'de-DE' && v.name.includes('Google'));
+    if (!bestVoice) bestVoice = availableVoices.find(v => v.lang === 'de-DE' && v.name.includes('Natural'));
+    if (!bestVoice) bestVoice = availableVoices.find(v => v.lang === 'de-DE');
+    if (bestVoice) { u.voice = bestVoice; u.pitch = 1.0; u.rate = 1.1; }
+    window.speechSynthesis.speak(u);
+}
 
+// Feature implementations (Modals)
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
@@ -415,7 +461,6 @@ function openDiagnosis() {
   $id('dxCancel').onclick=()=>closeModal('modalDx');
   openModal('modalDx');
 }
-
 function openImmo() {
   if(!caseState) return;
   $id('immoOk').onclick = () => {
@@ -427,7 +472,6 @@ function openImmo() {
   $id('immoCancel').onclick = () => closeModal('modalImmo');
   openModal('modalImmo');
 }
-
 function openBodyMap() {
   if(!caseState) return;
   ['body_head','body_torso','body_arm_r','body_arm_l','body_leg_r','body_leg_l'].forEach(id => {
@@ -439,14 +483,12 @@ function openBodyMap() {
      const el = document.getElementById(`body_${l}`);
      if(el) el.setAttribute('fill', '#f87171'); 
   });
-  
   const txt = caseState.hidden?.injuries?.join(', ') || "Keine sichtbaren Außenverletzungen.";
   $id('bodyMapText').textContent = txt;
   $id('bodyMapClose').onclick = () => closeModal('modalBodyMap');
   openModal('modalBodyMap');
   stepCase('Bodycheck (visuell)');
 }
-
 function openEKG() {
     if(!caseState) return;
     const type = caseState.hidden?.ekg_pattern || "sinus";
@@ -477,7 +519,6 @@ function openEKG() {
     openModal('modalEKG');
     stepCase('12-Kanal-EKG');
 }
-
 function openHandover() {
     if(!caseState) return;
     $id('s_ident').value = "";
@@ -485,7 +526,6 @@ function openHandover() {
     $id('s_prio').value = "";
     $id('s_action').value = "";
     $id('s_anam').value = "";
-    
     $id('handoverOk').onclick = () => {
         const text = `SINNHAFT: I:${$id('s_ident').value} | N:${$id('s_event').value} | N:${$id('s_prio').value} | H:${$id('s_action').value} | A:${$id('s_anam').value}`;
         stepCase(`Übergabe: ${text}`);
@@ -495,7 +535,6 @@ function openHandover() {
     $id('handoverCancel').onclick = () => closeModal('modalHandover');
     openModal('modalHandover');
 }
-
 async function openDebrief() {
   try {
     const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
