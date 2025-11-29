@@ -142,3 +142,19 @@ h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand
   border-color: #cf6b6b;
   color: #6b0000;
 }
+/* --- NEU: Setup ausblenden wenn Fall läuft --- */
+.setup-row.collapsed {
+  display: none;
+}
+
+/* --- NEU: Trend-Pfeile für Vitalwerte --- */
+.trend-up { color: #d32f2f; font-weight: bold; } /* Rot, wenn z.B. Puls steigt (Warnung) */
+.trend-down { color: #1976d2; font-weight: bold; }
+.trend-stable { color: #757575; }
+
+/* Vitalwert-Box etwas schicker machen */
+.vitals span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
