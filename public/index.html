@@ -6,7 +6,6 @@
   <title>medicIQ – Fallbeispiele (Click-UI)</title>
 
   <link rel="stylesheet" href="./style.css" />
-  <!-- kein Freitext mehr, daher kein marked nötig -->
   <script src="./app.js"></script>
 </head>
 <body>
@@ -14,8 +13,8 @@
   <section class="chat-container" aria-label="Fallbeispiele (Click-UI)">
     <h1>medicIQ – Fallbeispiele</h1>
 
-    <!-- Setup-Zeile (wird ausgeblendet bei Start) -->
-    <div class="setup-row">
+    <!-- BEREICH 1: Setup (Sichtbar wenn KEIN Fall läuft) -->
+    <div id="setupArea" class="setup-row">
       <div class="setup-left">
         <span class="setup-label">Fachrichtung:</span>
         <button class="spec-chip active" data-spec="internistisch">Internistisch</button>
@@ -29,9 +28,13 @@
           <option value="RS" selected>RS</option>
           <option value="NotSan">NotSan</option>
         </select>
-        <button id="startCase" class="btn secondary">Neuen Fall starten</button>
-        <button id="finishCase" class="btn danger">Fall beenden</button>
+        <button id="startCase" class="btn">Neuen Fall starten</button>
       </div>
+    </div>
+
+    <!-- BEREICH 2: Laufender Fall (Sichtbar WENN Fall läuft) -->
+    <div id="activeControls" class="setup-row hidden" style="justify-content: flex-end;">
+      <button id="finishCase" class="btn danger">Fall beenden</button>
     </div>
 
     <!-- Status -->
@@ -40,7 +43,7 @@
       <div id="caseScore">Score: 0</div>
     </div>
 
-    <!-- Vitals (starten auf „–“, erst sichtbar wenn erhoben/aktualisiert) -->
+    <!-- Vitals -->
     <div class="vitals" aria-label="Vitalwerte">
       <span><strong>RR</strong>   <span id="vRR">–</span></span>
       <span><strong>SpO₂</strong> <span id="vSpO2">–</span></span>
@@ -76,7 +79,7 @@
       <button class="tab" data-tab="D">D – Disability</button>
       <button class="tab" data-tab="E">E – Exposure</button>
       
-      <!-- Der Global-Button für Notarzt -->
+      <!-- Global Notarzt -->
       <button id="btnGlobalNA" style="border:1px solid #fecaca; background:#fef2f2; color:#b91c1c; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:bold; margin-left:6px;">
         📞 Notarzt
       </button>
@@ -84,7 +87,7 @@
     
     <div id="panel" class="action-grid" aria-live="polite"></div>
 
-    <!-- Schemata / Tools -->
+    <!-- Schemata -->
     <div class="schemata-row">
       <button class="schema-btn" data-tool="FOUR_S">4S-Schema</button>
       <button class="schema-btn" data-tool="SAMPLER">SAMPLER</button>
@@ -122,15 +125,10 @@
 <!-- ===== MODALS ===== -->
 <div id="modalBackdrop" class="modal-backdrop hidden"></div>
 
-<!-- AF COUNTER -->
-<div id="modalAF" class="modal hidden" role="dialog" aria-modal="true">
-  <div class="modal-head">Atemfrequenz zählen (30 Sekunden)</div>
+<div id="modalAF" class="modal hidden">
+  <div class="modal-head">Atemfrequenz zählen (30s)</div>
   <div class="modal-body">
-    <p>Tippe bei jeder Inspiration auf „Atemzug“. Nach 30s rechnen wir auf /min hoch.</p>
-    <div class="af-ui">
-      <div><span id="afTimer">30</span>s</div>
-      <div><span id="afCount">0</span> Atemzüge</div>
-    </div>
+    <div class="af-ui"><div><span id="afTimer">30</span>s</div><div><span id="afCount">0</span> x</div></div>
   </div>
   <div class="modal-actions">
     <button id="afTap" class="btn secondary">Atemzug</button>
@@ -139,7 +137,6 @@
   </div>
 </div>
 
-<!-- NRS -->
 <div id="modalNRS" class="modal hidden">
   <div class="modal-head">Schmerzskala (NRS 0–10)</div>
   <div class="modal-body">
@@ -154,135 +151,104 @@
   </div>
 </div>
 
-<!-- BE-FAST -->
 <div id="modalBEFAST" class="modal hidden">
   <div class="modal-head">BE-FAST Check</div>
   <div class="modal-body befast-grid">
     <div id="befastInfo" class="small muted"></div>
-    <label><input type="checkbox" id="b_face" /> B – Balance (Gleichgewicht)</label>
-    <label><input type="checkbox" id="e_eyes" /> E – Eyes (Sehstörung)</label>
-    <label><input type="checkbox" id="f_face" /> F – Face (Facialisparese)</label>
-    <label><input type="checkbox" id="a_arm"  /> A – Arm (Armschwäche)</label>
-    <label><input type="checkbox" id="s_speech" /> S – Speech (Sprache)</label>
-    <label>Zeit letzter normaler Zustand: <input type="time" id="t_time" /></label>
+    <label><input type="checkbox" id="b_face" /> B – Balance</label>
+    <label><input type="checkbox" id="e_eyes" /> E – Eyes</label>
+    <label><input type="checkbox" id="f_face" /> F – Face</label>
+    <label><input type="checkbox" id="a_arm"  /> A – Arm</label>
+    <label><input type="checkbox" id="s_speech" /> S – Speech</label>
+    <label>Last known well: <input type="time" id="t_time" /></label>
   </div>
   <div class="modal-actions">
     <button id="befastFetch" class="btn secondary">Infos abrufen</button>
-    <button id="befastOk" class="btn">Dokumentieren</button>
+    <button id="befastOk" class="btn">Doku</button>
     <button id="befastCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
 
-<!-- SAMPLER -->
 <div id="modalSampler" class="modal hidden">
   <div class="modal-head">SAMPLER</div>
   <div class="modal-body form-grid">
     <div id="samplerInfo" class="small muted"></div>
-    <label>Symptoms <input id="s_sympt" placeholder="Beschwerden…" /></label>
-    <label>Allergies <input id="s_allerg" placeholder="Allergien…" /></label>
-    <label>Medications <input id="s_med" placeholder="Medikamente…" /></label>
-    <label>Past history <input id="s_hist" placeholder="Vorerkrankungen…" /></label>
-    <label>Last intake <input id="s_last" placeholder="Letzte Einnahme / Mahlzeit…" /></label>
-    <label>Events <input id="s_events" placeholder="Ereignis / Mechanismus…" /></label>
-    <label>Risk factors <input id="s_risk" placeholder="Risikofaktoren (optional)…" /></label>
+    <label>S - Symptome <input id="s_sympt" /></label>
+    <label>A - Allergien <input id="s_allerg" /></label>
+    <label>M - Medikamente <input id="s_med" /></label>
+    <label>P - Patientenveorgeschichte <input id="s_hist" /></label>
+    <label>L - Letzte Mahlzeit/Einnahme <input id="s_last" /></label>
+    <label>E - Ereignis <input id="s_events" /></label>
+    <label>R - Risikofaktoren <input id="s_risk" /></label>
   </div>
   <div class="modal-actions">
     <button id="samplerFetch" class="btn secondary">Infos abrufen</button>
-    <button id="samplerOk" class="btn">Dokumentieren</button>
+    <button id="samplerOk" class="btn">Doku</button>
     <button id="samplerCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
 
-<!-- 4S -->
 <div id="modal4S" class="modal hidden">
   <div class="modal-head">4S-Schema</div>
   <div class="modal-body form-grid">
     <div id="s4Info" class="small muted"></div>
-    <label><input type="checkbox" id="s1" /> Sicherheit (Eigenschutz/Umfeld)</label>
-    <label><input type="checkbox" id="s2" /> Szene/Szenerie beurteilt</label>
-    <label><input type="checkbox" id="s3" /> Sichtung / Anzahl / Ressourcen</label>
-    <label><input type="checkbox" id="s4" /> Support nachgefordert (z. B. NA/Feuerwehr)</label>
+    <label><input type="checkbox" id="s1" /> Sicherheit</label>
+    <label><input type="checkbox" id="s2" /> Szene</label>
+    <label><input type="checkbox" id="s3" /> Sichtung</label>
+    <label><input type="checkbox" id="s4" /> Support</label>
   </div>
   <div class="modal-actions">
     <button id="s4Fetch" class="btn secondary">Infos abrufen</button>
-    <button id="s4Ok" class="btn">Dokumentieren</button>
+    <button id="s4Ok" class="btn">Doku</button>
     <button id="s4Cancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
 
-<!-- O2 Modal -->
 <div id="modalO2" class="modal hidden">
   <div class="modal-head">Sauerstoffgabe</div>
   <div class="modal-body form-grid">
-    <label>Applikationsform:
+    <label>Gerät:
       <select id="o2Device">
-        <option value="brille">Nasenbrille (1–6 l/min)</option>
-        <option value="maske">Einfache Maske (5–10 l/min)</option>
-        <option value="reservoir">Maske mit Reservoir (10–15 l/min)</option>
-        <option value="beatmung">Beutel-Maske (15 l/min)</option>
+        <option>Nasenbrille (1–6 l/min)</option>
+        <option>Einfache Maske (5–10 l/min)</option>
+        <option>Maske mit Reservoir (10–15 l/min)</option>
+        <option>Beutel-Maske (15 l/min)</option>
       </select>
     </label>
-    <label>Flow (Liter/min):
-      <div style="display:flex; gap:10px; align-items:center;">
-        <input id="o2Flow" type="range" min="0" max="15" step="1" value="0" style="flex:1" />
-        <span id="o2FlowVal" style="font-weight:bold; width:30px;">0</span> l
-      </div>
+    <label>Flow: <span id="o2FlowVal">0</span> l/min
+      <input id="o2Flow" type="range" min="0" max="15" step="1" value="0" />
     </label>
-    <p class="small muted">Hinweis: Nasenbrille max 6l, Maske mind. 5l.</p>
   </div>
   <div class="modal-actions">
-    <button id="o2Ok" class="btn">Verabreichen</button>
+    <button id="o2Ok" class="btn">Geben</button>
     <button id="o2Cancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
 
-<!-- Notarzt Modal -->
 <div id="modalNA" class="modal hidden">
   <div class="modal-head">Notarzt nachfordern</div>
-  <div class="modal-body form-grid">
-    <p>Bitte Begründung angeben (Indikation):</p>
-    <textarea id="naReason" rows="3" placeholder="z. B. Analgesiebedarf, hämodynamische Instabilität..."></textarea>
+  <div class="modal-body">
+    <p>Begründung:</p>
+    <textarea id="naReason" rows="3" style="width:100%"></textarea>
   </div>
   <div class="modal-actions">
-    <button id="naOk" class="btn">Nachfordern</button>
+    <button id="naOk" class="btn">Rufen</button>
     <button id="naCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
 
-<!-- Diagnose & Transport -->
 <div id="modalDx" class="modal hidden">
-  <div class="modal-head">Verdachtsdiagnose & Transport</div>
+  <div class="modal-head">Verdachtsdiagnose</div>
   <div class="modal-body form-grid">
-    <label>Fachrichtung
-      <select id="dxSpec">
-        <option value="internistisch">Internistisch</option>
-        <option value="neurologisch">Neurologisch</option>
-        <option value="trauma">Trauma</option>
-        <option value="paediatrisch">Pädiatrisch</option>
-      </select>
-    </label>
-    <label>Verdachtsdiagnose
-      <select id="dxSelect">
-        <!-- wird dynamisch je Fachrichtung befüllt -->
-      </select>
-    </label>
-    <label>Priorität
-      <select id="dxPrio">
-        <option value="hoch (rot)">hoch (rot)</option>
-        <option value="mittel (gelb)">mittel (gelb)</option>
-        <option value="niedrig (grün)">niedrig (grün)</option>
-      </select>
-    </label>
-    <label>Bemerkung (optional)
-      <textarea id="dxNote" rows="3" placeholder="z. B. Schlaganfallverdacht – FAST positiv …"></textarea>
-    </label>
+    <select id="dxSpec"><option value="internistisch">Internistisch</option><option value="neurologisch">Neurologisch</option><option value="trauma">Trauma</option><option value="paediatrisch">Pädiatrisch</option></select>
+    <select id="dxSelect"></select>
+    <select id="dxPrio"><option>hoch (rot)</option><option>mittel (gelb)</option><option>niedrig (grün)</option></select>
+    <textarea id="dxNote" rows="2" placeholder="Bemerkung..."></textarea>
   </div>
   <div class="modal-actions">
-    <button id="dxOk" class="btn">Dokumentieren</button>
+    <button id="dxOk" class="btn">Speichern</button>
     <button id="dxCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
-<!-- ===== END MODALS ===== -->
-
 </body>
 </html>

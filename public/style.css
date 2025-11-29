@@ -4,7 +4,7 @@
   --brand: #0f766e;
   --text: #0f172a;
   --muted: #6b7280;
-  --bubble-ai:   #eaf0ff;
+  --bubble-ai: #eaf0ff;
   --ring: rgba(15,118,110,.25);
   --shadow: 0 10px 30px rgba(0,0,0,.08);
 }
@@ -13,148 +13,75 @@
 html, body { height: 100%; }
 body {
   margin: 0;
-  background:
-    radial-gradient(1200px 600px at 50% -10%, #eaf2ff, transparent 60%),
-    radial-gradient(1000px 600px at 120% -20%, #eefcf7, transparent 60%),
-    var(--bg);
+  background: radial-gradient(1200px 600px at 50% -10%, #eaf2ff, transparent 60%), var(--bg);
   color: var(--text);
-  font: 16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font: 16px/1.45 system-ui, -apple-system, sans-serif;
 }
 
 .page { max-width: 980px; margin: 40px auto; padding: 0 16px 40px; }
-.chat-container { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; }
+.chat-container { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; position: relative; z-index: 10; }
 h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand); }
 
-.status-row { display: flex; justify-content: space-between; align-items: center; margin: 6px 2px 10px; color: var(--muted); font-size: .95rem; }
+/* WICHTIG: Verstecken */
+.hidden { display: none !important; }
 
-.vitals { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin: 8px 0 12px; }
-.vitals span { background: #fafbff; border: 1px solid #eef2f7; border-radius: 8px; padding: 6px 8px; text-align: center; font-size: .92rem; }
+/* Status & Vitals */
+.status-row { display: flex; justify-content: space-between; color: var(--muted); margin-bottom: 10px; }
+.vitals { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 12px; }
+.vitals span { background: #fafbff; border: 1px solid #eef2f7; border-radius: 8px; padding: 6px; text-align: center; font-size: .9rem; display:flex; align-items:center; justify-content:center; gap:4px; }
 
-.progress { display: flex; gap: 8px; margin: 6px 0 12px; }
-.chip { border: 1px solid #dbe3ee; background: #f7faff; color: #274060; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: .9rem; user-select: none; }
+/* Progress Chips */
+.progress { display: flex; gap: 8px; margin-bottom: 12px; }
+.chip { background: #f7faff; border: 1px solid #dbe3ee; padding: 6px 12px; border-radius: 99px; font-weight: bold; color: #274060; }
 .chip.done { background: #dcf5f2; border-color: #b8ebe4; color: #0f4c46; }
 .chip.active { outline: 3px solid var(--ring); }
 
-.hint { border: 1px dashed #d8dee6; background: #fbfcff; padding: 10px 12px; border-radius: 10px; margin: 0 0 12px; color: #1f2a44; font-size: .95rem; }
-.hint.hidden { display: none; }
-.hint strong { color: #0f4c46; }
+/* Hints */
+.hint { border: 1px dashed #d8dee6; background: #fbfcff; padding: 10px; border-radius: 10px; margin-bottom: 12px; }
 
-/* Tabs */
-.tabs { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-.tab { border: 1px solid #dbe3ee; background: #fff; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+/* Tabs & Action Grid */
+.tabs { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+.tab { padding: 8px 12px; border: 1px solid #dbe3ee; border-radius: 10px; background: #fff; cursor: pointer; }
 .tab.active { background: #eef6ff; border-color: #bfdcff; }
 
-/* Action grid */
 .action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px; }
-.action-card { border: 1px solid #e5e7eb; background: #fff; border-radius: 12px; padding: 10px; cursor: pointer; text-align: left; }
+.action-card { border: 1px solid #e5e7eb; background: #fff; border-radius: 12px; padding: 10px; text-align: left; cursor: pointer; }
 .action-card:hover { background: #f9fbff; }
-.action-title { font-weight: 700; margin-bottom: 4px; }
-.action-sub { color: var(--muted); font-size: .9rem; }
 
-/* Queue */
-.queue { margin-top: 8px; }
-.queue-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.queue-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-.queue-item { display: flex; justify-content: space-between; align-items: center; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; background: #fff; }
-.queue-item .qi-label { font-weight: 600; }
-.q-actions { display: flex; gap: 6px; }
+/* Setup & Controls */
+.setup-row { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+.spec-chip { border: 1px solid #dbe3ee; background: #fff; padding: 8px 12px; border-radius: 99px; cursor: pointer; }
+.spec-chip.active { background: #eef6ff; border-color: #bfdcff; }
+.role-select { height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #dbe3ee; }
+
+/* Queue & Chat */
+.queue { margin-top: 8px; border: 1px solid #eef2f7; border-radius: 12px; padding: 10px; background: #fff; }
+.queue-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.queue-item { display: flex; justify-content: space-between; padding: 6px 10px; background: #f8fafc; border-radius: 8px; }
+
+.chat-wrap { margin-top: 12px; border: 1px solid #eef2f7; border-radius: 12px; padding: 12px; background: #fff; max-height: 400px; overflow-y: auto; }
+.msg { background: var(--bubble-ai); border-radius: 12px; padding: 10px; margin-bottom: 10px; border: 1px solid #e3e8f2; }
 
 /* Buttons */
-.btn { background: var(--brand); color: #fff; border: none; height: 42px; padding: 0 16px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: background .2s ease; }
-.btn:hover:not([disabled]) { background: #0b5f59; }
-.btn.secondary { background: #334155; }
-.btn.secondary:hover:not([disabled]) { background: #1e293b; }
-.btn.danger { background: #b91c1c; }
-.btn.danger:hover:not([disabled]) { background: #991b1b; }
-.action-row { display: flex; gap: 10px; margin-top: 10px; }
+.btn { background: var(--brand); color: #fff; border: none; height: 38px; padding: 0 16px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+.btn:hover { background: #0d655d; }
+.btn.secondary { background: #475569; }
+.btn.danger { background: #dc2626; }
+.schemata-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.schema-btn { border: 1px solid #cbd5e1; background: #fff; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.schema-btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
 
-.card { border: 1px solid #eef2f7; border-radius: 12px; padding: 12px; background: #fff; }
+/* Modals - Z-Index Fix */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); z-index: 900; }
+.modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 12px; padding: 0; width: 90%; max-width: 500px; z-index: 1000; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+.modal-head { padding: 12px 16px; font-weight: bold; border-bottom: 1px solid #e2e8f0; }
+.modal-body { padding: 16px; display: grid; gap: 12px; }
+.modal-actions { padding: 12px 16px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 8px; }
 
-/* Feedback Log */
-.chat-wrap { margin-top: 12px; }
-.chat-log { display: grid; gap: 10px; }
-.msg { background: var(--bubble-ai); border-radius: 12px; padding: 10px 12px; border: 1px solid #e3e8f2; }
-.msg .small { color: var(--muted); }
-
-/* Debriefing-Layout im Chat */
-.msg ul.debrief-list {
-  margin: 6px 0 0;
-  padding-left: 1.1rem;
-}
-.msg ul.debrief-list li {
-  margin-bottom: 2px;
-}
-.msg .debrief-label {
-  font-weight: 600;
-}
-.msg .debrief-value {
-  color: var(--muted);
-}
-
-/* Footer */
-.legal { margin: 14px 6px 0; color: var(--muted); text-align: left; font-size: .95rem; }
-/* Setup-Zeile (Fachrichtung / Rolle) */
-.setup-row{display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-.setup-label{font-size:.9rem;color:var(--muted);margin-right:6px}
-.spec-chip{border:1px solid #dbe3ee;background:#fff;padding:8px 10px;border-radius:999px;cursor:pointer}
-.spec-chip.active{background:#eef6ff;border-color:#bfdcff}
-.role-select{height:38px;border:1px solid #dbe3ee;border-radius:8px;padding:0 10px;background:#fff;margin-right:8px}
-/* Schemata-Leiste */
-.schemata-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
-.schema-btn{border:1px solid #dbe3ee;background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer}
-.schema-btn.primary{background:#0f766e;color:#fff;border-color:#0f766e}
-
-/* Modals */
-.modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(2px);z-index:60}
-.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.2);z-index:70;max-width:560px;width:92%}
-.modal-head{padding:12px 14px;border-bottom:1px solid #eef2f7;font-weight:700}
-.modal-body{padding:12px 14px}
-.modal-actions{display:flex;gap:8px;justify-content:flex-end;padding:12px 14px;border-top:1px solid #eef2f7}
-.hidden{display:none !important}
-
-.form-grid{display:grid;gap:10px}
-.befast-grid{display:grid;gap:8px}
-.af-ui{display:flex;gap:24px;font-size:1.1rem;font-weight:700}
-.nrs-val{margin-top:6px}
-.small.muted{ color:#6b7280; margin:6px 0 4px; }
-.modal-actions .btn.secondary{ opacity:.95 }
-/* Debriefing-Ergebnis-Banner */
-.debrief-result {
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-weight: 600;
-  margin-bottom: 6px;
-  font-size: 15px;
-  border: 1px solid transparent;
-}
-.debrief-pass {
-  background: #d4f7df;
-  border-color: #88d59b;
-  color: #085c2e;
-}
-.debrief-warn {
-  background: #fff7d0;
-  border-color: #e0c35b;
-  color: #665200;
-}
-.debrief-fail {
-  background: #ffd9d9;
-  border-color: #cf6b6b;
-  color: #6b0000;
-}
-/* --- NEU: Setup ausblenden wenn Fall läuft --- */
-.setup-row.collapsed {
-  display: none;
-}
-
-/* --- NEU: Trend-Pfeile für Vitalwerte --- */
-.trend-up { color: #d32f2f; font-weight: bold; } /* Rot, wenn z.B. Puls steigt (Warnung) */
-.trend-down { color: #1976d2; font-weight: bold; }
-.trend-stable { color: #757575; }
-
-/* Vitalwert-Box etwas schicker machen */
-.vitals span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
+/* Misc */
+.form-grid input, .form-grid select, .form-grid textarea { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; margin-top: 4px; }
+.af-ui { display: flex; justify-content: space-around; font-size: 1.2rem; font-weight: bold; margin-bottom: 10px; }
+.debrief-pass { color: #166534; background: #dcfce7; padding: 6px; border-radius: 6px; }
+.debrief-warn { color: #854d0e; background: #fef9c3; padding: 6px; border-radius: 6px; }
+.debrief-fail { color: #991b1b; background: #fee2e2; padding: 6px; border-radius: 6px; }
+ul.debrief-list { padding-left: 20px; margin: 6px 0; }
