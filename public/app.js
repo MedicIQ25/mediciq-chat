@@ -41,7 +41,8 @@ const vitalsMap = {
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
   renderPanel('X');
-  updateUI(false);
+  // Zwinge UI in den "Start"-Modus beim Laden
+  updateUI(false); 
 });
 
 // Spec Selection

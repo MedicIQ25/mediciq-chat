@@ -13,7 +13,7 @@
   <section class="chat-container" aria-label="Fallbeispiele (Click-UI)">
     <h1>medicIQ – Fallbeispiele</h1>
 
-    <!-- Setup & Steuerung -->
+    <!-- Setup-Bereich -->
     <div class="setup-container">
       
       <!-- Zeile 1: Fachrichtung -->
@@ -27,7 +27,7 @@
         </div>
       </div>
 
-      <!-- Zeile 2: Rolle & Start/Stop -->
+      <!-- Zeile 2: Steuerung -->
       <div class="setup-row control-row">
         <div class="setup-left">
           <label class="setup-label" for="roleSel">Rolle:</label>
@@ -37,7 +37,7 @@
           </select>
         </div>
         <div class="setup-right">
-          <!-- Button Gruppe: Wir schalten per CSS/JS um -->
+          <!-- Wichtig: Button-IDs müssen exakt stimmen -->
           <button id="startCase" class="btn">Neuen Fall starten</button>
           <button id="finishCase" class="btn danger hidden">Fall beenden</button>
         </div>
@@ -129,7 +129,7 @@
 </main>
 
 <!-- ===== MODALS ===== -->
-<!-- Sicherheits-Fix: style="display:none" damit es beim Laden garantiert weg ist -->
+<!-- WICHTIG: style="display:none" verhindert, dass der Hintergrund Klicks blockiert -->
 <div id="modalBackdrop" class="modal-backdrop" style="display:none;"></div>
 
 <div id="modalAF" class="modal" style="display:none;">

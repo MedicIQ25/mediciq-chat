@@ -19,6 +19,7 @@ body {
 }
 
 .page { max-width: 980px; margin: 40px auto; padding: 0 16px 40px; }
+/* Z-Index 10 damit Container über Hintergrund liegt */
 .chat-container { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; position: relative; z-index: 10; }
 h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand); }
 
@@ -99,5 +100,5 @@ h1 { text-align: center; font-size: 1.6rem; margin: 0 0 12px; color: var(--brand
 .debrief-fail { color: #991b1b; background: #fee2e2; padding: 6px; border-radius: 6px; }
 ul.debrief-list { padding-left: 20px; margin: 6px 0; }
 
-/* Utility */
+/* UTILITY - MUSS GANZ UNTEN STEHEN */
 .hidden { display: none !important; }
