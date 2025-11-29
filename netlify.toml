@@ -1,6 +1,8 @@
 [build]
-  publish = "public"
+  publish = "public"       # Das Frontend liegt im Ordner "public"
+  functions = "netlify/functions" # Das Backend liegt hier
 
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
