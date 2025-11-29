@@ -12,9 +12,18 @@
 <main class="page">
   <section class="chat-container" aria-label="Fallbeispiele (Click-UI)">
     
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <h1 style="margin:0;">medicIQ – Fallbeispiele</h1>
-        <div id="missionTimer" class="timer-badge hidden">00:00</div>
+    <div class="header-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+        <h1 style="margin:0; font-size:1.5rem; color:#0f766e;">medicIQ – Fallbeispiele</h1>
+        
+        <div class="controls-right" style="display:flex; gap:10px; align-items:center;">
+            <button id="btnSound" class="mode-toggle" title="Sprachausgabe" style="background:transparent; border:1px solid #64748b; border-radius:6px; cursor:pointer; padding:4px 8px; color:inherit;">🔇 Aus</button>
+            
+            <button id="btnDark" class="mode-toggle" title="Nachtmodus" style="background:transparent; border:1px solid #64748b; border-radius:6px; cursor:pointer; padding:4px 8px; color:inherit;">🌙</button>
+            
+            <button id="btnPrint" class="mode-toggle" title="Drucken" style="background:transparent; border:1px solid #64748b; border-radius:6px; cursor:pointer; padding:4px 8px; color:inherit;">🖨️</button>
+            
+            <div id="missionTimer" class="timer-badge hidden" style="background:#0f172a; color:#fff; font-family:monospace; padding:5px 10px; border-radius:6px; font-weight:bold;">00:00</div>
+        </div>
     </div>
 
     <div class="setup-container">
@@ -128,7 +137,7 @@
     </div>
 
     <div class="card chat-wrap">
-      <div class="h">Feedback</div>
+      <div class="h">Feedback / Protokoll</div>
       <div id="chatLog" class="chat-log"></div>
     </div>
   </section>
@@ -338,13 +347,11 @@
   <div class="modal-head">Übergabe (SINNHAFT)</div>
   <div class="modal-body form-grid">
     <div class="small muted" style="color:#ef4444; font-weight:bold;">S - Start (Ruhe! Alle bereit?)</div>
-    
     <label>I - Identifikation <input id="s_ident" placeholder="Name, Alter, (Gewicht)..." /></label>
     <label>N - Notfallereignis <input id="s_event" placeholder="Was? Wie? Wann? Wo?" /></label>
     <label>N - Notfallpriorität <input id="s_prio" placeholder="xABCDE, Vitalparameter..." /></label>
     <label>H - Handlungen <input id="s_action" placeholder="Durchgeführte Maßnahmen, Wirkung..." /></label>
     <label>A - Anamnese <input id="s_anam" placeholder="SAMPLER, Besonderheiten..." /></label>
-    
     <div class="small muted" style="margin-top:5px; color:#3b82f6;">F - Fazit (Wiederholung) | T - Teamfragen</div>
   </div>
   <div class="modal-actions">
