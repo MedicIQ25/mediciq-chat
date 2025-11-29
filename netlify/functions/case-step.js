@@ -1,6 +1,6 @@
 /**
  * Netlify Function: case-step
- * Fixes: Diagnose-Bug (Prio 'hoch'), SAMPLER-Text, Lagerung-Split, SpO2-Sichtbarkeit
+ * Fixes: SAMPLER (Layout & R), 4S (Inhalt anzeigen), Diagnose, O2, Trends
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -44,7 +44,7 @@ exports.handler = async (event) => {
     function ok(body) { return { statusCode: 200, headers, body: JSON.stringify(body) }; }
 
     // =================================================================
-    // 0. PRIORITÄT: DIAGNOSE & DEBRIEF (Bevor andere Keywords greifen!)
+    // 0. PRIORITÄT: DIAGNOSE & DEBRIEF
     // =================================================================
     if (ua.includes("Verdachtsdiagnose") || ua.includes("Verdacht:")) { 
       state.measurements.diagnosis = ua; 
@@ -82,7 +82,7 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // 1. O2 LOGIK (Gerät + Flow)
+    // 1. O2 LOGIK
     // =================================================================
     if (ua.includes('O2-Gabe')) {
       const flowMatch = ua.match(/(\d+)\s*l\/min/);
@@ -111,12 +111,9 @@ exports.handler = async (event) => {
     const hasO2 = state.history.some(h => /o2|sauerstoff|beatmung/.test(h.action.toLowerCase()));
     const curSpO2 = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
     
-    // Nur verschlechtern wenn kritisch und kein O2
     if (curSpO2 < 92 && !hasO2 && state.action_count % 3 === 0) {
         const newSpO2 = Math.max(70, curSpO2 - 2);
         updVitals({ SpO2: newSpO2 });
-        
-        // FIX: Wert nur anzeigen wenn gemessen
         if (state.measurements.vitals?.SpO2) {
              reply.finding = (reply.finding || "") + `\n⚠️ Patient wirkt zyanotischer (SpO₂ fällt auf ${newSpO2}%).`;
         } else {
@@ -125,19 +122,56 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // 3. 4S, SAMPLER, NRS
+    // 3. SCHEMATA (SAMPLER, 4S, NRS) - Optimiertes Layout
     // =================================================================
+    
+    // SAMPLER: Untereinander & mit R
     if (/sampler doku/.test(low)) {
       reply.accepted = true;
-      // FIX: Inhalt anzeigen
       const s = state.anamnesis?.SAMPLER || {};
-      const content = `S: ${text(s.S)} | A: ${text(s.A)} | M: ${text(s.M)} | P: ${text(s.P)} | L: ${text(s.L)} | E: ${text(s.E)}`;
-      reply.evaluation = "SAMPLER dokumentiert.";
+      const content = [
+        `S: ${text(s.S)}`,
+        `A: ${text(s.A)}`,
+        `M: ${text(s.M)}`,
+        `P: ${text(s.P)}`,
+        `L: ${text(s.L)}`,
+        `E: ${text(s.E)}`,
+        `R: ${text(s.R)}`
+      ].join('\n');
+      
+      reply.evaluation = "SAMPLER dokumentiert:";
+      reply.finding = content; 
+      return ok(reply);
+    }
+
+    // 4S: Inhalt anzeigen statt nur "doku"
+    if (/4s dokumentiert/.test(low)) {
+      reply.accepted = true;
+      state.measurements.schemas['4S'] = true;
+      if(!state.history.some(h=>h.action.includes('4S davor'))) state.score += 1;
+      
+      const s4 = state.scene_4s || {};
+      const content = [
+        `Sicherheit: ${text(s4.sicherheit)}`,
+        `Szene: ${text(s4.szene)}`,
+        `Sichtung: ${text(s4.sichtung_personen)}`,
+        `Support: ${text(s4.support_empfehlung)}`
+      ].join('\n');
+
+      reply.evaluation = "4S-Schema dokumentiert:";
       reply.finding = content;
       return ok(reply);
     }
     
-    // FIX: Schmerz Info immer beantworten
+    // 4S Info (Button)
+    if (/4s info/.test(low)) {
+      const s = state.scene_4s || {};
+      reply.finding = `Sicherheit: ${s.sicherheit||'-'}\nSzene: ${s.szene||'-'}`;
+      reply.accepted = true;
+      return ok(reply);
+    }
+    
+    // Schmerz
     if (/schmerz info/.test(low)) {
         const p = H.pain || {};
         reply.finding = `Patient angabe: NRS ${p.nrs || '?'} (${p.ort || 'unbekannt'})`;
@@ -146,7 +180,7 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // STANDARD LOGIK
+    // STANDARD LOGIK (XABCDE)
     // =================================================================
     
     // X
@@ -198,9 +232,8 @@ exports.handler = async (event) => {
     if (/bodycheck/.test(low)) { reply.accepted=true; reply.finding=(H.skin||"o.B.")+" "+(H.injuries?.join(',')||""); reply.evaluation="E: Bodycheck."; touchStep("E"); return ok(reply); }
     if (/temp/.test(low)) { updVitals({Temp:state.vitals.Temp||36.5}); reply.accepted=true; reply.evaluation="E: Temp gemessen."; touchStep("E"); return ok(reply); }
     
-    // FIX: Trennung Lagerung vs. Wärme & SpO2 Effekt
+    // Trennung Lagerung vs. Wärme & SpO2 Effekt
     if (/oberkörper|lagerung|lagern/.test(low) && /hoch/.test(low)) { 
-        // Physiologie: Hochlagerung verbessert Ventilation leicht
         const cur = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
         if(cur < 98) updVitals({ SpO2: Math.min(100, cur + 2) });
         reply.accepted=true; 
@@ -216,8 +249,7 @@ exports.handler = async (event) => {
         return ok(reply); 
     }
     
-    // Schemata
-    if (/4s/.test(low)) { reply.accepted=true; reply.evaluation="4S doku."; return ok(reply); }
+    // NRS Fallback
     if (/nrs/.test(low)) { reply.accepted=true; reply.evaluation="Schmerz doku."; return ok(reply); }
 
     // Fallback
