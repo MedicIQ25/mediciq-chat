@@ -1,6 +1,6 @@
 /**
  * Netlify Function: case-step
- * Fixes: 4S-Regex, O2-Logik (Flow/Gerät), Ehrliches Debriefing, Trends
+ * Fixes: Lagerung-Regex erweitert, O2-Logik, Trends
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -40,7 +40,6 @@ exports.handler = async (event) => {
       }
     };
     const touchStep = (l) => { if(!state.steps_done.includes(l.toUpperCase())) { state.steps_done.push(l.toUpperCase()); state.score+=1; } };
-    const text = (v) => (v === undefined || v === null || v === "") ? "—" : String(v).trim();
     
     // Funktion für Standard-Antwort
     function ok(body) { return { statusCode: 200, headers, body: JSON.stringify(body) }; }
@@ -49,7 +48,6 @@ exports.handler = async (event) => {
     // 1. O2 LOGIK (Gerät + Flow)
     // =================================================================
     if (ua.includes('O2-Gabe')) {
-      // Parse: "O2-Gabe: Einfache Maske mit 8 l/min"
       const flowMatch = ua.match(/(\d+)\s*l\/min/);
       const flow = flowMatch ? parseInt(flowMatch[1]) : 0;
       const isMaske = ua.includes('Maske');
@@ -58,14 +56,12 @@ exports.handler = async (event) => {
       const currentSpO2 = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
       let boost = 0;
 
-      // Medizinische Faustformel (vereinfacht)
       if (isReservoir && flow >= 10) {
-        boost = 15; // Reservoir ist effektiv
+        boost = 15; 
       } else if (isMaske && flow >= 5) {
-        boost = 8 + (flow - 5); // 5L->8%, 10L->13%
+        boost = 8 + (flow - 5); 
       } else {
-        // Brille
-        boost = flow * 1.5; // 2L -> 3%, 4L -> 6%
+        boost = flow * 1.5; 
       }
       
       const newSpO2 = Math.min(100, Math.max(currentSpO2, currentSpO2 + boost));
@@ -140,7 +136,7 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // STANDARD LOGIK (Buttons etc.)
+    // STANDARD LOGIK
     // =================================================================
     
     // X
@@ -170,7 +166,7 @@ exports.handler = async (event) => {
     if (/auskultieren|lunge/.test(low)) { 
       reply.accepted=true; reply.finding=H.lung||"o.B."; reply.evaluation="B: Auskultiert."; touchStep("B"); return ok(reply); 
     }
-    // Fallback O2 (falls manuell eingetippt ohne Modal-String)
+    // Fallback O2
     if (/o2|sauerstoff/.test(low)) {
       updVitals({SpO2: Math.min(100, (state.vitals.SpO2||94)+5)}); reply.accepted=true; reply.evaluation="O2 Gabe (pauschal)."; touchStep("B"); return ok(reply);
     }
@@ -195,7 +191,8 @@ exports.handler = async (event) => {
     // E
     if (/bodycheck/.test(low)) { reply.accepted=true; reply.finding=(H.skin||"o.B.")+" "+(H.injuries?.join(',')||""); reply.evaluation="E: Bodycheck."; touchStep("E"); return ok(reply); }
     if (/temp/.test(low)) { updVitals({Temp:state.vitals.Temp||36.5}); reply.accepted=true; reply.evaluation="E: Temp gemessen."; touchStep("E"); return ok(reply); }
-    if (/wärme|lagerung/.test(low)) { reply.accepted=true; reply.evaluation="E: Lagerung/Wärme."; touchStep("E"); return ok(reply); }
+    // FIX: Erkennt jetzt auch "lagern", "oberkörper" und "hoch"
+    if (/wärme|lagerung|lagern|oberkörper|hoch/.test(low)) { reply.accepted=true; reply.evaluation="E: Lagerung/Wärme."; touchStep("E"); return ok(reply); }
 
     // Schemata
     if (/sampler/.test(low)) { reply.accepted=true; reply.evaluation="SAMPLER doku."; return ok(reply); }

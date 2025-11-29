@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Sauerstoff-Modal & Debrief Fix)
+// medicIQ – App Logic (Sauerstoff-Modal & Schönes Debriefing)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -136,7 +136,7 @@ const ACTIONS = {
     { label: 'AF messen (zählen)',     token: 'AF messen' },
     { label: 'SpO₂ messen',            token: 'SpO2 messen' },
     { label: 'Lunge auskultieren',     token: 'Lunge auskultieren' },
-    { label: 'Sauerstoff geben',       special: 'O2' } // Ruft Modal auf
+    { label: 'Sauerstoff geben',       special: 'O2' } 
   ],
   C: [
     { label: 'RR messen',              token: 'RR messen' },
@@ -164,7 +164,6 @@ function renderPanel(tabKey) {
     btn.className = 'action-card';
     btn.innerHTML = `<div class="label">${action.label}</div>`;
     btn.addEventListener('click', () => {
-      // Wenn es ein Spezial-Button (O2) ist:
       if (action.special === 'O2') {
         openOxygen();
       } else {
@@ -296,7 +295,7 @@ const $id = (x) => document.getElementById(x);
 function openModal(id) { $id('modalBackdrop').classList.remove('hidden'); $id(id).classList.remove('hidden'); }
 function closeModal(id) { $id('modalBackdrop').classList.add('hidden'); $id(id).classList.add('hidden'); }
 
-// NEU: Sauerstoff Modal
+// O2 Modal
 function openOxygen() {
   if (!caseState) return;
   const flowSlider = $id('o2Flow');
@@ -311,7 +310,6 @@ function openOxygen() {
   $id('o2Ok').onclick = () => {
     const flow = flowSlider.value;
     const dev  = deviceSel.options[deviceSel.selectedIndex].text;
-    // Baut String: "O2-Gabe: Einfache Maske mit 8 l/min"
     const msg = `O2-Gabe: ${dev} mit ${flow} l/min`;
     stepCase(msg);
     closeModal('modalO2');
@@ -336,7 +334,6 @@ function openBEFAST() {
     if($id('f_face').checked) parts.push('Face'); 
     if($id('a_arm').checked)  parts.push('Arm'); 
     if($id('s_speech').checked) parts.push('Speech');
-    // ...
     stepCase('BEFAST dokumentiert');
     closeModal('modalBEFAST');
   };
@@ -421,9 +418,27 @@ function openDiagnosis() {
 }
 
 async function openDebrief() {
+  // Verbesserte Formatierung: Leere Zeilen raus, Doppelpunkte fett
   function format(raw) {
     if(!raw) return '';
-    return `<ul class="debrief-list small">${String(raw).split('\n').map(l=>`<li>${l}</li>`).join('')}</ul>`;
+    const cleanLines = String(raw)
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0); // Leere Zeilen filtern
+
+    const items = cleanLines.map(l => {
+      // Prüfen ob es ein Key:Value Paar ist
+      const parts = l.split(':');
+      if (parts.length > 1) {
+        // Erster Teil fett
+        const key = parts[0];
+        const val = parts.slice(1).join(':');
+        return `<li><strong>${key}:</strong>${val}</li>`;
+      }
+      return `<li>${l}</li>`;
+    }).join('');
+
+    return `<ul class="debrief-list small">${items}</ul>`;
   }
   
   try {
