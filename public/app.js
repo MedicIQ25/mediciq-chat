@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Updated: Realistic Voice + UI Fixes)
+// medicIQ – App Logic (Fixed: Crash Prevention & Layout)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -26,11 +26,10 @@ const specButtons = Array.from(document.querySelectorAll('.spec-chip'));
 let selectedSpec  = 'internistisch';
 
 // Settings
-let soundEnabled = false; // Standard: Ton AUS
+let soundEnabled = false; 
 let isDarkMode = false;
 let availableVoices = [];
 
-// Stimmen laden
 window.speechSynthesis.onvoiceschanged = () => {
     availableVoices = window.speechSynthesis.getVoices();
 };
@@ -43,7 +42,6 @@ let startTime = null;
 let lastTickTime = 0; 
 
 const visibleVitals = {};
-// Mapping der IDs zu den Elementen
 const vitalsMap = {
   RR:   document.getElementById('vRR'),
   SpO2: document.getElementById('vSpO2'),
@@ -54,63 +52,38 @@ const vitalsMap = {
   GCS:  document.getElementById('vGCS')
 };
 
-// --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
   renderPanel('X');
   updateUI(false); 
 });
 
-// === High-End Features (Sound, Dark, Print) ===
-
-// Sound Toggle
+// === Features ===
 document.getElementById('btnSound')?.addEventListener('click', (e) => {
     soundEnabled = !soundEnabled;
     e.target.textContent = soundEnabled ? "🔊 An" : "🔇 Aus";
-    // Falls Stimmen noch nicht da waren, nochmal laden
     if(availableVoices.length === 0) availableVoices = window.speechSynthesis.getVoices();
 });
 
-// Dark Mode Toggle
 document.getElementById('btnDark')?.addEventListener('click', () => {
     isDarkMode = !isDarkMode;
     document.body.classList.toggle('dark-mode', isDarkMode);
 });
 
-// Print
-document.getElementById('btnPrint')?.addEventListener('click', () => {
-    window.print();
-});
+document.getElementById('btnPrint')?.addEventListener('click', () => window.print());
 
-// Verbesserte Sprachausgabe (Sucht nach besseren Stimmen)
 function speak(text) {
-    if(!soundEnabled || !window.speechSynthesis) return;
-    if(text.length > 300) return; // Zu lang ist nervig
-    
+    if(!soundEnabled || !window.speechSynthesis || !text) return;
+    if(text.length > 300) return;
     window.speechSynthesis.cancel();
-    
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'de-DE';
-    
-    // Suche nach "Google" oder "Natural" Stimmen für mehr Realismus
     let bestVoice = availableVoices.find(v => v.lang === 'de-DE' && v.name.includes('Google'));
-    if (!bestVoice) {
-        bestVoice = availableVoices.find(v => v.lang === 'de-DE' && v.name.includes('Natural'));
-    }
-    // Fallback auf irgendeine deutsche Stimme
-    if (!bestVoice) {
-        bestVoice = availableVoices.find(v => v.lang === 'de-DE');
-    }
-
-    if (bestVoice) {
-        u.voice = bestVoice;
-        u.pitch = 1.0; 
-        u.rate = 1.1; 
-    }
-
+    if (!bestVoice) bestVoice = availableVoices.find(v => v.lang === 'de-DE' && v.name.includes('Natural'));
+    if (!bestVoice) bestVoice = availableVoices.find(v => v.lang === 'de-DE');
+    if (bestVoice) { u.voice = bestVoice; u.pitch = 1.0; u.rate = 1.1; }
     window.speechSynthesis.speak(u);
 }
 
-// Spec Selection
 specButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     if(caseState) return; 
@@ -120,7 +93,6 @@ specButtons.forEach(btn => {
   });
 });
 
-// Tools & Tabs Listener
 document.querySelectorAll('.schema-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const t = btn.dataset.tool;
@@ -143,52 +115,13 @@ tabs.forEach(t => t.addEventListener('click', () => {
 
 document.getElementById('btnGlobalNA')?.addEventListener('click', openNA);
 
-// ------- Actions Panel -------
 const ACTIONS = {
-  X: [
-    { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck' },
-    { label: 'Keine Blutung feststellbar', token: 'X unauffällig' },
-    { label: 'Druckverband anlegen', token: 'Druckverband' },
-    { label: 'Tourniquet anlegen', token: 'Tourniquet' },
-    { label: 'Beckenschlinge anlegen', token: 'Beckenschlinge' },
-    { label: 'Woundpacking', token: 'Hämostyptikum' }
-  ],
-  A: [
-    { label: 'Esmarch-Handgriff', token: 'Esmarch' },
-    { label: 'Absaugen', token: 'Absaugen' },
-    { label: 'Mundraumkontrolle', token: 'Mundraumkontrolle' },
-    { label: 'Guedel-Tubus', token: 'Guedel' },
-    { label: 'Wendel-Tubus', token: 'Wendel' },
-    { label: 'Beutel-Masken-Beatmung', token: 'Beutel-Masken-Beatmung' }
-  ],
-  B: [
-    { label: 'AF messen (zählen)', token: 'AF messen' },
-    { label: 'SpO₂ messen', token: 'SpO2 messen' },
-    { label: 'Lunge auskultieren', token: 'Lunge auskultieren' },
-    { label: 'Sauerstoff geben', special: 'O2' }
-  ],
-  C: [
-    { label: 'RR messen', token: 'RR messen' },
-    { label: 'Puls messen', token: 'Puls messen' },
-    { label: 'pDMS prüfen', token: 'pDMS Kontrolle' },
-    { label: '12-Kanal-EKG', special: 'EKG' },
-    { label: 'i.V. Zugang legen', token: 'i.V. Zugang legen' },
-    { label: 'Volumen 500 ml', token: 'Volumen 500 ml' }
-  ],
-  D: [
-    { label: 'GCS erheben', token: 'GCS erheben' },
-    { label: 'Pupillen prüfen', token: 'Pupillen' },
-    { label: 'BZ messen', token: 'BZ messen' }
-  ],
-  E: [
-    { label: 'Bodycheck (Text)', token: 'Bodycheck' },
-    { label: 'Bodycheck (Bild)', special: 'BODYMAP' },
-    { label: 'pDMS prüfen', token: 'pDMS Kontrolle' },
-    { label: 'Immobilisation / Schienung', special: 'IMMO' },
-    { label: 'Wärmeerhalt', token: 'Wärmeerhalt' },
-    { label: 'Temp messen', token: 'Temperatur messen' },
-    { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' }
-  ]
+  X: [ { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck' }, { label: 'Keine Blutung feststellbar', token: 'X unauffällig' }, { label: 'Druckverband anlegen', token: 'Druckverband' }, { label: 'Tourniquet anlegen', token: 'Tourniquet' }, { label: 'Beckenschlinge anlegen', token: 'Beckenschlinge' }, { label: 'Woundpacking', token: 'Hämostyptikum' } ],
+  A: [ { label: 'Esmarch-Handgriff', token: 'Esmarch' }, { label: 'Absaugen', token: 'Absaugen' }, { label: 'Mundraumkontrolle', token: 'Mundraumkontrolle' }, { label: 'Guedel-Tubus', token: 'Guedel' }, { label: 'Wendel-Tubus', token: 'Wendel' }, { label: 'Beutel-Masken-Beatmung', token: 'Beutel-Masken-Beatmung' } ],
+  B: [ { label: 'AF messen (zählen)', token: 'AF messen' }, { label: 'SpO₂ messen', token: 'SpO2 messen' }, { label: 'Lunge auskultieren', token: 'Lunge auskultieren' }, { label: 'Sauerstoff geben', special: 'O2' } ],
+  C: [ { label: 'RR messen', token: 'RR messen' }, { label: 'Puls messen', token: 'Puls messen' }, { label: 'pDMS prüfen', token: 'pDMS Kontrolle' }, { label: '12-Kanal-EKG', special: 'EKG' }, { label: 'i.V. Zugang legen', token: 'i.V. Zugang legen' }, { label: 'Volumen 500 ml', token: 'Volumen 500 ml' } ],
+  D: [ { label: 'GCS erheben', token: 'GCS erheben' }, { label: 'Pupillen prüfen', token: 'Pupillen' }, { label: 'BZ messen', token: 'BZ messen' } ],
+  E: [ { label: 'Bodycheck (Text)', token: 'Bodycheck' }, { label: 'Bodycheck (Bild)', special: 'BODYMAP' }, { label: 'pDMS prüfen', token: 'pDMS Kontrolle' }, { label: 'Immobilisation / Schienung', special: 'IMMO' }, { label: 'Wärmeerhalt', token: 'Wärmeerhalt' }, { label: 'Temp messen', token: 'Temperatur messen' }, { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' } ]
 };
 
 function renderPanel(k) {
@@ -198,12 +131,7 @@ function renderPanel(k) {
     b.className = 'action-card';
     b.textContent = a.label;
     b.onclick = () => {
-      if(a.special === 'O2') openOxygen();
-      else if(a.special === 'NA') openNA();
-      else if(a.special === 'IMMO') openImmo();
-      else if(a.special === 'BODYMAP') openBodyMap();
-      else if(a.special === 'EKG') openEKG();
-      else { queue.push(a); renderQueue(); }
+      if(a.special === 'O2') openOxygen(); else if(a.special === 'NA') openNA(); else if(a.special === 'IMMO') openImmo(); else if(a.special === 'BODYMAP') openBodyMap(); else if(a.special === 'EKG') openEKG(); else { queue.push(a); renderQueue(); }
     };
     panel.appendChild(b);
   });
@@ -220,18 +148,14 @@ function renderQueue() {
   });
 }
 
-// ------- MONITOR & VITALS LOGIC -------
-
 function renderVitals() {
   for(let k in vitalsMap) {
     const el = vitalsMap[k];
     const valStr = visibleVitals[k] || '--';
     el.innerHTML = valStr;
-    
     const box = el.parentElement; 
     if(box) {
         box.classList.remove('critical');
-        // ALARM LOGIK
         const valNum = parseFloat(valStr.match(/\d+/)?.[0] || 0);
         if (k === 'SpO2' && valNum > 0 && valNum < 90) box.classList.add('critical');
         if (k === 'RR' && valNum > 0 && valNum < 90) box.classList.add('critical'); 
@@ -241,30 +165,21 @@ function renderVitals() {
   }
 }
 
-// ------- TIMER LOGIC -------
-
 function startTimer() {
   startTime = Date.now();
   lastTickTime = Date.now(); 
-  
   timerEl.classList.remove('hidden');
   timerEl.textContent = "00:00";
-  
   if(timerInterval) clearInterval(timerInterval);
-  
   timerInterval = setInterval(() => {
     const now = Date.now();
     const diff = Math.floor((now - startTime) / 1000);
     const m = Math.floor(diff / 60).toString().padStart(2,'0');
     const s = (diff % 60).toString().padStart(2,'0');
     timerEl.textContent = `${m}:${s}`;
-
-    // System-Check alle 30s
     if (now - lastTickTime >= 30000) { 
         lastTickTime = now;
-        if(caseState && !caseState.measurements?.handover_done) {
-            stepCase('System-Check: 30s vergangen'); 
-        }
+        if(caseState && !caseState.measurements?.handover_done) { stepCase('System-Check: 30s vergangen'); }
     }
   }, 1000);
 }
@@ -288,8 +203,6 @@ function updateUI(running) {
     timerEl.classList.add('hidden'); 
   }
 }
-
-// ------- CASE CONTROL -------
 
 async function startCase() {
   chatLog.innerHTML = '';
@@ -322,9 +235,19 @@ async function startCase() {
     addMsg(`<strong>Fallstart:</strong> ${caseState.story}`);
     speak(caseState.story); 
   } catch(e) {
-    caseState = { id:'local', specialty:selectedSpec, steps_done:[], history:[], score:0, vitals:{} };
+    // FIX: Fallback hat jetzt eine Story, damit es nicht crasht
+    caseState = { 
+        id:'local', 
+        specialty:selectedSpec, 
+        steps_done:[], 
+        history:[], 
+        score:0, 
+        vitals:{}, 
+        story: "Offline-Modus: Simulierter Fall ohne Server-Verbindung. Vitals manuell prüfen." 
+    };
     addMsg(`⚠️ Offline/Fehler: ${e.message}. Lokaler Modus aktiv.`);
     setStatus('Lokal Aktiv');
+    speak(caseState.story);
   } finally {
     startBtn.disabled = false;
   }
@@ -363,9 +286,7 @@ async function stepCase(txt) {
           ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
         `);
         
-        if(d.finding && !isSystemTick) {
-            speak(d.finding);
-        }
+        if(d.finding && !isSystemTick) speak(d.finding);
     }
 
     caseState = d.case_state || caseState;
@@ -413,8 +334,6 @@ runBtn.onclick = async () => {
 clearBtn.onclick = () => { queue.length=0; renderQueue(); };
 startBtn.onclick = startCase;
 finishBtn.onclick = () => { openHandover(); };
-
-// --- Feature Modals ---
 
 function openOxygen() {
   if(!caseState) return;
@@ -520,6 +439,7 @@ function openBodyMap() {
      const el = document.getElementById(`body_${l}`);
      if(el) el.setAttribute('fill', '#f87171'); 
   });
+  
   const txt = caseState.hidden?.injuries?.join(', ') || "Keine sichtbaren Außenverletzungen.";
   $id('bodyMapText').textContent = txt;
   $id('bodyMapClose').onclick = () => closeModal('modalBodyMap');
@@ -532,12 +452,9 @@ function openEKG() {
     const type = caseState.hidden?.ekg_pattern || "sinus";
     const line = $id('ekgLine');
     const txt  = $id('ekgText');
-    
     line.classList.add('ekg-anim');
-
     let points = "";
     let yBase = 75;
-    
     if(type === "sinus") {
         for(let i=0; i<400; i+=60) {
             points += `${i},${yBase} ${i+10},${yBase} ${i+15},${yBase-10} ${i+20},${yBase+10} ${i+25},${yBase-50} ${i+30},${yBase+20} ${i+35},${yBase} ${i+45},${yBase-5} ${i+50},${yBase} `;
@@ -555,9 +472,7 @@ function openEKG() {
         txt.textContent = "Monitorbild - Asystolie";
         txt.style.color = "#ef4444";
     }
-    
     line.setAttribute('points', points);
-    
     $id('ekgClose').onclick = () => closeModal('modalEKG');
     openModal('modalEKG');
     stepCase('12-Kanal-EKG');

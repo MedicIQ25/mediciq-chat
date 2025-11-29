@@ -20,15 +20,16 @@ body.dark-mode {
 }
 
 * { box-sizing: border-box; }
-/* FIX: 100vh erzwingt volle Höhe, damit Dark Mode unten nicht weiß wird */
 html { height: 100%; }
+
+/* FIX: min-height sorgt dafür, dass der Dark Mode bis ganz unten geht */
 body {
-  min-height: 100vh;
+  min-height: 100vh; 
   margin: 0;
   font: 16px/1.5 system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
-  transition: 0.3s;
+  transition: background 0.3s, color 0.3s;
 }
 
 .page { max-width: 1000px; margin: 0 auto; padding: 20px 15px 40px; }
@@ -49,22 +50,22 @@ h1 { margin: 0; font-size: 1.5rem; color: var(--brand); }
 }
 body.dark-mode .timer-badge { background: #f1f5f9; color: #0f172a; }
 
-/* SETUP SCREEN (NEU: Button neben Select) */
+/* SETUP SCREEN */
 .setup-container { margin-bottom: 20px; padding: 15px; background: var(--bg); border-radius: 10px; border: 1px solid var(--muted); }
 .setup-row { margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
 .mb-2 { margin-bottom: 1rem; }
 
-.control-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.role-select { height: 38px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--muted); background: var(--card); color: var(--text); }
+/* Hier liegen Rolle und Start-Button nebeneinander */
+.control-group { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.role-select { height: 40px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--muted); background: var(--card); color: var(--text); }
 
-.status-group { text-align: right; font-size: 0.9rem; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+.status-group { text-align: right; font-size: 0.9rem; color: var(--muted); display: flex; gap: 10px; align-items: center; margin-left: auto; }
 .score-badge { font-weight: bold; color: var(--brand); background: var(--bubble-ai); padding: 2px 8px; border-radius: 4px; }
 
-/* Fachrichtung Chips */
 .spec-chip { border: 1px solid var(--muted); background: var(--card); color: var(--text); padding: 6px 12px; border-radius: 99px; cursor: pointer; font-size: 0.9rem; }
 .spec-chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 
-/* === MONITOR DISPLAY === */
+/* MONITOR DISPLAY */
 .vitals {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
@@ -120,7 +121,7 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .action-card { background: var(--card); border: 1px solid var(--muted); color: var(--text); border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; transition: 0.2s; font-weight: 500; }
 .action-card:hover { transform: translateY(-2px); border-color: var(--brand); background: var(--bg); }
 
-/* SCHEMATA & TOOLS */
+/* SCHEMATA */
 .schemata-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; padding-top: 10px; border-top: 1px solid var(--muted); }
 .schema-btn { background: var(--card); border: 1px solid var(--muted); padding: 6px 12px; border-radius: 6px; cursor: pointer; color: var(--text); font-size: 0.9rem; }
 .schema-btn.primary { background: var(--brand); color: white; border: none; }
@@ -135,7 +136,7 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .msg div { margin-bottom: 4px; }
 
 /* BUTTONS */
-.btn { padding: 10px 20px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; background: var(--brand); color: white; }
+.btn { padding: 0 20px; height: 40px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; background: var(--brand); color: white; display: inline-flex; align-items: center; justify-content: center; }
 .btn.secondary { background: var(--muted); }
 .btn.danger { background: #dc2626; }
 .btn:hover { opacity: 0.9; }
@@ -148,7 +149,7 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .modal-body { margin-bottom: 20px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
-/* EKG ANIM */
+/* EKG */
 @keyframes ekgMove { 0% { stroke-dashoffset: 400; } 100% { stroke-dashoffset: 0; } }
 .ekg-anim { stroke-dasharray: 400; animation: ekgMove 4s linear infinite; }
 
@@ -157,7 +158,6 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .small { font-size: 0.85rem; }
 .muted { color: var(--muted); opacity: 0.8; }
 
-/* PRINT */
 @media print {
   body { background: #fff; color: #000; }
   .chat-container, .card, .queue, .modal { box-shadow: none; border: 1px solid #ccc; }
