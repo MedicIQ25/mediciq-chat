@@ -237,6 +237,30 @@
     <button id="dxCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
+<div id="modalO2" class="modal hidden">
+  <div class="modal-head">Sauerstoffgabe</div>
+  <div class="modal-body form-grid">
+    <label>Applikationsform:
+      <select id="o2Device">
+        <option value="brille">Nasenbrille (1–6 l/min)</option>
+        <option value="maske">Einfache Maske (5–10 l/min)</option>
+        <option value="reservoir">Maske mit Reservoir (10–15 l/min)</option>
+        <option value="beatmung">Beutel-Maske (15 l/min)</option>
+      </select>
+    </label>
+    <label>Flow (Liter/min):
+      <div style="display:flex; gap:10px; align-items:center;">
+        <input id="o2Flow" type="range" min="0" max="15" step="1" value="0" style="flex:1" />
+        <span id="o2FlowVal" style="font-weight:bold; width:30px;">0</span> l
+      </div>
+    </label>
+    <p class="small muted">Hinweis: Nasenbrille max 6l, Maske mind. 5l.</p>
+  </div>
+  <div class="modal-actions">
+    <button id="o2Ok" class="btn">Verabreichen</button>
+    <button id="o2Cancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
 <!-- ===== END MODALS ===== -->
 
 </body>
