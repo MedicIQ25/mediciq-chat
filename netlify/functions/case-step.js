@@ -1,5 +1,6 @@
 /**
  * Netlify Function: case-step
+ * (Fix: Zugang/Volumen, pDMS, Trauma, Übergabe, System-Check/Verschlechterung)
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -16,10 +17,9 @@ exports.handler = async (event) => {
     state.history    = state.history || [];
     state.score      = state.score || 0;
     state.action_count = (state.action_count || 0) + 1;
-    // Neue Flags
-    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false };
+    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false, handover_done: false, handover_empty: false };
     
-    // History
+    // History update
     if (ua) {
       state.history.push({ ts: new Date().toISOString(), action: ua });
       if (state.history.length > 50) state.history.shift();
@@ -46,7 +46,37 @@ exports.handler = async (event) => {
     function ok(body) { return { statusCode: 200, headers, body: JSON.stringify(body) }; }
 
     // =================================================================
-    // 0. PRIORITÄT: DIAGNOSE & DEBRIEF (Mit "Key Action" Check)
+    // 0. SYSTEM CHECK (Zeitgesteuerte Verschlechterung)
+    // =================================================================
+    if (ua.includes("System-Check")) {
+        const hasO2 = state.history.some(h => /o2|sauerstoff|beatmung/.test(h.action.toLowerCase()));
+        const hasImmo = state.history.some(h => h.action.includes('Immobilisation'));
+        const curSpO2 = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
+        
+        reply.accepted = true; // Still accept it so it works
+        
+        // Logik: Ohne O2 sinkt die Sättigung bei Atemnot-Fällen
+        if (curSpO2 < 93 && !hasO2) {
+            const newSpO2 = Math.max(75, curSpO2 - 2);
+            updVitals({ SpO2: newSpO2 });
+            // Warnung nur wenn Wert sichtbar
+            if (state.measurements.vitals?.SpO2) {
+                reply.finding = `⚠️ Zeit vergeht: SpO₂ fällt weiter auf ${newSpO2}%!`;
+            } else {
+                reply.finding = `⚠️ Zeit vergeht: Patient wirkt zunehmend zyanotisch (blau).`;
+            }
+        } 
+        // Trauma: Ohne Schmerzmittel/Schienung steigt der Schmerz?
+        else if (state.specialty === 'trauma' && !hasImmo && !hasO2) {
+             reply.finding = "⚠️ Zeit vergeht: Patient klagt über zunehmende Schmerzen und Übelkeit (Schock?).";
+        }
+        
+        // Wenn keine Verschlechterung, kein finding -> wird im Frontend dann nicht fett angezeigt
+        return ok(reply);
+    }
+
+    // =================================================================
+    // 0.1 PRIORITÄT: DIAGNOSE & DEBRIEF & ÜBERGABE
     // =================================================================
     if (ua.includes("Verdachtsdiagnose") || ua.includes("Verdacht:")) { 
       state.measurements.diagnosis = ua.replace("Verdachtsdiagnose:", "").trim(); 
@@ -55,10 +85,18 @@ exports.handler = async (event) => {
       return ok(reply); 
     }
     
+    // Handover Check: Ist Inhalt da?
     if (ua.includes("Übergabe:")) {
-        state.measurements.handover_done = true;
+        const cleanText = ua.replace("SINNHAFT:", "").replace(/I:|N:|H:|A:|\|/g, "").replace(/\s+/g, "");
+        if (cleanText.length < 5) { 
+             state.measurements.handover_empty = true;
+             reply.evaluation = "Übergabe abgeschickt (Inhalt leer!).";
+        } else {
+             state.measurements.handover_done = true;
+             state.measurements.handover_empty = false;
+             reply.evaluation = "Übergabe an Klinik/Arzt erfolgt.";
+        }
         reply.accepted = true;
-        reply.evaluation = "Übergabe an Klinik/Arzt erfolgt.";
         return ok(reply);
     }
 
@@ -76,7 +114,9 @@ exports.handler = async (event) => {
       const hasImmo = actionsDone.some(a => a.includes("immobilisation"));
       const hasDMS  = actionsDone.some(a => a.includes("pdms") || a.includes("dms"));
       const hasO2   = actionsDone.some(a => a.includes("o2") || a.includes("sauerstoff"));
-      const hasHandover = state.measurements.handover_done;
+      
+      const hoDone = state.measurements.handover_done;
+      const hoEmpty = state.measurements.handover_empty;
 
       let status = "Bestanden";
       let summary = "";
@@ -98,7 +138,10 @@ exports.handler = async (event) => {
       else if (state.specialty === 'trauma') summary += "\n❌ Trauma: Es wurde keine Schienung durchgeführt.";
       if (hasDMS) summary += "\n✅ Sicherheit: pDMS-Kontrolle wurde durchgeführt.";
       if (hasO2 && parseFloat(state.vitals.SpO2) < 94) summary += "\n✅ Therapie: Sauerstoffgabe war indiziert und erfolgte.";
-      if (hasHandover) summary += "\n✅ Kommunikation: Strukturierte Übergabe (SINNHAFT) ist erfolgt.";
+      
+      // Handover Feedback
+      if (hoDone && !hoEmpty) summary += "\n✅ Kommunikation: Strukturierte Übergabe (SINNHAFT) ist erfolgt.";
+      else if (hoEmpty) summary += "\n❌ Kommunikation: Übergabe-Protokoll war leer!";
       else summary += "\n⚠️ Kommunikation: Übergabe an den Arzt fehlte.";
       
       if (state.measurements.diagnosis) {
@@ -114,11 +157,11 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // 0.1 X - INSPEKTION (Blutungscheck)
+    // 1. X - INSPEKTION (Blutungscheck)
     // =================================================================
     if (/blutungscheck|blutung suchen/.test(low)) {
         reply.accepted = true;
-        const info = H.bleeding_info || "Keine offensichtlichen massiven Blutungen auf den ersten Blick erkennbar.";
+        const info = H.bleeding_info || "Keine offensichtlichen massiven Blutungen.";
         reply.finding = info;
         reply.evaluation = "X: Initiale Blutungs-Inspektion durchgeführt.";
         if (info.toLowerCase().includes("spritzend") || info.toLowerCase().includes("massiv")) {
@@ -131,7 +174,7 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // 1. O2 LOGIK
+    // 2. O2 LOGIK
     // =================================================================
     if (ua.includes('O2-Gabe')) {
       const flowMatch = ua.match(/(\d+)\s*l\/min/);
@@ -152,21 +195,6 @@ exports.handler = async (event) => {
       reply.finding = `SpO₂ steigt an (Effekt ca. +${Math.floor(boost)}%)`;
       touchStep("B");
       return ok(reply);
-    }
-
-    // =================================================================
-    // 2. REALISMUS
-    // =================================================================
-    const hasO2 = state.history.some(h => /o2|sauerstoff|beatmung/.test(h.action.toLowerCase()));
-    const curSpO2 = parseFloat(state.vitals.SpO2 || baseVitals.SpO2);
-    if (curSpO2 < 92 && !hasO2 && state.action_count % 3 === 0) {
-        const newSpO2 = Math.max(70, curSpO2 - 2);
-        updVitals({ SpO2: newSpO2 });
-        if (state.measurements.vitals?.SpO2) {
-             reply.finding = (reply.finding || "") + `\n⚠️ Patient wirkt zyanotischer (SpO₂ fällt auf ${newSpO2}%).`;
-        } else {
-             reply.finding = (reply.finding || "") + "\n⚠️ Patient wirkt zyanotischer (Lippenzyanose).";
-        }
     }
 
     // =================================================================
@@ -312,7 +340,7 @@ exports.handler = async (event) => {
     }
 
     // =================================================================
-    // STANDARD LOGIK
+    // STANDARD LOGIK (XABCDE)
     // =================================================================
     if (/x unauff|keine.*blutung/.test(low)) { reply.accepted=true; reply.evaluation="X: Keine bedrohliche Blutung."; touchStep("X"); return ok(reply); }
     if (/druckverband|tourniquet/.test(low)) { reply.accepted=true; reply.evaluation="X: Blutung gestoppt."; touchStep("X"); return ok(reply); }

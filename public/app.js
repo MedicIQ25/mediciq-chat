@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Updated: SINNHAFT Handover)
+// medicIQ – App Logic (Updated: Echtzeit-Verschlechterung)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -30,6 +30,7 @@ let caseState = null;
 const queue = [];
 let timerInterval = null;
 let startTime = null;
+let lastTickTime = 0; // NEU: Für den 30s Check
 
 const visibleVitals = {};
 const vitalsMap = {
@@ -158,18 +159,32 @@ function renderQueue() {
   });
 }
 
-// ------- CORE LOGIC -------
+// ------- CORE LOGIC (Updated Timer) -------
 
 function startTimer() {
   startTime = Date.now();
+  lastTickTime = Date.now(); // Startpunkt für den 30s Intervall
+  
   timerEl.classList.remove('hidden');
   timerEl.textContent = "00:00";
+  
   if(timerInterval) clearInterval(timerInterval);
+  
   timerInterval = setInterval(() => {
-    const diff = Math.floor((Date.now() - startTime) / 1000);
+    const now = Date.now();
+    const diff = Math.floor((now - startTime) / 1000);
     const m = Math.floor(diff / 60).toString().padStart(2,'0');
     const s = (diff % 60).toString().padStart(2,'0');
     timerEl.textContent = `${m}:${s}`;
+
+    // NEU: Alle 30 Sekunden einen Realitäts-Check senden
+    if (now - lastTickTime >= 30000) { // 30000 ms = 30 sek
+        lastTickTime = now;
+        // Sende unsichtbaren Ping an die KI, nur wenn Fall läuft
+        if(caseState && !caseState.measurements?.handover_done) {
+            stepCase('System-Check: 30s vergangen'); 
+        }
+    }
   }, 1000);
 }
 
@@ -247,17 +262,26 @@ async function stepCase(txt) {
       renderVitals();
     }
     
-    let meta = [];
-    if(d.accepted) meta.push('✓');
-    if(d.outside_scope) meta.push('?');
-    if(d.unsafe) meta.push('⛔');
-    
-    addMsg(`
-      <div><strong>${txt}</strong> <small>${meta.join(' ')}</small></div>
-      ${d.evaluation ? `<div>${d.evaluation.replace(/\n/g,'<br>')}</div>` : ''}
-      ${d.finding ? `<div style="color:#0f766e; margin-top:4px;">${d.finding.replace(/\n/g,'<br>')}</div>` : ''}
-      ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
-    `);
+    // Wir zeigen die System-Meldung "Zeit vergangen" nur an, wenn sich wirklich was verschlechtert hat (finding ist da)
+    // oder wenn es eine normale User-Aktion ist.
+    const isSystemTick = txt.includes('System-Check');
+    const hasFinding = !!d.finding;
+
+    if (!isSystemTick || (isSystemTick && hasFinding)) {
+        let meta = [];
+        if(d.accepted && !isSystemTick) meta.push('✓');
+        if(d.unsafe) meta.push('⛔');
+        
+        let displayTxt = txt;
+        if(isSystemTick) displayTxt = "⏱️ <i>Zeit vergeht...</i>";
+
+        addMsg(`
+          <div><strong>${displayTxt}</strong> <small>${meta.join(' ')}</small></div>
+          ${d.evaluation ? `<div>${d.evaluation.replace(/\n/g,'<br>')}</div>` : ''}
+          ${d.finding ? `<div style="color:#b91c1c; margin-top:4px;">${d.finding.replace(/\n/g,'<br>')}</div>` : ''}
+          ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
+        `);
+    }
 
     caseState = d.case_state || caseState;
     setScore(caseState.score||0);
@@ -275,7 +299,7 @@ async function stepCase(txt) {
   }
 }
 
-// ------- Helpers -------
+// ------- Helpers & Modals (Rest bleibt gleich) -------
 function setStatus(t) { statusEl.textContent = t; }
 function setScore(n) { scoreEl.textContent = `Score: ${n}`; }
 function renderVitals() {
@@ -308,7 +332,6 @@ function addMsg(h) {
   d.scrollIntoView({block:'end', behavior:'smooth'});
 }
 
-// ------- Modals -------
 const $id = (id) => document.getElementById(id);
 const backdrop = $id('modalBackdrop');
 
@@ -325,7 +348,6 @@ function closeModal(id) {
   el.style.display = 'none';
 }
 
-// Handlers
 runBtn.onclick = async () => {
   if(!caseState) return;
   while(queue.length) {
@@ -337,11 +359,8 @@ runBtn.onclick = async () => {
 };
 clearBtn.onclick = () => { queue.length=0; renderQueue(); };
 startBtn.onclick = startCase;
-finishBtn.onclick = () => {
-    openHandover();
-};
+finishBtn.onclick = () => { openHandover(); };
 
-// Specific Modal Logic
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
@@ -478,7 +497,6 @@ function openEKG() {
     stepCase('12-Kanal-EKG');
 }
 
-// NEU: SINNHAFT Übergabe
 function openHandover() {
     if(!caseState) return;
     $id('s_ident').value = "";

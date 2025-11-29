@@ -1,7 +1,7 @@
 /**
  * Netlify Function: case-new
  * Erzeugt einen neuen Fall mit vollständigen, auswertbaren Feldern
- * inkl. EKG Pattern
+ * inkl. EKG Pattern und Patientennamen in der Story.
  */
 
 exports.handler = async (event) => {
@@ -23,8 +23,9 @@ exports.handler = async (event) => {
         specialty: "internistisch",
         role,
         difficulty,
+        // UPDATE: Name hinzugefügt
         story:
-          "17-jähriger Patient auf dem Sportplatz mit akuter Atemnot nach Sprint. Sprechdyspnoe, 2-Wort-Sätze.",
+          "Einsatz auf dem Sportplatz: Patient Lukas M. (17 Jahre) klagt über akute Atemnot nach einem 100m-Sprint. Er spricht nur in 2-Wort-Sätzen.",
         target_outcome:
           "AF und SpO₂ verbessern (O₂ + inhalatives β₂-Mimetikum), Transport vorbereiten.",
         key_findings: ["Dyspnoe", "verlängertes Exspirium", "Giemen", "Sprechdyspnoe"],
@@ -34,7 +35,7 @@ exports.handler = async (event) => {
 
         scene_4s: {
           sicherheit: "Keine akute Eigen-/Fremdgefährdung, Sportplatz gesichert.",
-          szene: "Sportplatz, Patient sitzt nach vorne gebeugt, stützt sich auf die Knie.",
+          szene: "Sportplatz, Lukas sitzt nach vorne gebeugt (Kutschersitz).",
           sichtung_personen: "1 Patient, Trainer und Mannschaftskameraden anwesend.",
           support_empfehlung:
             "NA bei fehlender Besserung unter Therapie oder klinischer Verschlechterung erwägen."
@@ -44,10 +45,10 @@ exports.handler = async (event) => {
           SAMPLER: {
             S: "akute Atemnot nach Sprint, bekannte Asthma bronchiale",
             A: "Pollen, Hausstaub",
-            M: "Bedarfs-Spray (β₂-Mimetikum), Controller unregelmäßig",
+            M: "Salbutamol Spray (Bedarf), Budesonid (Controller, unregelmäßig)",
             P: "Asthma bronchiale seit Kindheit",
             L: "keine Krankenhausaufenthalte in letzter Zeit",
-            E: "Belastung/Sport, Pollenflug, Inhalator vergessen",
+            E: "Belastung/Sport, Pollenflug, Inhalator in der Tasche vergessen",
             R: "keine Reise, kein Fieber"
           },
           vorerkrankungen: ["Asthma bronchiale"],
@@ -59,7 +60,7 @@ exports.handler = async (event) => {
             P: "schlimmer bei Belastung, besser im Sitzen nach vorne gebeugt",
             Q: "Engegefühl in der Brust",
             R: "kein Ausstrahlen",
-            S: "NRS 2–3, eher Luftnot als Schmerz",
+            S: "NRS 2–3 (Druck), subjektive Luftnot 8/10",
             T: "seit ca. 10 Minuten zunehmend"
           }
         },
@@ -67,10 +68,7 @@ exports.handler = async (event) => {
         hidden: {
           diagnosis_keys: ["Asthma", "Obstruktion", "Spastik", "Atemnot"],
           bleeding_info: "Keine äußeren Blutungen sichtbar. Kleidung trocken.",
-          
-          // NEU EKG
-          ekg_pattern: "sinus", // sinus, vt, asystolie
-          
+          ekg_pattern: "sinus", 
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei, kein Stridor, kein Erbrochenes",
           lung: "Giemen beidseits, verlängertes Exspirium, keine Rasselgeräusche",
@@ -91,8 +89,9 @@ exports.handler = async (event) => {
         specialty: "neurologisch",
         role,
         difficulty,
+        // UPDATE: Name hinzugefügt
         story:
-          "65-jähriger Patient, zuhause aufgefunden, wirkt verwirrt und schwitzig. Angehörige berichten von Diabetes.",
+          "Einsatz in Privatwohnung: Der 65-jährige Karl H. wurde von seiner Frau verwirrt auf dem Sofa vorgefunden. Er wirkt kaltschweißig und desorientiert. Die Ehefrau erwähnt Diabetes.",
         target_outcome:
           "Hypoglykämie erkennen, Glukosegabe, Bewusstseinslage und BZ im Verlauf dokumentieren.",
         key_findings: ["Vigilanzminderung", "kaltschweißig", "niedriger BZ", "Diabetesanamnese"],
@@ -103,15 +102,15 @@ exports.handler = async (event) => {
         scene_4s: {
           sicherheit: "Wohnung, keine akute Gefährdungslage, Zugang frei.",
           szene: "Patient halb auf dem Sofa, reagiert verzögert, Wohnumgebung unauffällig.",
-          sichtung_personen: "1 Patient, Ehepartner anwesend.",
+          sichtung_personen: "1 Patient, Ehefrau anwesend.",
           support_empfehlung: "NA bei Bewusstlosigkeit oder fehlender Besserung nach Therapie."
         },
 
         anamnesis: {
           SAMPLER: {
-            S: "Verwirrtheit, Zittern, Schwitzen",
+            S: "Verwirrtheit, Zittern, Schwitzen, Wortfindungsstörungen",
             A: "keine bekannt",
-            M: "Insulin, Metformin, Blutdruckmedikamente",
+            M: "Insulin (Lantus), Metformin, Ramipril",
             P: "Diabetes mellitus Typ 2, Hypertonie",
             L: "abends wenig gegessen, morgens keine Mahlzeit",
             E: "Mahlzeit ausgelassen, Insulin dennoch gespritzt",
@@ -134,9 +133,7 @@ exports.handler = async (event) => {
         hidden: {
           diagnosis_keys: ["Hypoglykämie", "Unterzucker", "Glucose", "Zucker"],
           bleeding_info: "Keine Blutungen. Patient schwitzt stark (kaltschweißig).",
-          
           ekg_pattern: "sinus",
-          
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei",
           lung: "vesikuläres Atemgeräusch beidseits, keine RG",
@@ -157,8 +154,9 @@ exports.handler = async (event) => {
         specialty: "trauma",
         role,
         difficulty,
+        // UPDATE: Name hinzugefügt
         story:
-          "29-jährige Patientin stürzt beim Fahrradfahren, fängt sich mit dem rechten Arm ab. Deformität und Schmerzen am Unterarm.",
+          "Fahrradsturz auf dem Radweg: Die 29-jährige Lena S. hat sich beim Sturz mit dem rechten Arm abgefangen. Der Unterarm steht deutlich fehl.",
         target_outcome:
           "Blutungskontrolle, adäquate Immobilisation, Schmerztherapie einleiten, Traumaschema anwenden.",
         key_findings: ["deformierter Unterarm", "Druckschmerz", "Schwellung", "Bewegungsschmerz"],
@@ -167,8 +165,8 @@ exports.handler = async (event) => {
         vitals: { RR: "132/84", SpO2: 98, AF: 18, Puls: 88, BZ: 102, Temp: 36.7, GCS: 15 },
 
         scene_4s: {
-          sicherheit: "Straße gesichert, kein laufender Verkehr mehr, Helm vorhanden.",
-          szene: "Fahrradsturz, Patientin sitzt am Gehweg, Fahrrad daneben.",
+          sicherheit: "Radweg, gesichert. Helm wurde getragen (intakt).",
+          szene: "Fahrradsturz, Lena sitzt am Gehwegrand, hält ihren rechten Arm.",
           sichtung_personen: "1 Patientin, Zeuge vor Ort.",
           support_empfehlung:
             "NA nur bei zusätzlicher Kopfverletzung, Polytrauma oder Schockzeichen."
@@ -176,11 +174,11 @@ exports.handler = async (event) => {
 
         anamnesis: {
           SAMPLER: {
-            S: "starke Schmerzen rechter Unterarm",
+            S: "starke Schmerzen rechter Unterarm, 'Knacken' gehört",
             A: "keine bekannt",
-            M: "keine Dauermedikation",
+            M: "Pille (Kontrazeptiva)",
             P: "keine relevanten Vorerkrankungen",
-            L: "keine OPs / Krankenhausaufenthalte",
+            L: "Frühstück vor 2 Stunden",
             E: "Fahrradsturz, Sturz auf ausgestreckten Arm",
             R: "keine Reise, kein Infekt"
           },
@@ -190,10 +188,10 @@ exports.handler = async (event) => {
           antikoagulation: false,
           OPQRST: {
             O: "sofort nach Sturz",
-            P: "Bewegung / Belastung verschlechtert, Schienen / Ruhigstellung bessert",
+            P: "Bewegung / Belastung verschlechtert massiv, Ruhigstellung bessert",
             Q: "stechender, lokaler Schmerz",
             R: "kein Ausstrahlen",
-            S: "NRS 7–8",
+            S: "NRS 8 (initial)",
             T: "konstant seit Sturz"
           }
         },
@@ -202,9 +200,7 @@ exports.handler = async (event) => {
           diagnosis_keys: ["Fraktur", "Bruch", "Unterarm", "Radius", "Ulna"],
           injury_map: ["arm_r"],
           bleeding_info: "Sickerblutung am Unterarm durch Schürfwunden. Keine spritzende arterielle Blutung. Kleidung sonst trocken.",
-          
           ekg_pattern: "sinus",
-          
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei",
           lung: "vesikulär beidseits, keine RG",
@@ -225,8 +221,9 @@ exports.handler = async (event) => {
         specialty: "pädiatrisch",
         role,
         difficulty,
+        // UPDATE: Name hinzugefügt
         story:
-          "9 Monate alter Säugling mit Husten und erschwerter Atmung seit gestern, heute deutliche Verschlechterung.",
+          "Häuslicher Notfall: Der 9 Monate alte Säugling 'Ben' hustet seit gestern und atmet heute sehr schwer. Die Eltern sind besorgt.",
         target_outcome:
           "Respiratorische Situation einschätzen, Oxygenierung verbessern, Transport mit Monitoring in Kinderklinik.",
         key_findings: ["Tachypnoe", "Einziehungen", "Nasenflügeln", "geringe Trinkmenge", "Fieber"],
@@ -244,16 +241,16 @@ exports.handler = async (event) => {
 
         anamnesis: {
           SAMPLER: {
-            S: "Husten, schnelle Atmung, trinkt schlecht",
+            S: "Husten, schnelle Atmung, trinkt schlecht (< 50% der Norm)",
             A: "keine bekannt",
-            M: "Fiebersaft heute Morgen",
+            M: "Paracetamol Zäpfchen vor 4h",
             P: "Frühgeboren 36+0, sonst unauffällig",
-            L: "keine Krankenhausaufenthalte",
+            L: "Flasche vor 4 Stunden, kaum getrunken",
             E: "seit 2 Tagen Husten und Schnupfen, seit heute deutlich schlechter",
-            R: "kein Auslandsaufenthalt, Kontakt zu erkälteten Geschwistern"
+            R: "kein Auslandsaufenthalt, Kontakt zu erkälteten Geschwistern (Kita)"
           },
           vorerkrankungen: ["Frühgeburt 36+0"],
-          medikation: ["Paracetamol-Saft nach Bedarf"],
+          medikation: ["Paracetamol nach Bedarf"],
           allergien: [],
           antikoagulation: false,
           OPQRST: {
@@ -269,9 +266,7 @@ exports.handler = async (event) => {
         hidden: {
           diagnosis_keys: ["Bronchiolitis", "RSV", "Infekt", "Obstruktion", "Atemwegsinfekt"],
           bleeding_info: "Keine Blutungen sichtbar. Windelbereich nicht beurteilt.",
-          
-          ekg_pattern: "sinus", // Bei Säuglingen oft schneller Sinus
-          
+          ekg_pattern: "sinus", 
           pupils: "isokor, altersentsprechend, prompt",
           mouth: "Nasen-Rachenraum mit klarem Sekret, kein Stridor",
           lung:
@@ -369,7 +364,6 @@ exports.handler = async (event) => {
     c.hidden.pain    = c.hidden.pain || { nrs: 0, ort: "—", charakter: "—" };
     c.hidden.injuries = Array.isArray(c.hidden.injuries) ? c.hidden.injuries : [];
     
-    // Fallback falls diagnosis_keys vergessen wurde
     c.hidden.diagnosis_keys = Array.isArray(c.hidden.diagnosis_keys) ? c.hidden.diagnosis_keys : [];
     c.hidden.injury_map = Array.isArray(c.hidden.injury_map) ? c.hidden.injury_map : [];
     c.hidden.bleeding_info = c.hidden.bleeding_info || "Keine äußeren Blutungen.";
