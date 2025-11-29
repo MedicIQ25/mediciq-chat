@@ -145,7 +145,6 @@ const ACTIONS = {
     { label: '12-Kanal-EKG',           token: '12-Kanal-EKG' },
     { label: 'i.V. Zugang legen',      token: 'i.V. Zugang legen' }, 
     { label: 'Volumen 500 ml',         token: 'Volumen 500 ml' }
-    // Notarzt hier entfernt, da jetzt globaler Button
   ],
   D: [
     { label: 'GCS erheben',            token: 'GCS erheben' },
@@ -305,9 +304,11 @@ function closeModal(id) { $id('modalBackdrop').classList.add('hidden'); $id(id).
 // Notarzt Modal
 function openNA() {
   if (!caseState) return;
-  $id('naReason').value = '';
+  const txt = $id('naReason');
+  if(txt) txt.value = '';
+  
   $id('naOk').onclick = () => {
-    const reason = $id('naReason').value || 'Keine Angabe';
+    const reason = txt?.value || 'Keine Angabe';
     stepCase(`Notarzt nachfordern: ${reason}`);
     closeModal('modalNA');
   };
