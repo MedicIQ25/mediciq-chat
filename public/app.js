@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Updated: pDMS & Color Fix)
+// medicIQ – App Logic (Updated: SINNHAFT Handover)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -13,6 +13,7 @@ const hintText  = document.getElementById('hintText');
 const panel     = document.getElementById('panel');
 const queueList = document.getElementById('queueList');
 const chatLog   = document.getElementById('chatLog');
+const timerEl   = document.getElementById('missionTimer');
 
 // Controls
 const specRow   = document.getElementById('specRow');
@@ -27,6 +28,9 @@ let selectedSpec  = 'internistisch';
 // State
 let caseState = null;
 const queue = [];
+let timerInterval = null;
+let startTime = null;
+
 const visibleVitals = {};
 const vitalsMap = {
   RR:   document.getElementById('vRR'),
@@ -54,7 +58,7 @@ specButtons.forEach(btn => {
   });
 });
 
-// Tools
+// Tools & Tabs
 document.querySelectorAll('.schema-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const t = btn.dataset.tool;
@@ -68,7 +72,6 @@ document.querySelectorAll('.schema-btn').forEach(btn => {
   });
 });
 
-// Tabs
 const tabs = Array.from(document.querySelectorAll('.tab'));
 tabs.forEach(t => t.addEventListener('click', () => {
   tabs.forEach(x => x.classList.remove('active'));
@@ -76,15 +79,12 @@ tabs.forEach(t => t.addEventListener('click', () => {
   renderPanel(t.dataset.tab);
 }));
 
-// Global NA
 document.getElementById('btnGlobalNA')?.addEventListener('click', openNA);
 
-// ------- Actions Panel (Updated) -------
+// ------- Actions Panel -------
 const ACTIONS = {
   X: [
-    // NEU: Erst untersuchen!
     { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck' },
-    // Dann urteilen oder handeln
     { label: 'Keine Blutung feststellbar', token: 'X unauffällig' },
     { label: 'Druckverband anlegen', token: 'Druckverband' },
     { label: 'Tourniquet anlegen', token: 'Tourniquet' },
@@ -109,7 +109,7 @@ const ACTIONS = {
     { label: 'RR messen', token: 'RR messen' },
     { label: 'Puls messen', token: 'Puls messen' },
     { label: 'pDMS prüfen', token: 'pDMS Kontrolle' },
-    { label: '12-Kanal-EKG', token: '12-Kanal-EKG' },
+    { label: '12-Kanal-EKG', special: 'EKG' },
     { label: 'i.V. Zugang legen', token: 'i.V. Zugang legen' },
     { label: 'Volumen 500 ml', token: 'Volumen 500 ml' }
   ],
@@ -140,6 +140,7 @@ function renderPanel(k) {
       else if(a.special === 'NA') openNA();
       else if(a.special === 'IMMO') openImmo();
       else if(a.special === 'BODYMAP') openBodyMap();
+      else if(a.special === 'EKG') openEKG();
       else { queue.push(a); renderQueue(); }
     };
     panel.appendChild(b);
@@ -159,6 +160,23 @@ function renderQueue() {
 
 // ------- CORE LOGIC -------
 
+function startTimer() {
+  startTime = Date.now();
+  timerEl.classList.remove('hidden');
+  timerEl.textContent = "00:00";
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const diff = Math.floor((Date.now() - startTime) / 1000);
+    const m = Math.floor(diff / 60).toString().padStart(2,'0');
+    const s = (diff % 60).toString().padStart(2,'0');
+    timerEl.textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+function stopTimer() {
+  if(timerInterval) clearInterval(timerInterval);
+}
+
 function updateUI(running) {
   if (running) {
     specRow.classList.add('hidden');
@@ -171,6 +189,7 @@ function updateUI(running) {
     finishBtn.classList.add('hidden');
     roleSel.disabled = false;
     startBtn.disabled = false;
+    timerEl.classList.add('hidden'); 
   }
 }
 
@@ -182,6 +201,7 @@ async function startCase() {
   renderVitals();
   
   updateUI(true); 
+  startTimer(); 
   
   const chips = Array.from(document.querySelectorAll('.chip'));
   chips.forEach(c => c.classList.remove('done','active'));
@@ -247,6 +267,7 @@ async function stepCase(txt) {
       openDebrief();
       caseState = null;
       updateUI(false); 
+      stopTimer();
       setStatus('Fall beendet.');
     }
   } catch(e) {
@@ -287,7 +308,7 @@ function addMsg(h) {
   d.scrollIntoView({block:'end', behavior:'smooth'});
 }
 
-// ------- Modals (Safe Handling) -------
+// ------- Modals -------
 const $id = (id) => document.getElementById(id);
 const backdrop = $id('modalBackdrop');
 
@@ -316,11 +337,8 @@ runBtn.onclick = async () => {
 };
 clearBtn.onclick = () => { queue.length=0; renderQueue(); };
 startBtn.onclick = startCase;
-finishBtn.onclick = async () => {
-  if(caseState) {
-    await openDebrief();
-    stepCase('Fall beenden');
-  }
+finishBtn.onclick = () => {
+    openHandover();
 };
 
 // Specific Modal Logic
@@ -416,29 +434,67 @@ function openImmo() {
 
 function openBodyMap() {
   if(!caseState) return;
-  
-  // Reset Colors
   ['body_head','body_torso','body_arm_r','body_arm_l','body_leg_r','body_leg_l'].forEach(id => {
     const el = document.getElementById(id);
-    // Hier nutzen wir setAttribute für den SVG Fill
     if(el) el.setAttribute('fill', '#f1f5f9');
   });
-
-  // Verletzungsort aus caseState holen
   const loc = caseState.hidden?.injury_map || []; 
-  
   loc.forEach(l => {
      const el = document.getElementById(`body_${l}`);
-     if(el) el.setAttribute('fill', '#f87171'); // Rot
+     if(el) el.setAttribute('fill', '#f87171'); 
   });
-
   const txt = caseState.hidden?.injuries?.join(', ') || "Keine sichtbaren Außenverletzungen.";
   $id('bodyMapText').textContent = txt;
-
   $id('bodyMapClose').onclick = () => closeModal('modalBodyMap');
   openModal('modalBodyMap');
-  
   stepCase('Bodycheck (visuell)');
+}
+
+function openEKG() {
+    if(!caseState) return;
+    const type = caseState.hidden?.ekg_pattern || "sinus";
+    const line = $id('ekgLine');
+    const txt  = $id('ekgText');
+    let points = "";
+    let yBase = 75;
+    
+    if(type === "sinus") {
+        for(let i=0; i<400; i+=50) {
+            points += `${i},${yBase} ${i+10},${yBase} ${i+15},${yBase-10} ${i+20},${yBase+10} ${i+25},${yBase-50} ${i+30},${yBase+20} ${i+35},${yBase} ${i+45},${yBase-5} ${i+50},${yBase} `;
+        }
+        txt.textContent = "Monitorbild (Ableitung II)";
+    } else if (type === "vt") {
+        for(let i=0; i<400; i+=30) {
+             points += `${i},${yBase} ${i+10},${yBase-60} ${i+20},${yBase+60} ${i+30},${yBase} `;
+        }
+        txt.textContent = "Monitorbild (Warnung!)";
+    } else {
+        points = `0,${yBase} 400,${yBase}`;
+        txt.textContent = "Monitorbild";
+    }
+    line.setAttribute('points', points);
+    $id('ekgClose').onclick = () => closeModal('modalEKG');
+    openModal('modalEKG');
+    stepCase('12-Kanal-EKG');
+}
+
+// NEU: SINNHAFT Übergabe
+function openHandover() {
+    if(!caseState) return;
+    $id('s_ident').value = "";
+    $id('s_event').value = "";
+    $id('s_prio').value = "";
+    $id('s_action').value = "";
+    $id('s_anam').value = "";
+    
+    $id('handoverOk').onclick = () => {
+        const text = `SINNHAFT: I:${$id('s_ident').value} | N:${$id('s_event').value} | N:${$id('s_prio').value} | H:${$id('s_action').value} | A:${$id('s_anam').value}`;
+        stepCase(`Übergabe: ${text}`);
+        setTimeout(() => stepCase('Fall beenden'), 800);
+        closeModal('modalHandover');
+    };
+    $id('handoverCancel').onclick = () => closeModal('modalHandover');
+    openModal('modalHandover');
 }
 
 async function openDebrief() {

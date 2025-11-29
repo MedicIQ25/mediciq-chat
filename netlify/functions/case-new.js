@@ -1,7 +1,7 @@
 /**
  * Netlify Function: case-new
  * Erzeugt einen neuen Fall mit vollständigen, auswertbaren Feldern
- * (inkl. 4S, SAMPLER, BEFAST, Schmerz, vitals_baseline, bleeding_info).
+ * inkl. EKG Pattern
  */
 
 exports.handler = async (event) => {
@@ -66,16 +66,18 @@ exports.handler = async (event) => {
 
         hidden: {
           diagnosis_keys: ["Asthma", "Obstruktion", "Spastik", "Atemnot"],
-          // NEU: Blutungsinfo
           bleeding_info: "Keine äußeren Blutungen sichtbar. Kleidung trocken.",
+          
+          // NEU EKG
+          ekg_pattern: "sinus", // sinus, vt, asystolie
           
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei, kein Stridor, kein Erbrochenes",
           lung: "Giemen beidseits, verlängertes Exspirium, keine Rasselgeräusche",
           abdomen: "weich, kein Abwehrspannungsbefund",
           skin: "rosig, leicht schweißig",
-          ekg3: "Sinusrhythmus 110/min, keine ST-Hebungen",
-          ekg12: "Sinusrhythmus, keine Ischämiezeichen",
+          ekg3: "Sinusrhythmus 124/min, P-Wellen vorhanden",
+          ekg12: "Sinustachykardie, keine Ischämiezeichen",
           befast: "ohne Auffälligkeiten",
           lkw: "nicht relevant",
           pain: { nrs: 2, ort: "thorakal, diffus", charakter: "Engegefühl/Pressen" },
@@ -131,15 +133,16 @@ exports.handler = async (event) => {
 
         hidden: {
           diagnosis_keys: ["Hypoglykämie", "Unterzucker", "Glucose", "Zucker"],
-          // NEU
           bleeding_info: "Keine Blutungen. Patient schwitzt stark (kaltschweißig).",
+          
+          ekg_pattern: "sinus",
           
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei",
           lung: "vesikuläres Atemgeräusch beidseits, keine RG",
           abdomen: "weich, kein Druckschmerz",
           skin: "kaltschweißig, leicht blass",
-          ekg3: "Sinusrhythmus 90/min, einzelne supraventrikuläre Extrasystolen",
+          ekg3: "Sinusrhythmus 96/min",
           ekg12: "Sinusrhythmus, keine akuten Ischämiezeichen",
           befast: "ohne fokal-neurologische Ausfälle",
           lkw: "kein Schlaganfallverdacht, daher nicht relevant",
@@ -198,16 +201,16 @@ exports.handler = async (event) => {
         hidden: {
           diagnosis_keys: ["Fraktur", "Bruch", "Unterarm", "Radius", "Ulna"],
           injury_map: ["arm_r"],
-          
-          // NEU: Spezifische Blutungsinformation für Trauma
           bleeding_info: "Sickerblutung am Unterarm durch Schürfwunden. Keine spritzende arterielle Blutung. Kleidung sonst trocken.",
+          
+          ekg_pattern: "sinus",
           
           pupils: "isokor, mittelweit, prompt",
           mouth: "Mund-/Rachenraum frei",
           lung: "vesikulär beidseits, keine RG",
           abdomen: "weich, kein Druckschmerz",
           skin: "Schürfwunden am rechten Unterarm, Hämatom, keine große offene Wunde",
-          ekg3: "Sinusrhythmus 85/min",
+          ekg3: "Sinusrhythmus 88/min",
           ekg12: "Sinus, keine Auffälligkeiten",
           befast: "ohne Auffälligkeiten",
           lkw: "nicht relevant",
@@ -265,8 +268,9 @@ exports.handler = async (event) => {
 
         hidden: {
           diagnosis_keys: ["Bronchiolitis", "RSV", "Infekt", "Obstruktion", "Atemwegsinfekt"],
-          // NEU
           bleeding_info: "Keine Blutungen sichtbar. Windelbereich nicht beurteilt.",
+          
+          ekg_pattern: "sinus", // Bei Säuglingen oft schneller Sinus
           
           pupils: "isokor, altersentsprechend, prompt",
           mouth: "Nasen-Rachenraum mit klarem Sekret, kein Stridor",
@@ -274,7 +278,7 @@ exports.handler = async (event) => {
             "beidseits giemende und pfeifende Atemgeräusche, verlängertes Exspirium, leichte Einziehungen",
           abdomen: "weich, kein Druckschmerz",
           skin: "leicht febril, etwas blass, periphere Zyanose bei Belastung",
-          ekg3: "Sinusrhythmus, altersentsprechende HF",
+          ekg3: "Sinusrhythmus 168/min",
           ekg12: "nicht routinemäßig abgeleitet; kein Hinweis auf kardiale Problematik",
           befast: "nicht relevant",
           lkw: "nicht relevant",
@@ -369,6 +373,7 @@ exports.handler = async (event) => {
     c.hidden.diagnosis_keys = Array.isArray(c.hidden.diagnosis_keys) ? c.hidden.diagnosis_keys : [];
     c.hidden.injury_map = Array.isArray(c.hidden.injury_map) ? c.hidden.injury_map : [];
     c.hidden.bleeding_info = c.hidden.bleeding_info || "Keine äußeren Blutungen.";
+    c.hidden.ekg_pattern = c.hidden.ekg_pattern || "sinus";
 
     c.support = c.support || { calls: [] };
 

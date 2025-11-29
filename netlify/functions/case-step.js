@@ -1,9 +1,5 @@
 /**
  * Netlify Function: case-step
- * Fixes: Zugang/Volumen Logik, Notarzt, SAMPLER Info, SpO2 Visibility
- * + Neu: Intelligentes Debriefing mit Lob für Einzelmaßnahmen
- * + Neu: pDMS Logik
- * + Neu: X-Blutungscheck
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -58,6 +54,13 @@ exports.handler = async (event) => {
       reply.evaluation = "Verdachtsdiagnose & Priorität dokumentiert.";
       return ok(reply); 
     }
+    
+    if (ua.includes("Übergabe:")) {
+        state.measurements.handover_done = true;
+        reply.accepted = true;
+        reply.evaluation = "Übergabe an Klinik/Arzt erfolgt.";
+        return ok(reply);
+    }
 
     if (/debrief|fall beenden/.test(low)) {
       reply.done = true;
@@ -73,6 +76,7 @@ exports.handler = async (event) => {
       const hasImmo = actionsDone.some(a => a.includes("immobilisation"));
       const hasDMS  = actionsDone.some(a => a.includes("pdms") || a.includes("dms"));
       const hasO2   = actionsDone.some(a => a.includes("o2") || a.includes("sauerstoff"));
+      const hasHandover = state.measurements.handover_done;
 
       let status = "Bestanden";
       let summary = "";
@@ -94,6 +98,8 @@ exports.handler = async (event) => {
       else if (state.specialty === 'trauma') summary += "\n❌ Trauma: Es wurde keine Schienung durchgeführt.";
       if (hasDMS) summary += "\n✅ Sicherheit: pDMS-Kontrolle wurde durchgeführt.";
       if (hasO2 && parseFloat(state.vitals.SpO2) < 94) summary += "\n✅ Therapie: Sauerstoffgabe war indiziert und erfolgte.";
+      if (hasHandover) summary += "\n✅ Kommunikation: Strukturierte Übergabe (SINNHAFT) ist erfolgt.";
+      else summary += "\n⚠️ Kommunikation: Übergabe an den Arzt fehlte.";
       
       if (state.measurements.diagnosis) {
         summary += `\n\nDeine Diagnose: ${state.measurements.diagnosis}`;
@@ -112,13 +118,9 @@ exports.handler = async (event) => {
     // =================================================================
     if (/blutungscheck|blutung suchen/.test(low)) {
         reply.accepted = true;
-        
-        // Info aus dem Hidden-Bereich holen
         const info = H.bleeding_info || "Keine offensichtlichen massiven Blutungen auf den ersten Blick erkennbar.";
-        
         reply.finding = info;
         reply.evaluation = "X: Initiale Blutungs-Inspektion durchgeführt.";
-        
         if (info.toLowerCase().includes("spritzend") || info.toLowerCase().includes("massiv")) {
              reply.next_hint = "Sofort Tourniquet oder Druckverband!";
         } else if (info.toLowerCase().includes("keine")) {
@@ -254,6 +256,18 @@ exports.handler = async (event) => {
             ? `Verletzungen identifiziert: ${H.injuries.join(', ')}` 
             : "Keine äußeren Verletzungen erkennbar.";
         touchStep("E");
+        return ok(reply);
+    }
+    
+    // EKG LOGIK
+    if (ua.includes('12-Kanal-EKG')) {
+        reply.accepted = true;
+        const pattern = H.ekg_pattern || "sinus";
+        reply.evaluation = "C: EKG geschrieben.";
+        if (pattern === 'vt') reply.finding = "Achtung! Breitkomplextachykardie.";
+        else if (pattern === 'asystolie') reply.finding = "Nulllinie (Asystolie).";
+        else reply.finding = H.ekg12 || "Sinusrhythmus.";
+        touchStep("C");
         return ok(reply);
     }
 

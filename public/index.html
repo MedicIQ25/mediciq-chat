@@ -12,7 +12,10 @@
 <main class="page">
   <section class="chat-container" aria-label="Fallbeispiele (Click-UI)">
     
-    <h1>medicIQ – Fallbeispiele</h1>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h1 style="margin:0;">medicIQ – Fallbeispiele</h1>
+        <div id="missionTimer" class="timer-badge hidden">00:00</div>
+    </div>
 
     <div class="setup-container">
       
@@ -35,7 +38,7 @@
         </div>
         <div class="setup-right">
           <button id="startCase" class="btn">Neuen Fall starten</button>
-          <button id="finishCase" class="btn danger hidden">Fall beenden</button>
+          <button id="finishCase" class="btn danger hidden">Fall beenden (Übergabe)</button>
         </div>
       </div>
 
@@ -88,7 +91,7 @@
       <button class="schema-btn" data-tool="SAMPLER">SAMPLER</button>
       <button class="schema-btn" data-tool="BEFAST">BE-FAST</button>
       <button class="schema-btn" data-tool="NRS">Schmerzskala (NRS)</button>
-      <button class="schema-btn primary" data-tool="DIAGNOSIS">Verdachtsdiagnose & Transport</button>
+      <button class="schema-btn primary" data-tool="DIAGNOSIS">Verdachtsdiagnose</button>
       <button class="schema-btn" data-tool="DEBRIEF">Debriefing anzeigen</button>
     </div>
 
@@ -296,5 +299,38 @@
     <button id="bodyMapClose" class="btn secondary">Schließen</button>
   </div>
 </div>
+
+<div id="modalEKG" class="modal" style="display:none;">
+  <div class="modal-head">EKG Monitor (3-Kanal / 12-Kanal)</div>
+  <div class="modal-body" style="text-align:center;">
+    <svg id="ekgSvg" width="400" height="150" viewBox="0 0 400 150" style="background:#000; border:2px solid #333; margin:auto;">
+       <polyline id="ekgLine" points="" fill="none" stroke="#00ff00" stroke-width="2" />
+    </svg>
+    <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e;"></div>
+  </div>
+  <div class="modal-actions">
+    <button id="ekgClose" class="btn secondary">Schließen</button>
+  </div>
+</div>
+
+<div id="modalHandover" class="modal" style="display:none;">
+  <div class="modal-head">Übergabe (SINNHAFT)</div>
+  <div class="modal-body form-grid">
+    <div class="small muted" style="color:#ef4444; font-weight:bold;">S - Start (Ruhe! Alle bereit?)</div>
+    
+    <label>I - Identifikation <input id="s_ident" placeholder="Name, Alter, (Gewicht)..." /></label>
+    <label>N - Notfallereignis <input id="s_event" placeholder="Was? Wie? Wann? Wo?" /></label>
+    <label>N - Notfallpriorität <input id="s_prio" placeholder="xABCDE, Vitalparameter..." /></label>
+    <label>H - Handlungen <input id="s_action" placeholder="Durchgeführte Maßnahmen, Wirkung..." /></label>
+    <label>A - Anamnese <input id="s_anam" placeholder="SAMPLER, Besonderheiten..." /></label>
+    
+    <div class="small muted" style="margin-top:5px; color:#3b82f6;">F - Fazit (Wiederholung) | T - Teamfragen</div>
+  </div>
+  <div class="modal-actions">
+    <button id="handoverOk" class="btn">Fall abschließen</button>
+    <button id="handoverCancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
+
 </body>
 </html>
