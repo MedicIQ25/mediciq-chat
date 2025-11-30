@@ -1,7 +1,6 @@
 /**
  * Netlify Function: case-new
- * Erzeugt einen neuen Fall mit vollständigen, auswertbaren Feldern
- * inkl. EKG Pattern und Patientennamen in der Story.
+ * Erzeugt einen neuen Fall mit vollständigen Feldern und Patienten-Dialogen.
  */
 
 exports.handler = async (event) => {
@@ -23,11 +22,12 @@ exports.handler = async (event) => {
         specialty: "internistisch",
         role,
         difficulty,
-        // UPDATE: Name hinzugefügt
-        story:
-          "Einsatz auf dem Sportplatz: Patient Lukas M. (17 Jahre) klagt über akute Atemnot nach einem 100m-Sprint. Er spricht nur in 2-Wort-Sätzen.",
-        target_outcome:
-          "AF und SpO₂ verbessern (O₂ + inhalatives β₂-Mimetikum), Transport vorbereiten.",
+        // SZENE (Das liest du)
+        story: "Einsatz auf dem Sportplatz: Patient Lukas M. (17 Jahre) sitzt im Kutschersitz auf der Bank nach einem 100m-Sprint.",
+        // DIALOG (Das hörst du - Gehetzt, Atemnot)
+        intro_dialogue: "Hilfe... ich krieg... kaum Luft! *keuch* ... Hab mein Spray... vergessen!",
+        
+        target_outcome: "AF und SpO₂ verbessern (O₂ + inhalatives β₂-Mimetikum), Transport vorbereiten.",
         key_findings: ["Dyspnoe", "verlängertes Exspirium", "Giemen", "Sprechdyspnoe"],
         red_flags: ["SpO₂ < 90 %", "Erschöpfung", "Silent chest"],
 
@@ -37,51 +37,23 @@ exports.handler = async (event) => {
           sicherheit: "Keine akute Eigen-/Fremdgefährdung, Sportplatz gesichert.",
           szene: "Sportplatz, Lukas sitzt nach vorne gebeugt (Kutschersitz).",
           sichtung_personen: "1 Patient, Trainer und Mannschaftskameraden anwesend.",
-          support_empfehlung:
-            "NA bei fehlender Besserung unter Therapie oder klinischer Verschlechterung erwägen."
+          support_empfehlung: "NA bei fehlender Besserung unter Therapie."
         },
 
         anamnesis: {
           SAMPLER: {
             S: "akute Atemnot nach Sprint, bekannte Asthma bronchiale",
             A: "Pollen, Hausstaub",
-            M: "Salbutamol Spray (Bedarf), Budesonid (Controller, unregelmäßig)",
+            M: "Salbutamol Spray (Bedarf)",
             P: "Asthma bronchiale seit Kindheit",
             L: "keine Krankenhausaufenthalte in letzter Zeit",
-            E: "Belastung/Sport, Pollenflug, Inhalator in der Tasche vergessen",
-            R: "keine Reise, kein Fieber"
+            E: "Belastung/Sport, Pollenflug",
+            R: "keine Reise"
           },
-          vorerkrankungen: ["Asthma bronchiale"],
-          medikation: ["β₂-Mimetikum Spray", "inhalatives Steroid (unregelmäßig)"],
-          allergien: ["Pollen", "Hausstaub"],
-          antikoagulation: false,
-          OPQRST: {
-            O: "plötzlich nach Sprint",
-            P: "schlimmer bei Belastung, besser im Sitzen nach vorne gebeugt",
-            Q: "Engegefühl in der Brust",
-            R: "kein Ausstrahlen",
-            S: "NRS 2–3 (Druck), subjektive Luftnot 8/10",
-            T: "seit ca. 10 Minuten zunehmend"
-          }
+          vorerkrankungen: ["Asthma bronchiale"], medikation: ["β₂-Mimetikum Spray"], allergien: ["Pollen", "Hausstaub"], antikoagulation: false,
+          OPQRST: { O: "plötzlich", P: "Sitzen besser", Q: "Engegefühl", R: "-", S: "Luftnot 8/10", T: "seit 10 min" }
         },
-
-        hidden: {
-          diagnosis_keys: ["Asthma", "Obstruktion", "Spastik", "Atemnot"],
-          bleeding_info: "Keine äußeren Blutungen sichtbar. Kleidung trocken.",
-          ekg_pattern: "sinus", 
-          pupils: "isokor, mittelweit, prompt",
-          mouth: "Mund-/Rachenraum frei, kein Stridor, kein Erbrochenes",
-          lung: "Giemen beidseits, verlängertes Exspirium, keine Rasselgeräusche",
-          abdomen: "weich, kein Abwehrspannungsbefund",
-          skin: "rosig, leicht schweißig",
-          ekg3: "Sinusrhythmus 124/min, P-Wellen vorhanden",
-          ekg12: "Sinustachykardie, keine Ischämiezeichen",
-          befast: "ohne Auffälligkeiten",
-          lkw: "nicht relevant",
-          pain: { nrs: 2, ort: "thorakal, diffus", charakter: "Engegefühl/Pressen" },
-          injuries: [],
-          vitals_baseline: { RR: "130/80", SpO2: 94, AF: 18, Puls: 98, BZ: 108, Temp: 36.8, GCS: 15 }
-        }
+        hidden: { diagnosis_keys: ["Asthma", "Obstruktion"], bleeding_info: "Keine äußeren Blutungen.", ekg_pattern: "sinus", pupils: "isokor, mittel", lung: "Giemen beidseits", injuries: [] }
       }),
 
       neurologisch: () => ({
@@ -89,64 +61,38 @@ exports.handler = async (event) => {
         specialty: "neurologisch",
         role,
         difficulty,
-        // UPDATE: Name hinzugefügt
-        story:
-          "Einsatz in Privatwohnung: Der 65-jährige Karl H. wurde von seiner Frau verwirrt auf dem Sofa vorgefunden. Er wirkt kaltschweißig und desorientiert. Die Ehefrau erwähnt Diabetes.",
-        target_outcome:
-          "Hypoglykämie erkennen, Glukosegabe, Bewusstseinslage und BZ im Verlauf dokumentieren.",
-        key_findings: ["Vigilanzminderung", "kaltschweißig", "niedriger BZ", "Diabetesanamnese"],
-        red_flags: ["Bewusstlosigkeit", "Krampfanfälle", "fehlende Besserung nach Glukose"],
+        // SZENE
+        story: "Einsatz in Privatwohnung: Der 65-jährige Karl H. sitzt verwirrt auf dem Sofa. Er ist kaltschweißig und zittert.",
+        // DIALOG (Verwirrt, langsam)
+        intro_dialogue: "Was... wo bin ich hier? Mir ist so... komisch... alles dreht sich irgendwie.",
+
+        target_outcome: "Hypoglykämie erkennen, Glukosegabe.",
+        key_findings: ["Vigilanzminderung", "kaltschweißig", "niedriger BZ"],
+        red_flags: ["Bewusstlosigkeit", "Krampfanfälle"],
 
         vitals: { RR: "146/88", SpO2: 96, AF: 18, Puls: 96, BZ: 42, Temp: 36.4, GCS: 13 },
 
         scene_4s: {
-          sicherheit: "Wohnung, keine akute Gefährdungslage, Zugang frei.",
-          szene: "Patient halb auf dem Sofa, reagiert verzögert, Wohnumgebung unauffällig.",
+          sicherheit: "Wohnung sicher.",
+          szene: "Patient auf Sofa, reagiert verzögert.",
           sichtung_personen: "1 Patient, Ehefrau anwesend.",
-          support_empfehlung: "NA bei Bewusstlosigkeit oder fehlender Besserung nach Therapie."
+          support_empfehlung: "NA bei Bewusstlosigkeit."
         },
 
         anamnesis: {
           SAMPLER: {
-            S: "Verwirrtheit, Zittern, Schwitzen, Wortfindungsstörungen",
-            A: "keine bekannt",
-            M: "Insulin (Lantus), Metformin, Ramipril",
-            P: "Diabetes mellitus Typ 2, Hypertonie",
-            L: "abends wenig gegessen, morgens keine Mahlzeit",
-            E: "Mahlzeit ausgelassen, Insulin dennoch gespritzt",
-            R: "keine Reise, keine Infektsymptome"
+            S: "Verwirrtheit, Zittern, Schwitzen",
+            A: "-",
+            M: "Insulin (Lantus), Metformin",
+            P: "Diabetes Typ 2",
+            L: "Abendessen gestern",
+            E: "Insulin gespritzt aber Frühstück vergessen",
+            R: "-"
           },
-          vorerkrankungen: ["Diabetes mellitus Typ 2", "arterielle Hypertonie"],
-          medikation: ["Basalinsulin", "Metformin", "ACE-Hemmer"],
-          allergien: [],
-          antikoagulation: false,
-          OPQRST: {
-            O: "seit ca. 30 Minuten zunehmende Verwirrtheit",
-            P: "keine klare Provokation außer Nahrungsverzicht",
-            Q: "kein Schmerz, eher Schwächegefühl",
-            R: "-",
-            S: "-",
-            T: "progredient über 30–60 Minuten"
-          }
+          vorerkrankungen: ["Diabetes mellitus Typ 2"], medikation: ["Insulin", "Metformin"], allergien: [], antikoagulation: false,
+          OPQRST: { O: "seit 30 min", P: "-", Q: "Schwäche", R: "-", S: "-", T: "progredient" }
         },
-
-        hidden: {
-          diagnosis_keys: ["Hypoglykämie", "Unterzucker", "Glucose", "Zucker"],
-          bleeding_info: "Keine Blutungen. Patient schwitzt stark (kaltschweißig).",
-          ekg_pattern: "sinus",
-          pupils: "isokor, mittelweit, prompt",
-          mouth: "Mund-/Rachenraum frei",
-          lung: "vesikuläres Atemgeräusch beidseits, keine RG",
-          abdomen: "weich, kein Druckschmerz",
-          skin: "kaltschweißig, leicht blass",
-          ekg3: "Sinusrhythmus 96/min",
-          ekg12: "Sinusrhythmus, keine akuten Ischämiezeichen",
-          befast: "ohne fokal-neurologische Ausfälle",
-          lkw: "kein Schlaganfallverdacht, daher nicht relevant",
-          pain: { nrs: 0, ort: "kein Schmerz", charakter: "-" },
-          injuries: [],
-          vitals_baseline: { RR: "140/80", SpO2: 97, AF: 16, Puls: 82, BZ: 120, Temp: 36.6, GCS: 15 }
-        }
+        hidden: { diagnosis_keys: ["Hypoglykämie", "Unterzucker"], bleeding_info: "Keine Blutung, kaltschweißig.", ekg_pattern: "sinus", pupils: "isokor", lung: "frei", injuries: [] }
       }),
 
       trauma: () => ({
@@ -154,66 +100,38 @@ exports.handler = async (event) => {
         specialty: "trauma",
         role,
         difficulty,
-        // UPDATE: Name hinzugefügt
-        story:
-          "Fahrradsturz auf dem Radweg: Die 29-jährige Lena S. hat sich beim Sturz mit dem rechten Arm abgefangen. Der Unterarm steht deutlich fehl.",
-        target_outcome:
-          "Blutungskontrolle, adäquate Immobilisation, Schmerztherapie einleiten, Traumaschema anwenden.",
-        key_findings: ["deformierter Unterarm", "Druckschmerz", "Schwellung", "Bewegungsschmerz"],
-        red_flags: ["starke Blutung", "neurologische Ausfälle der Hand", "weitere Verletzungen übersehen"],
+        // SZENE
+        story: "Fahrradsturz auf dem Radweg: Die 29-jährige Lena S. hält ihren rechten Unterarm, der deutlich fehlsteht.",
+        // DIALOG (Schmerzverzerrt, panisch)
+        intro_dialogue: "Aua! Mein Arm! Scheiße, das tut so weh... bitte helfen Sie mir, da hat es laut geknackt!",
 
-        vitals: { RR: "132/84", SpO2: 98, AF: 18, Puls: 88, BZ: 102, Temp: 36.7, GCS: 15 },
+        target_outcome: "Immobilisation, Schmerztherapie.",
+        key_findings: ["deformierter Unterarm", "Druckschmerz"],
+        red_flags: ["DMS-Ausfall", "starke Blutung"],
+
+        vitals: { RR: "132/84", SpO2: 98, AF: 18, Puls: 110, BZ: 102, Temp: 36.7, GCS: 15 },
 
         scene_4s: {
-          sicherheit: "Radweg, gesichert. Helm wurde getragen (intakt).",
-          szene: "Fahrradsturz, Lena sitzt am Gehwegrand, hält ihren rechten Arm.",
-          sichtung_personen: "1 Patientin, Zeuge vor Ort.",
-          support_empfehlung:
-            "NA nur bei zusätzlicher Kopfverletzung, Polytrauma oder Schockzeichen."
+          sicherheit: "Radweg gesichert. Helm intakt.",
+          szene: "Patientin sitzt am Boden.",
+          sichtung_personen: "1 Patientin.",
+          support_empfehlung: "NA zur Analgesie."
         },
 
         anamnesis: {
           SAMPLER: {
-            S: "starke Schmerzen rechter Unterarm, 'Knacken' gehört",
-            A: "keine bekannt",
-            M: "Pille (Kontrazeptiva)",
-            P: "keine relevanten Vorerkrankungen",
-            L: "Frühstück vor 2 Stunden",
-            E: "Fahrradsturz, Sturz auf ausgestreckten Arm",
-            R: "keine Reise, kein Infekt"
+            S: "starke Schmerzen rechter Arm",
+            A: "-",
+            M: "Pille",
+            P: "-",
+            L: "2h",
+            E: "Sturz auf Arm",
+            R: "-"
           },
-          vorerkrankungen: [],
-          medikation: [],
-          allergien: [],
-          antikoagulation: false,
-          OPQRST: {
-            O: "sofort nach Sturz",
-            P: "Bewegung / Belastung verschlechtert massiv, Ruhigstellung bessert",
-            Q: "stechender, lokaler Schmerz",
-            R: "kein Ausstrahlen",
-            S: "NRS 8 (initial)",
-            T: "konstant seit Sturz"
-          }
+          vorerkrankungen: [], medikation: ["Kontrazeptiva"], allergien: [], antikoagulation: false,
+          OPQRST: { O: "sofort", P: "Bewegung unmöglich", Q: "stechend", R: "lokal", S: "NRS 9", T: "akut" }
         },
-
-        hidden: {
-          diagnosis_keys: ["Fraktur", "Bruch", "Unterarm", "Radius", "Ulna"],
-          injury_map: ["arm_r"],
-          bleeding_info: "Sickerblutung am Unterarm durch Schürfwunden. Keine spritzende arterielle Blutung. Kleidung sonst trocken.",
-          ekg_pattern: "sinus",
-          pupils: "isokor, mittelweit, prompt",
-          mouth: "Mund-/Rachenraum frei",
-          lung: "vesikulär beidseits, keine RG",
-          abdomen: "weich, kein Druckschmerz",
-          skin: "Schürfwunden am rechten Unterarm, Hämatom, keine große offene Wunde",
-          ekg3: "Sinusrhythmus 88/min",
-          ekg12: "Sinus, keine Auffälligkeiten",
-          befast: "ohne Auffälligkeiten",
-          lkw: "nicht relevant",
-          pain: { nrs: 8, ort: "rechter Unterarm", charakter: "stechend, pulsierend" },
-          injuries: ["vermutete distale Unterarmfraktur rechts"],
-          vitals_baseline: { RR: "128/78", SpO2: 98, AF: 16, Puls: 80, BZ: 102, Temp: 36.7, GCS: 15 }
-        }
+        hidden: { diagnosis_keys: ["Fraktur", "Unterarm"], injury_map: ["arm_r"], bleeding_info: "Schürfwunden Arm, keine arterielle Blutung.", ekg_pattern: "sinus", pupils: "ok", lung: "frei", injuries: ["Fraktur Unterarm rechts"] }
       }),
 
       pädiatrisch: () => ({
@@ -221,66 +139,38 @@ exports.handler = async (event) => {
         specialty: "pädiatrisch",
         role,
         difficulty,
-        // UPDATE: Name hinzugefügt
-        story:
-          "Häuslicher Notfall: Der 9 Monate alte Säugling 'Ben' hustet seit gestern und atmet heute sehr schwer. Die Eltern sind besorgt.",
-        target_outcome:
-          "Respiratorische Situation einschätzen, Oxygenierung verbessern, Transport mit Monitoring in Kinderklinik.",
-        key_findings: ["Tachypnoe", "Einziehungen", "Nasenflügeln", "geringe Trinkmenge", "Fieber"],
-        red_flags: ["Apnoen", "Zyanose", "Erschöpfung", "SpO₂ < 92 % trotz O₂"],
+        // SZENE
+        story: "Häuslicher Notfall: Der 9 Monate alte Säugling 'Ben' hustet schwer und atmet sehr schnell. Die Mutter hält ihn im Arm.",
+        // DIALOG (Mutter spricht für das Kind)
+        intro_dialogue: "Bitte schauen Sie nach Ben! Er atmet so schnell und pfeift richtig... er will auch nichts trinken!",
 
-        vitals: { RR: "110/70", SpO2: 90, AF: 42, Puls: 168, BZ: 96, Temp: 38.7, GCS: 15 },
+        target_outcome: "Oxygenierung verbessern, Transport.",
+        key_findings: ["Tachypnoe", "Einziehungen", "Nasenflügeln"],
+        red_flags: ["Zyanose", "Erschöpfung"],
+
+        vitals: { RR: "110/70", SpO2: 90, AF: 45, Puls: 160, BZ: 96, Temp: 38.7, GCS: 15 },
 
         scene_4s: {
-          sicherheit: "Wohnung, keine akute Gefährdung. Eltern anwesend.",
-          szene: "Kind liegt im Bettchen, wirkt erschöpft, atmet schnell.",
-          sichtung_personen: "1 Kind, Eltern anwesend.",
-          support_empfehlung:
-            "NA / Kinderarzt bei drohender respiratorischer Erschöpfung oder Apnoen."
+          sicherheit: "Wohnung sicher.",
+          szene: "Kinderzimmer.",
+          sichtung_personen: "Kind + Mutter.",
+          support_empfehlung: "Kinderarzt/NA bei Erschöpfung."
         },
 
         anamnesis: {
           SAMPLER: {
-            S: "Husten, schnelle Atmung, trinkt schlecht (< 50% der Norm)",
-            A: "keine bekannt",
-            M: "Paracetamol Zäpfchen vor 4h",
-            P: "Frühgeboren 36+0, sonst unauffällig",
-            L: "Flasche vor 4 Stunden, kaum getrunken",
-            E: "seit 2 Tagen Husten und Schnupfen, seit heute deutlich schlechter",
-            R: "kein Auslandsaufenthalt, Kontakt zu erkälteten Geschwistern (Kita)"
+            S: "Husten, Schnappatmung, Trinkschwäche",
+            A: "-",
+            M: "Paracetamol",
+            P: "Frühgeburt 36. SSW",
+            L: "4h",
+            E: "Infekt seit 2 Tagen",
+            R: "-"
           },
-          vorerkrankungen: ["Frühgeburt 36+0"],
-          medikation: ["Paracetamol nach Bedarf"],
-          allergien: [],
-          antikoagulation: false,
-          OPQRST: {
-            O: "schleichender Beginn vor 2 Tagen",
-            P: "Lagewechsel kaum Einfluss, Sitzen auf dem Arm bessert etwas",
-            Q: "kein Schmerz, eher Luftnot/Unruhe",
-            R: "-",
-            S: "-",
-            T: "progredient"
-          }
+          vorerkrankungen: ["Frühgeburt"], medikation: ["Paracetamol"], allergien: [], antikoagulation: false,
+          OPQRST: { O: "schleichend", P: "-", Q: "Atemnot", R: "-", S: "-", T: "verschlechtert" }
         },
-
-        hidden: {
-          diagnosis_keys: ["Bronchiolitis", "RSV", "Infekt", "Obstruktion", "Atemwegsinfekt"],
-          bleeding_info: "Keine Blutungen sichtbar. Windelbereich nicht beurteilt.",
-          ekg_pattern: "sinus", 
-          pupils: "isokor, altersentsprechend, prompt",
-          mouth: "Nasen-Rachenraum mit klarem Sekret, kein Stridor",
-          lung:
-            "beidseits giemende und pfeifende Atemgeräusche, verlängertes Exspirium, leichte Einziehungen",
-          abdomen: "weich, kein Druckschmerz",
-          skin: "leicht febril, etwas blass, periphere Zyanose bei Belastung",
-          ekg3: "Sinusrhythmus 168/min",
-          ekg12: "nicht routinemäßig abgeleitet; kein Hinweis auf kardiale Problematik",
-          befast: "nicht relevant",
-          lkw: "nicht relevant",
-          pain: { nrs: 3, ort: "unklar (Kind kann es nicht äußern)", charakter: "Unruhe, Quengeln" },
-          injuries: [],
-          vitals_baseline: { RR: "105/65", SpO2: 95, AF: 32, Puls: 150, BZ: 96, Temp: 37.8, GCS: 15 }
-        }
+        hidden: { diagnosis_keys: ["Bronchiolitis", "RSV"], bleeding_info: "Keine.", ekg_pattern: "sinus", pupils: "ok", lung: "Giemen/Pfeifen", injuries: [] }
       })
     };
 
@@ -288,88 +178,18 @@ exports.handler = async (event) => {
     const createCase = cases[specialty] || cases["internistisch"];
     let c = createCase();
 
-    // ---------- Generische Defaults / Aufräumen ----------
-    c.role       = role;
+    // ---------- Generische Defaults ----------
+    c.role = role;
     c.difficulty = difficulty;
-    c.score      = typeof c.score === "number" ? c.score : 0;
-    c.steps_done = Array.isArray(c.steps_done) ? c.steps_done : [];
-    c.history    = Array.isArray(c.history) ? c.history : [];
-
-    c.vitals = c.vitals || {
-      RR: "120/80",
-      SpO2: 96,
-      AF: 16,
-      Puls: 80,
-      BZ: 110,
-      Temp: 36.8,
-      GCS: 15
-    };
-
-    c.scene_4s = c.scene_4s || {
-      sicherheit: "keine Angaben",
-      szene: "keine Angaben",
-      sichtung_personen: "keine Angaben",
-      support_empfehlung: "keine Empfehlung"
-    };
-
-    c.anamnesis = c.anamnesis || {};
-    c.anamnesis.SAMPLER = c.anamnesis.SAMPLER || {
-      S: "—",
-      A: "—",
-      M: "—",
-      P: "—",
-      L: "—",
-      E: "—",
-      R: "—"
-    };
-    c.anamnesis.vorerkrankungen = Array.isArray(c.anamnesis.vorerkrankungen)
-      ? c.anamnesis.vorerkrankungen
-      : [];
-    c.anamnesis.medikation = Array.isArray(c.anamnesis.medikation)
-      ? c.anamnesis.medikation
-      : [];
-    c.anamnesis.allergien = Array.isArray(c.anamnesis.allergien) ? c.anamnesis.allergien : [];
-    if (typeof c.anamnesis.antikoagulation !== "boolean") {
-      c.anamnesis.antikoagulation = false;
-    }
-    c.anamnesis.OPQRST = c.anamnesis.OPQRST || {
-      O: "—",
-      P: "—",
-      Q: "—",
-      R: "—",
-      S: "—",
-      T: "—"
-    };
-
-    c.hidden = c.hidden || {};
-    c.hidden.vitals_baseline = c.hidden.vitals_baseline || {
-      RR: c.vitals.RR || "120/80",
-      SpO2: c.vitals.SpO2 || 96,
-      AF: c.vitals.AF || 16,
-      Puls: c.vitals.Puls || 80,
-      BZ: c.vitals.BZ || 110,
-      Temp: c.vitals.Temp || 36.8,
-      GCS: c.vitals.GCS || 15
-    };
-
-    c.hidden.pupils  = c.hidden.pupils  || "isokor, mittelweit, prompt";
-    c.hidden.mouth   = c.hidden.mouth   || "Mund-/Rachenraum frei, kein Erbrochenes";
-    c.hidden.lung    = c.hidden.lung    || "vesikuläres Atemgeräusch beidseits, keine RG";
-    c.hidden.abdomen = c.hidden.abdomen || "weich, kein Abwehrspannungsbefund";
-    c.hidden.skin    = c.hidden.skin    || "warm, rosig, keine Auffälligkeiten";
-    c.hidden.ekg3    = c.hidden.ekg3    || "Sinusrhythmus, keine akuten Auffälligkeiten";
-    c.hidden.ekg12   = c.hidden.ekg12   || "Sinus, ohne Ischämiezeichen";
-    c.hidden.befast  = c.hidden.befast  || "ohne Auffälligkeiten";
-    c.hidden.lkw     = c.hidden.lkw     || "nicht ermittelbar";
-    c.hidden.pain    = c.hidden.pain || { nrs: 0, ort: "—", charakter: "—" };
-    c.hidden.injuries = Array.isArray(c.hidden.injuries) ? c.hidden.injuries : [];
+    c.score = 0;
+    c.steps_done = [];
+    c.history = [];
     
-    c.hidden.diagnosis_keys = Array.isArray(c.hidden.diagnosis_keys) ? c.hidden.diagnosis_keys : [];
-    c.hidden.injury_map = Array.isArray(c.hidden.injury_map) ? c.hidden.injury_map : [];
-    c.hidden.bleeding_info = c.hidden.bleeding_info || "Keine äußeren Blutungen.";
-    c.hidden.ekg_pattern = c.hidden.ekg_pattern || "sinus";
-
-    c.support = c.support || { calls: [] };
+    // Fallbacks für leere Felder
+    c.vitals = c.vitals || { RR: "120/80", SpO2: 96, AF: 16, Puls: 80, BZ: 100, Temp: 36.5, GCS: 15 };
+    c.hidden.vitals_baseline = c.hidden.vitals_baseline || { ...c.vitals };
+    c.hidden.injuries = c.hidden.injuries || [];
+    c.hidden.diagnosis_keys = c.hidden.diagnosis_keys || [];
 
     return {
       statusCode: 200,

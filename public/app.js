@@ -1,11 +1,11 @@
 // ===============================================================
-// medicIQ – App Logic (Fixed Version)
+// medicIQ – App Logic (Professional Voice & Dialogue Edition)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
 const API_CASE_STEP = '/.netlify/functions/case-step';
 
-// Define CONSTANTS first to avoid access errors
+// CONSTANTS
 const ACTIONS = {
   X: [ { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck' }, { label: 'Keine Blutung feststellbar', token: 'X unauffällig' }, { label: 'Druckverband anlegen', token: 'Druckverband' }, { label: 'Tourniquet anlegen', token: 'Tourniquet' }, { label: 'Beckenschlinge anlegen', token: 'Beckenschlinge' }, { label: 'Woundpacking', token: 'Hämostyptikum' } ],
   A: [ { label: 'Esmarch-Handgriff', token: 'Esmarch' }, { label: 'Absaugen', token: 'Absaugen' }, { label: 'Mundraumkontrolle', token: 'Mundraumkontrolle' }, { label: 'Guedel-Tubus', token: 'Guedel' }, { label: 'Wendel-Tubus', token: 'Wendel' }, { label: 'Beutel-Masken-Beatmung', token: 'Beutel-Masken-Beatmung' } ],
@@ -23,7 +23,6 @@ let startTime = null;
 let lastTickTime = 0; 
 let soundEnabled = false; 
 let isDarkMode = false;
-let availableVoices = [];
 let selectedSpec = 'internistisch';
 const visibleVitals = {};
 
@@ -33,18 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPanel('X');
     updateUI(false); 
     
-    // 2. Load Voices
-    if(window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = () => {
-            availableVoices = window.speechSynthesis.getVoices();
-        };
-    }
-
-    // 3. Attach Listeners Safely
+    // 2. Attach Listeners Safely
     bindEvent('btnSound', 'click', (e) => {
         soundEnabled = !soundEnabled;
         e.target.textContent = soundEnabled ? "🔊 An" : "🔇 Aus";
-        if(availableVoices.length === 0 && window.speechSynthesis) availableVoices = window.speechSynthesis.getVoices();
     });
 
     bindEvent('btnDark', 'click', () => {
@@ -101,7 +92,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
 });
 
-// Helper to bind events only if element exists
 function bindEvent(id, event, func) {
     const el = document.getElementById(id);
     if(el) el.addEventListener(event, func);
@@ -134,16 +124,26 @@ async function startCase() {
     if(!r.ok) throw new Error("Server Fehler: " + r.statusText);
     
     const d = await r.json();
-    caseState = d.case || d;
+    caseState = d.case || d; // Fallback
     
     document.getElementById('caseStatus').textContent = `Aktiv: ${caseState.specialty}`;
     document.getElementById('caseScore').textContent = 'Score: 0';
     renderProgress([]);
     showHint('Beginne mit XABCDE.');
+
+    // START DISPLAY & AUDIO
     addMsg(`<strong>Fallstart:</strong> ${caseState.story}`);
-    speak(caseState.story); 
+
+    // LOGIK: Wenn Dialog vorhanden, sprich den Dialog. Sonst die Story.
+    if (caseState.intro_dialogue) {
+        // Kurze Pause, dann spricht der Patient
+        setTimeout(() => speak(caseState.intro_dialogue), 500);
+    } else {
+        speak(caseState.story);
+    }
+
   } catch(e) {
-    // FALLBACK LOCAL MODE
+    // FALLBACK LOCAL
     caseState = { 
         id:'local', 
         specialty:selectedSpec, 
@@ -152,11 +152,10 @@ async function startCase() {
         score:0, 
         vitals:{}, 
         hidden: { ekg_pattern: 'sinus' },
-        story: "⚠️ Offline-Modus: Simulierter Fall ohne Server-Verbindung. Vitals manuell prüfen." 
+        story: "⚠️ Offline-Modus: Server nicht erreichbar. Bitte Internet prüfen." 
     };
-    addMsg(`⚠️ Konnte Fall nicht laden (${e.message}). Lokaler Modus aktiv.`);
-    document.getElementById('caseStatus').textContent = 'Lokal Aktiv';
-    speak(caseState.story);
+    addMsg(`⚠️ Konnte Fall nicht laden (${e.message}).`);
+    document.getElementById('caseStatus').textContent = 'Fehler';
   } finally {
     document.getElementById('startCase').disabled = false;
   }
@@ -195,22 +194,16 @@ async function stepCase(txt) {
           ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
         `);
         
-        // --- NEUER CODE START ---
-        // Prüfen, ob es sich nur um eine Dokumentation handelt (z.B. "SAMPLER doku")
+        // LOGIK: Wann soll gesprochen werden?
         const isDoku = txt.toLowerCase().includes('doku') || txt.toLowerCase().includes('dokumentiert');
-
-        // Nur sprechen, wenn:
-        // 1. Ein Befund da ist (d.finding)
-        // 2. Es kein automatischer Zeit-Check ist (!isSystemTick)
-        // 3. Es KEINE reine Dokumentation ist (!isDoku)
         if(d.finding && !isSystemTick && !isDoku) {
             speak(d.finding);
         }
-        }
-
+    }
 
     caseState = d.case_state || caseState;
-    document.getElementById('caseScore').textContent = `Score: ${caseState.score||0}`;
+    const scoreEl = document.getElementById('caseScore');
+    if(scoreEl) scoreEl.textContent = `Score: ${caseState.score||0}`;
     renderProgress(caseState.steps_done||[]);
     
     if(d.done) {
@@ -227,6 +220,7 @@ async function stepCase(txt) {
 
 function renderPanel(k) {
   const panel = document.getElementById('panel');
+  if(!panel) return;
   panel.innerHTML = '';
   (ACTIONS[k]||[]).forEach(a => {
     const b = document.createElement('button');
@@ -277,15 +271,17 @@ function startTimer() {
   startTime = Date.now();
   lastTickTime = Date.now(); 
   const el = document.getElementById('missionTimer');
-  el.classList.remove('hidden');
-  el.textContent = "00:00";
+  if(el) {
+      el.classList.remove('hidden');
+      el.textContent = "00:00";
+  }
   if(timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(() => {
     const now = Date.now();
     const diff = Math.floor((now - startTime) / 1000);
     const m = Math.floor(diff / 60).toString().padStart(2,'0');
     const s = (diff % 60).toString().padStart(2,'0');
-    el.textContent = `${m}:${s}`;
+    if(el) el.textContent = `${m}:${s}`;
     if (now - lastTickTime >= 30000) { 
         lastTickTime = now;
         if(caseState && !caseState.measurements?.handover_done) { stepCase('System-Check: 30s vergangen'); }
@@ -298,29 +294,30 @@ function stopTimer() {
 }
 
 function updateUI(running) {
-  const specRow = document.getElementById('specRow');
+  const specRow = document.getElementById('specRow'); // Achtung: ID im HTML beachten!
   const startBtn = document.getElementById('startCase');
   const finishBtn = document.getElementById('finishCase');
   const roleSel = document.getElementById('roleSel');
   const timerEl = document.getElementById('missionTimer');
 
   if (running) {
-    specRow.classList.add('hidden');
-    startBtn.classList.add('hidden');
-    finishBtn.classList.remove('hidden');
-    roleSel.disabled = true;
+    if(specRow) specRow.classList.add('hidden');
+    if(startBtn) startBtn.classList.add('hidden');
+    if(finishBtn) finishBtn.classList.remove('hidden');
+    if(roleSel) roleSel.disabled = true;
   } else {
-    specRow.classList.remove('hidden');
-    startBtn.classList.remove('hidden');
-    finishBtn.classList.add('hidden');
-    roleSel.disabled = true;
-    startBtn.disabled = false;
-    timerEl.classList.add('hidden'); 
+    if(specRow) specRow.classList.remove('hidden');
+    if(startBtn) startBtn.classList.remove('hidden');
+    if(finishBtn) finishBtn.classList.add('hidden');
+    if(roleSel) roleSel.disabled = true;
+    if(startBtn) startBtn.disabled = false;
+    if(timerEl) timerEl.classList.add('hidden'); 
   }
 }
 
 function renderQueue() {
   const list = document.getElementById('queueList');
+  if(!list) return;
   list.innerHTML = '';
   queue.forEach((it, i) => {
     const li = document.createElement('li');
@@ -348,8 +345,10 @@ function renderProgress(doneList) {
 }
 
 function showHint(t) {
-  document.getElementById('hintText').textContent = t;
-  document.getElementById('hintCard').classList.remove('hidden');
+  const ht = document.getElementById('hintText');
+  const hc = document.getElementById('hintCard');
+  if(ht) ht.textContent = t;
+  if(hc) hc.classList.remove('hidden');
 }
 
 function addMsg(h) {
@@ -357,8 +356,10 @@ function addMsg(h) {
   d.className = 'msg';
   d.innerHTML = h;
   const log = document.getElementById('chatLog');
-  log.appendChild(d);
-  d.scrollIntoView({block:'end', behavior:'smooth'});
+  if(log) {
+    log.appendChild(d);
+    d.scrollIntoView({block:'end', behavior:'smooth'});
+  }
 }
 
 // Modals
@@ -368,23 +369,22 @@ const modalBackdrop = document.getElementById('modalBackdrop');
 function openModal(id) { 
   const el = $id(id);
   if(!el) return;
-  modalBackdrop.style.display = 'block';
+  if(modalBackdrop) modalBackdrop.style.display = 'block';
   el.style.display = 'block';
 }
 function closeModal(id) { 
   const el = $id(id);
   if(!el) return;
-  modalBackdrop.style.display = 'none';
+  if(modalBackdrop) modalBackdrop.style.display = 'none';
   el.style.display = 'none';
 }
 
-// High-End OpenAI Sprachausgabe mit Geschlechter-Erkennung
+// --- OPENAI TTS LOGIC (High-End) ---
 let currentAudio = null;
 
 async function speak(text) {
     if (!soundEnabled || !text) return;
     
-    // Altes Audio stoppen
     if(currentAudio) { currentAudio.pause(); currentAudio = null; }
 
     // Text reinigen
@@ -396,33 +396,28 @@ async function speak(text) {
         .replace(/l\/min/g, 'Liter')
         .replace(/°C/g, 'Grad');
 
-    // --- LOGIK: WELCHE STIMME? ---
-    // Standard: Mann (onyx)
+    // LOGIK: Stimme wählen basierend auf Patient
     let selectedVoice = "onyx"; 
 
-    // Wir schauen uns die Story des aktuellen Falls an
-    // (caseState ist die globale Variable, wo der Fall drin liegt)
     if (caseState && caseState.story) {
         const storyLower = caseState.story.toLowerCase();
         const specialty = (caseState.specialty || "").toLowerCase();
 
-        // Check auf Kind (Pädiatrie oder Schlüsselwörter)
+        // Kind
         if (specialty === 'paediatrisch' || storyLower.includes('kind') || storyLower.includes('säugling') || storyLower.includes('junge') || storyLower.includes('mädchen')) {
-            selectedVoice = "alloy"; // "Alloy" ist neutraler/heller, passt am besten für junge Patienten
+            selectedVoice = "alloy"; 
         }
-        // Check auf Frau
+        // Frau
         else if (storyLower.includes('frau') || storyLower.includes('patientin') || storyLower.includes('sie ')) {
-            selectedVoice = "nova"; // "Nova" ist eine sehr gute weibliche Stimme
+            selectedVoice = "nova"; 
         }
     }
-    // -----------------------------
 
     const btn = document.getElementById('btnSound');
     const oldIcon = btn.textContent;
     btn.textContent = "⏳..."; 
 
     try {
-        // Wir schicken jetzt Text UND die gewünschte Stimme an den Server
         const response = await fetch('/.netlify/functions/tts', {
             method: 'POST',
             body: JSON.stringify({ 
@@ -448,7 +443,7 @@ async function speak(text) {
     }
 }
 
-// Feature implementations (Modals)
+// --- Feature Modals ---
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
@@ -472,8 +467,8 @@ function openNRS() {
   $id('nrsFetch').onclick = async () => {
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'Schmerz Info'})});
     const d = await res.json();
+    if(d.finding) speak(d.finding);
     $id('nrsInfo').textContent = d.finding;
-    speak(d.finding);
   };
   $id('nrsOk').onclick=()=>{ stepCase(`NRS ${r.value}`); closeModal('modalNRS'); };
   $id('nrsCancel').onclick=()=>closeModal('modalNRS');
@@ -483,8 +478,8 @@ function openBEFAST() {
   $id('befastFetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'BEFAST Info'})});
     const d = await res.json();
+    if(d.finding) speak(d.finding);
     $id('befastInfo').textContent = d.finding;
-    speak(d.finding);
   };
   $id('befastOk').onclick=()=>{ stepCase('BEFAST dokumentiert'); closeModal('modalBEFAST'); };
   $id('befastCancel').onclick=()=>closeModal('modalBEFAST');
@@ -510,8 +505,8 @@ function openFourS() {
   $id('s4Fetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
     const d = await res.json();
+    if(d.finding) speak(d.finding);
     $id('s4Info').textContent = d.finding;
-    speak(d.finding);
   };
   $id('s4Ok').onclick=()=>{ stepCase('4S dokumentiert'); closeModal('modal4S'); };
   $id('s4Cancel').onclick=()=>closeModal('modal4S');
