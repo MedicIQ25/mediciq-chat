@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Silent Medic / Talking Patient Edition)
+// medicIQ – App Logic (Gapless Monitor Edition)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -32,16 +32,12 @@ let monitorTimeout = null;
 
 // Wait for DOM
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Init UI
     renderPanel('X');
     updateUI(false); 
     
-    // 2. Attach Listeners Safely
     bindEvent('btnSound', 'click', (e) => {
         soundEnabled = !soundEnabled;
         e.target.textContent = soundEnabled ? "🔊 An" : "🔇 Aus";
-        
-        // Monitor Sound umschalten
         if(soundEnabled) startMonitorLoop();
         else stopMonitorLoop();
     });
@@ -52,9 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     bindEvent('btnPrint', 'click', () => window.print());
-    
     bindEvent('startCase', 'click', startCase);
-    
     bindEvent('finishCase', 'click', openHandover);
     
     bindEvent('btnRunQueue', 'click', async () => {
@@ -68,7 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     bindEvent('btnClearQueue', 'click', () => { queue.length=0; renderQueue(); });
-    
     bindEvent('btnGlobalNA', 'click', openNA);
 
     document.querySelectorAll('.spec-chip').forEach(btn => {
@@ -114,7 +107,6 @@ async function startCase() {
   renderQueue();
   for(let k in visibleVitals) delete visibleVitals[k];
   renderVitals(); 
-  
   updateUI(true); 
   startTimer(); 
   
@@ -132,36 +124,25 @@ async function startCase() {
     if(!r.ok) throw new Error("Server Fehler: " + r.statusText);
     
     const d = await r.json();
-    caseState = d.case || d; // Fallback
+    caseState = d.case || d; 
     
     document.getElementById('caseStatus').textContent = `Aktiv: ${caseState.specialty}`;
     document.getElementById('caseScore').textContent = 'Score: 0';
     renderProgress([]);
     showHint('Beginne mit XABCDE.');
 
-    // START DISPLAY (Text only)
     addMsg(`<strong>Fallstart:</strong> ${caseState.story}`);
 
-    // START AUDIO (Nur Dialog!)
-    // FIX: Kein "else speak(story)" mehr. Wenn kein Dialog da ist, bleibt es still.
     if (caseState.intro_dialogue) {
         setTimeout(() => speak(caseState.intro_dialogue), 500);
     } 
 
-    // Monitor starten, falls Sound an ist
     if(soundEnabled) startMonitorLoop();
 
   } catch(e) {
-    // FALLBACK LOCAL
     caseState = { 
-        id:'local', 
-        specialty:selectedSpec, 
-        steps_done:[], 
-        history:[], 
-        score:0, 
-        vitals:{}, 
-        hidden: { ekg_pattern: 'sinus' },
-        story: "⚠️ Offline-Modus: Server nicht erreichbar." 
+        id:'local', specialty:selectedSpec, steps_done:[], history:[], score:0, vitals:{}, 
+        hidden: { ekg_pattern: 'sinus' }, story: "⚠️ Offline-Modus: Server nicht erreichbar." 
     };
     addMsg(`⚠️ Konnte Fall nicht laden (${e.message}).`);
     document.getElementById('caseStatus').textContent = 'Fehler';
@@ -183,8 +164,6 @@ async function stepCase(txt) {
     if(d.updated_vitals) {
       Object.assign(visibleVitals, d.updated_vitals);
       renderVitals(); 
-      
-      // FIX: Monitor-Sound SOFORT triggern, wenn Vitals da sind
       if(soundEnabled) {
           if(monitorTimeout) clearTimeout(monitorTimeout);
           scheduleBeep();
@@ -208,10 +187,6 @@ async function stepCase(txt) {
           ${d.finding ? `<div style="color:#b91c1c; margin-top:4px;">${d.finding.replace(/\n/g,'<br>')}</div>` : ''}
           ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
         `);
-        
-        // LOGIK: ABSOLUTE STILLE BEI BEFUNDEN
-        // Der Block, der d.finding vorliest, wurde komplett entfernt.
-        // Nur wenn ein *neuer* Dialog im Backend generiert würde (was wir aktuell noch nicht haben), würde er hier sprechen.
     }
 
     caseState = d.case_state || caseState;
@@ -231,6 +206,130 @@ async function stepCase(txt) {
     addMsg(`Fehler: ${e.message}`);
   }
 }
+
+// --- EKG VISUAL UPDATE (GAPLESS VERSION) ---
+function openEKG() {
+    if(!caseState) return;
+    const type = caseState.hidden?.ekg_pattern || "sinus";
+    
+    // Grid definieren
+    const gridPattern = `
+      <defs>
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#222" stroke-width="1"/>
+        </pattern>
+        <pattern id="grid-bold" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#grid)" />
+          <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#444" stroke-width="2"/>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#grid-bold)" />
+    `;
+
+    // Wir erzeugen einen Pfad, der exakt 400px breit ist (ViewBox Breite)
+    const viewWidth = 400;
+    
+    // EKG oben (Basis 60px)
+    let ekgPath = generateLoopPath(type, 60, viewWidth);
+    // Pleth unten (Basis 130px)
+    let plethPath = generateLoopPath('pleth', 130, viewWidth);
+
+    const modalBody = document.querySelector('#modalEKG .modal-body');
+
+    modalBody.innerHTML = `
+      <div class="ekg-screen" style="width:100%; height:180px;">
+        <svg width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="none">
+            ${gridPattern}
+            
+            <g class="infinite-scroll">
+                 <g>
+                    <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" />
+                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" />
+                 </g>
+                 <g transform="translate(400, 0)">
+                    <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" />
+                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" />
+                 </g>
+            </g>
+
+            <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12" font-weight="bold">II</text>
+            <text x="5" y="100" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
+        </svg>
+      </div>
+      <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
+    `;
+
+    const txt = document.getElementById('ekgText');
+    if(type === "sinus") {
+        txt.textContent = "Sinusrhythmus (HF ~70/min)";
+        txt.style.color = "#00ff00";
+    } else if (type === "vt") {
+        txt.textContent = "!!! V-TACH (Puls tasten!) !!!";
+        txt.style.color = "#ef4444";
+    } else {
+        txt.textContent = "Asystolie / Nulllinie";
+        txt.style.color = "#ef4444";
+    }
+
+    openModal('modalEKG');
+
+    // FIX: Den Close-Button JEDES MAL neu verbinden, da das Modal neu gerendert wird
+    const closeBtn = document.getElementById('ekgClose');
+    if(closeBtn) {
+        closeBtn.onclick = () => closeModal('modalEKG');
+    }
+}
+
+// Helper: Generiert einen Pfad, der exakt 'width' Pixel füllt
+function generateLoopPath(type, yBase, totalWidth) {
+    let d = `M 0 ${yBase} `;
+    let currentX = 0;
+    
+    // Definition der "Bausteine" (Beats)
+    let beatWidth = 0;
+    let beatPoints = []; 
+
+    if (type === 'sinus') {
+        beatWidth = 50; // Breite eines Herzschlags
+        // Relativ-Koordinaten [dx, dy]
+        beatPoints = [
+           [5,0], [3,-5], [3,5], [4,0], // P
+           [2,0], [1,5], [2,-55], [2,60], [2,-10], // QRS
+           [3,0], [5,-10], [5,10], // T
+           [13,0] // Pause
+        ];
+    } else if (type === 'vt') {
+        beatWidth = 30;
+        beatPoints = [[10,-40], [10,80], [10,-40]];
+    } else if (type === 'pleth') {
+        beatWidth = 40;
+        beatPoints = [[10,-15], [5,-5], [15,20], [10,0]];
+    } else {
+        // Asystolie
+        return `M 0 ${yBase} L ${totalWidth} ${yBase}`;
+    }
+
+    // Wir füllen die Breite auf
+    while(currentX < totalWidth) {
+        beatPoints.forEach(pt => {
+            // Skalieren, falls nötig, aber hier nehmen wir fixed pixels
+            // Wir zeichnen absolut, damit keine Rundungsfehler entstehen
+            currentX += pt[0];
+            d += `L ${currentX} ${yBase + pt[1]} `;
+        });
+    }
+    
+    // WICHTIG: Damit der Loop perfekt passt, muss der Pfad GENAU bei totalWidth enden
+    // und auf yBase zurückkommen. Wir ziehen den letzten Strich glatt.
+    d += `L ${totalWidth} ${yBase}`;
+
+    return d;
+}
+
+
+// ... (renderPanel, renderVitals, Timer Functions, Modals...)
+// Die Standard-Funktionen bleiben hier unverändert. 
+// Zur Sicherheit füge ich sie kurz ein, damit du copy-paste machen kannst.
 
 function renderPanel(k) {
   const panel = document.getElementById('panel');
@@ -283,10 +382,7 @@ function startTimer() {
   startTime = Date.now();
   lastTickTime = Date.now(); 
   const el = document.getElementById('missionTimer');
-  if(el) {
-      el.classList.remove('hidden');
-      el.textContent = "00:00";
-  }
+  if(el) { el.classList.remove('hidden'); el.textContent = "00:00"; }
   if(timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(() => {
     const now = Date.now();
@@ -388,7 +484,7 @@ function closeModal(id) {
   el.style.display = 'none';
 }
 
-// --- EKG MONITOR SOUND LOGIC (FIXED) ---
+// --- EKG MONITOR SOUND LOGIC ---
 function startMonitorLoop() {
     if(!soundEnabled || !window.AudioContext) return;
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -403,37 +499,23 @@ function stopMonitorLoop() {
 
 function scheduleBeep() {
     if(!soundEnabled || !caseState) return;
-    
-    // FIX: Checke, ob Puls ODER SpO2 sichtbar ist.
-    // Ein SpO2 Clip liefert immer auch einen Pleth-Puls.
     const hasPuls = !!visibleVitals.Puls;
     const hasSpO2 = !!visibleVitals.SpO2;
 
     if(!hasPuls && !hasSpO2) {
-        // Monitor noch "aus"
         monitorTimeout = setTimeout(scheduleBeep, 1000);
         return;
     }
 
-    // Wenn Puls nicht sichtbar, aber SpO2 da ist, nehmen wir den "echten" Puls aus dem Hintergrund
-    // um den Rhythmus zu simulieren.
     let hrVal = 60;
-    if(hasPuls) {
-         hrVal = parseFloat(String(visibleVitals.Puls).match(/\d+/)?.[0] || 60);
-    } else if(hasSpO2) {
-         // Fallback: Puls aus State holen, auch wenn nicht angezeigt
-         hrVal = parseFloat(caseState.vitals?.Puls || 60);
-    }
-    
+    if(hasPuls) hrVal = parseFloat(String(visibleVitals.Puls).match(/\d+/)?.[0] || 60);
+    else if(hasSpO2) hrVal = parseFloat(caseState.vitals?.Puls || 60);
     if(hrVal <= 0) hrVal = 60;
 
     let spo2Val = 99;
-    if(hasSpO2) {
-        spo2Val = parseFloat(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
-    }
+    if(hasSpO2) spo2Val = parseFloat(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
 
     playBeep(spo2Val);
-
     const interval = 60000 / Math.max(30, Math.min(220, hrVal));
     monitorTimeout = setTimeout(scheduleBeep, interval);
 }
@@ -509,136 +591,8 @@ async function speak(text) {
     }
 }
 
-// --- PROFI EKG VISUALISIERUNG ---
-function openEKG() {
-    if(!caseState) return;
-    const type = caseState.hidden?.ekg_pattern || "sinus";
-    
-    // Wir bauen das Modal-Inhalt neu auf, um SVG sauber zu initialisieren
-    const modalBody = document.querySelector('#modalEKG .modal-body');
-    
-    // SVG mit Raster (Grid) Definition
-    const gridPattern = `
-      <defs>
-        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#333" stroke-width="1"/>
-        </pattern>
-        <pattern id="grid-bold" width="100" height="100" patternUnits="userSpaceOnUse">
-          <rect width="100" height="100" fill="url(#grid)" />
-          <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#555" stroke-width="2"/>
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#grid-bold)" />
-    `;
-
-    // Kanal 1: EKG (Grün)
-    let ekgPath = generateRhythmPath(type, 50, 400); // Y-Basis bei 50
-    
-    // Kanal 2: Plethysmogramm (Blau) - Simuliert SpO2 Welle
-    // Pleth ist meist nur eine weiche Welle
-    let plethPath = generateRhythmPath('pleth', 120, 400); // Y-Basis bei 120
-
-    modalBody.innerHTML = `
-      <div class="ekg-screen" style="width:100%; height:180px;">
-        <svg width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="none">
-            ${gridPattern}
-            
-            <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12">II</text>
-            <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="ekg-line" />
-            
-            <text x="5" y="100" fill="#3b82f6" font-family="monospace" font-size="12">Pleth</text>
-            <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" class="ekg-line" style="animation-duration: 6s;" />
-        </svg>
-      </div>
-      <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
-    `;
-
-    const txt = document.getElementById('ekgText');
-
-    if(type === "sinus") {
-        txt.textContent = "Sinusrhythmus (HF ~70/min)";
-        txt.style.color = "#00ff00";
-    } else if (type === "vt") {
-        txt.textContent = "!!! V-TACH (Puls tasten!) !!!";
-        txt.style.color = "#ef4444";
-    } else {
-        txt.textContent = "Asystolie / Nulllinie";
-        txt.style.color = "#ef4444";
-    }
-
-    // Modal öffnen
-    const modal = document.getElementById('modalEKG');
-    const backdrop = document.getElementById('modalBackdrop');
-    if(modal && backdrop) {
-        modal.style.display = 'block';
-        backdrop.style.display = 'block';
-    }
-    
-    // Close Handler neu binden (da wir innerHTML überschrieben haben)
-    const closeBtn = document.getElementById('ekgClose'); 
-    // Achtung: Der Close Button ist im HTML "modal-actions", das haben wir NICHT überschrieben.
-    // Aber falls du den Button im Body hattest, müssen wir aufpassen.
-    // Laut deiner HTML Datei ist der Button in "modal-actions", also alles gut.
-}
-
-// Helper: Generiert saubere Pfade ohne Lücken
-function generateRhythmPath(type, yBase, width) {
-    let d = `M 0 ${yBase} `;
-    let x = 0;
-    
-    // Definition eines "Beats" als relative Koordinaten [dx, dy]
-    // dy ist relativ zur Basislinie. Wir müssen immer zu 0 zurückkehren.
-    let beat = [];
-
-    if (type === 'sinus') {
-        // P-Welle (klein hoch), Q (leicht runter), R (hoch), S (runter), T (breit hoch)
-        // Format: [dx, y_offset_from_base]
-        // Wir nutzen Bezier-Kurven Annäherung durch viele Punkte oder einfache Linien
-        // Hier einfache Linien für Performance:
-        beat = [
-            [5, 0], [2, -5], [2, 0], // P
-            [3, 0], // Iso
-            [1, 2], [2, -45], [2, 50], [1, -7], // QRS
-            [2, 0], // Iso
-            [3, -8], [3, -8], [3, 0], // T
-            [10, 0] // Pause
-        ];
-    } else if (type === 'vt') {
-        // Breite, schnelle Zacken
-        beat = [
-            [5, -30], [5, 60], [5, -30] 
-        ];
-    } else if (type === 'pleth') {
-        // SpO2 Welle (Dikrotie angedeutet)
-        beat = [
-            [5, -10], [5, -15], [5, 25], [5, -5], [5, 5]
-        ];
-    } else {
-        // Asystolie
-        return `M 0 ${yBase} L ${width} ${yBase}`;
-    }
-
-    // Pfad zusammenbauen bis Breite gefüllt ist
-    while (x < width) {
-        if(type === 'sinus' || type === 'pleth') {
-            // Beat zeichnen
-            beat.forEach(pt => {
-                x += pt[0];
-                // Wir nutzen L (LineTo absolute) für bessere Kontrolle
-                // yBase + pt[1] ist die absolute Y-Position
-                d += `L ${x} ${yBase + pt[1]} `;
-            });
-        } else {
-            // VT ist chaotischer
-             beat.forEach(pt => {
-                x += pt[0];
-                d += `L ${x} ${yBase + pt[1]} `;
-            });
-        }
-    }
-    return d;
-}
-// ... Restliche Funktionen (openOxygen, openNA, openAFCounter...)
+// ... Feature Modals (openOxygen, openNA, openAFCounter...)
+// Diese bleiben unverändert am Ende stehen
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');

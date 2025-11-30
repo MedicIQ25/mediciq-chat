@@ -171,8 +171,21 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
   from { stroke-dashoffset: 1000; }
   to { stroke-dashoffset: 0; }
 }
-.ekg-line {
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 1000;
-  animation: dash 5s linear infinite;
+/* EKG Monitor Screen */
+.ekg-screen {
+  background-color: #000;
+  border: 4px solid #333;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden; /* Wichtig, damit man den zweiten Streifen nicht sieht */
+}
+
+/* Die neue Endlos-Animation */
+@keyframes slideLeft {
+  from { transform: translateX(0); }
+  to { transform: translateX(-400px); } /* Verschiebt um genau eine Bildbreite */
+}
+
+.infinite-scroll {
+  animation: slideLeft 4s linear infinite; /* 4s für einen Durchlauf */
 }
