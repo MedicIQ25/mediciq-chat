@@ -89,7 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
     bindEvent('btnPrint', 'click', () => window.print());
     bindEvent('startCase', 'click', startCase);
     bindEvent('finishCase', 'click', openHandover);
-    bindEvent('btnSchemaHandover', 'click', openHandover);
+    bindEvent('btnSchemaHandover', 'click', openHandover); // NEU: Unterer Übergabe-Button
+    
     bindEvent('btnRunQueue', 'click', async () => {
         if(!caseState) return;
         while(queue.length) {
@@ -122,6 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if(t==='FOUR_S') openFourS();
         if(t==='DIAGNOSIS') openDiagnosis();
         if(t==='DEBRIEF') openDebrief();
+        
+        // NEU: NEXUS und POLYTRAUMA
+        if(t==='NEXUS') openNexus();
+        if(t==='POLYTRAUMA') openPolytrauma();
       });
     });
 
@@ -140,6 +145,7 @@ function bindEvent(id, event, func) {
 // --- CORE LOGIC ---
 
 async function startCase() {
+// ... (Unveränderter Code)
   const chatLog = document.getElementById('chatLog');
   chatLog.innerHTML = '';
   queue.length = 0;
@@ -191,6 +197,7 @@ async function startCase() {
 }
 
 async function stepCase(txt) {
+// ... (Unveränderter Code)
   if(!caseState) return;
   
   try {
@@ -255,6 +262,7 @@ async function stepCase(txt) {
 }
 
 // --- MONITOR & AUDIO LOGIC ---
+// ... (Unveränderter Code)
 
 function startMonitorLoop() {
     if(!soundEnabled || !window.AudioContext) return;
@@ -358,6 +366,7 @@ function openEKG() {
 }
 
 function updateEKGView() {
+// ... (Unveränderter Code)
     const type = caseState.hidden?.ekg_pattern || "sinus";
     const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase(); 
     const hasSpO2 = !!visibleVitals.SpO2;
@@ -423,6 +432,7 @@ function updateEKGView() {
 }
 
 function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pathology = '') {
+// ... (Unveränderter Code)
     let d = `M 0 ${yBase} `;
     let currentX = 0;
     let beatWidth = 70; 
@@ -484,6 +494,7 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pa
 }
 
 // --- TTS ---
+// ... (Unveränderter Code)
 let currentAudio = null;
 async function speak(text) {
     if (!soundEnabled || !text) return;
@@ -520,6 +531,7 @@ async function speak(text) {
 }
 
 // --- DEBRIEFING ---
+// ... (Unveränderter Code)
 async function openDebrief() {
   if (!caseState) { addMsg("⚠️ Fehler: Kein Fall aktiv."); return; }
   stopTimer(); stopMonitorLoop();
@@ -551,6 +563,7 @@ async function openDebrief() {
 
 // --- UI HELPERS & MODALS ---
 function renderPanel(k) {
+// ... (Unveränderter Code)
   const panel = document.getElementById('panel');
   if(!panel) return;
   panel.innerHTML = '';
@@ -572,6 +585,7 @@ function renderPanel(k) {
 }
 
 function renderVitals() {
+// ... (Unveränderter Code)
   const map = { RR: 'vRR', SpO2: 'vSpO2', AF: 'vAF', Puls: 'vPuls', BZ: 'vBZ', Temp: 'vTemp', GCS: 'vGCS' };
   for(let k in map) {
     const el = document.getElementById(map[k]);
@@ -591,6 +605,7 @@ function renderVitals() {
 }
 
 function startTimer() {
+// ... (Unveränderter Code)
   startTime = Date.now();
   lastTickTime = Date.now(); 
   const el = document.getElementById('missionTimer');
@@ -612,6 +627,7 @@ function startTimer() {
 function stopTimer() { if(timerInterval) clearInterval(timerInterval); }
 
 function updateUI(running) {
+// ... (Unveränderter Code)
   const specRow = document.getElementById('specRow');
   const startBtn = document.getElementById('startCase');
   const finishBtn = document.getElementById('finishCase');
@@ -633,6 +649,7 @@ function updateUI(running) {
 }
 
 function renderQueue() {
+// ... (Unveränderter Code)
   const list = document.getElementById('queueList');
   if(!list) return;
   list.innerHTML = '';
@@ -646,6 +663,7 @@ function renderQueue() {
 }
 
 function renderProgress(doneList) {
+// ... (Unveränderter Code)
   const s = new Set((doneList||[]).map(x=>x[0]));
   ['X','A','B','C','D','E'].forEach(l => {
     const el = document.querySelector(`.chip[data-step="${l}"]`);
@@ -656,6 +674,7 @@ function renderProgress(doneList) {
 }
 
 function showHint(t) {
+// ... (Unveränderter Code)
   const ht = document.getElementById('hintText');
   const hc = document.getElementById('hintCard');
   if(ht) ht.textContent = t;
@@ -663,6 +682,7 @@ function showHint(t) {
 }
 
 function addMsg(h) {
+// ... (Unveränderter Code)
   const d = document.createElement('div');
   d.className = 'msg';
   d.innerHTML = h;
@@ -686,6 +706,7 @@ function closeModal(id) {
 }
 
 function openOxygen() {
+// ... (Unveränderter Code)
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
   s.value=0; v.textContent='0';
@@ -695,6 +716,7 @@ function openOxygen() {
   openModal('modalO2');
 }
 function openNA() {
+// ... (Unveränderter Code)
   if(!caseState) return;
   $id('naReason').value='';
   $id('naOk').onclick=()=>{ stepCase(`Notarzt nachfordern: ${$id('naReason').value}`); closeModal('modalNA'); };
@@ -703,6 +725,7 @@ function openNA() {
 }
 function openAFCounter() { if(caseState) stepCase('AF messen'); }
 function openNRS() {
+// ... (Unveränderter Code)
   const r=$id('nrsRange'), v=$id('nrsVal'); r.value=0; v.textContent='0';
   r.oninput=()=>v.textContent=r.value;
   $id('nrsFetch').onclick = async () => {
@@ -715,6 +738,7 @@ function openNRS() {
   openModal('modalNRS');
 }
 function openBEFAST() {
+// ... (Unveränderter Code)
   $id('befastFetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'BEFAST Info'})});
     const d = await res.json();
@@ -724,9 +748,44 @@ function openBEFAST() {
   $id('befastCancel').onclick=()=>closeModal('modalBEFAST');
   openModal('modalBEFAST');
 }
-// ...
+
+// NEU: NEXUS-Kriterien
+function openNexus() {
+  $id('nexusFetch').onclick=async()=>{
+    const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'NEXUS Info'})});
+    const d = await res.json();
+    $id('nexusInfo').innerHTML = d.finding; 
+  };
+  $id('nexusOk').onclick=()=>{ stepCase('NEXUS Kriterien geprüft'); closeModal('modalNEXUS'); };
+  $id('nexusCancel').onclick=()=>closeModal('modalNEXUS');
+  openModal('modalNEXUS');
+  // Setze die Checkboxen auf Basis des hidden State, falls vorhanden
+  if (caseState?.hidden?.nexus_criteria) {
+    const n = caseState.hidden.nexus_criteria;
+    // Setze alle Checkboxen auf false, bevor du die Fall-Daten anwendest (sauberes Modal)
+    $id('n1').checked = false; $id('n2').checked = false; $id('n3').checked = false; $id('n4').checked = false; $id('n5').checked = false;
+    if(n.c1) $id('n1').checked = true; 
+    if(n.c2) $id('n2').checked = true; 
+    if(n.c3) $id('n3').checked = true; 
+    if(n.c4) $id('n4').checked = true; 
+    if(n.c5) $id('n5').checked = true;
+  }
+}
+
+// NEU: Polytrauma-Kriterien
+function openPolytrauma() {
+  $id('polyFetch').onclick=async()=>{
+    const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'Polytrauma Info'})});
+    const d = await res.json();
+    $id('polyInfo').innerHTML = d.finding; 
+  };
+  $id('polyOk').onclick=()=>{ stepCase('Polytrauma Kriterien geprüft'); closeModal('modalPolytrauma'); };
+  $id('polyCancel').onclick=()=>closeModal('modalPolytrauma');
+  openModal('modalPolytrauma');
+}
 
 function openSampler() {
+// ... (Unveränderter Code)
   $id('samplerFetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {
         method:'POST', 
@@ -754,6 +813,7 @@ function openSampler() {
 }
 
 function openFourS() {
+// ... (Unveränderter Code)
   $id('s4Fetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
     const d = await res.json();
@@ -764,6 +824,7 @@ function openFourS() {
   openModal('modal4S');
 }
 function openDiagnosis() {
+// ... (Unveränderter Code)
   const dxSel = $id('dxSelect');
   const list = ['ACS','Asthma/Bronchialobstruktion','COPD-Exazerbation','Lungenembolie','Sepsis','Metabolische Entgleisung','Schlaganfall','Krampfanfall','Hypoglykämie','Polytrauma','Fraktur','Fieberkrampf'];
   dxSel.innerHTML = list.map(x=>`<option>${x}</option>`).join('');
@@ -772,12 +833,14 @@ function openDiagnosis() {
   openModal('modalDx');
 }
 function openImmo() {
+// ... (Unveränderter Code)
   if(!caseState) return;
   $id('immoOk').onclick = () => { stepCase(`Immobilisation: ${$id('immoMat').value} an ${$id('immoLoc').value}`); closeModal('modalImmo'); };
   $id('immoCancel').onclick = () => closeModal('modalImmo');
   openModal('modalImmo');
 }
 function openBodyMap() {
+// ... (Unveränderter Code)
   if(!caseState) return;
   ['body_head','body_torso','body_arm_r','body_arm_l','body_leg_r','body_leg_l'].forEach(id => {
     const el = document.getElementById(id);
@@ -792,6 +855,7 @@ function openBodyMap() {
   stepCase('Bodycheck (visuell)');
 }
 function openHandover() {
+// ... (Unveränderter Code)
     if(!caseState) return;
     
     // Die Felder für SINNHAFT leeren (da der User sie füllen soll)

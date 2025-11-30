@@ -122,7 +122,7 @@ exports.handler = async (event) => {
         }
       }),
 
-      trauma: () => ({
+trauma: () => ({
         id: "rs_trauma_arm",
         specialty: "trauma",
         
@@ -163,7 +163,25 @@ exports.handler = async (event) => {
           ekg_pattern: "sinus",
           ekg12: "Sinustachykardie (Schmerzstress), sonst o.B.",
           pain: { nrs: 9, ort: "Rechter Unterarm", charakter: "Stechend, pulsierend" },
-          injuries: ["Geschlossene distale Radiusfraktur rechts", "Schürfwunden Ellenbogen"]
+          injuries: ["Geschlossene distale Radiusfraktur rechts", "Schürfwunden Ellenbogen"],
+          
+          // NEU: NEXUS-Kriterien
+          nexus_criteria: {
+            summary: "Patient ist wach und ansprechbar (GCS 15), neurologische Untersuchung ist unauffällig. Es liegt jedoch eine sehr schmerzhafte, ablenkende Fraktur vor.",
+            c1: false, // Empfindlichkeit in der HWS
+            c2: false, // Neurologische Ausfälle
+            c3: false, // Vigilanz-/Bewusstseinsstörung
+            c4: false, // Intoxikation
+            c5: true,  // Ablenkende Verletzung (Fraktur NRS 9/10)
+          },
+          
+          // NEU: Polytrauma-Kriterien
+          polytrauma_criteria: {
+            vitals: "RR 135/82, SpO2 98%, GCS 15. Kriterien nicht erfüllt.",
+            anatomical: "Isolierte Fraktur am Unterarm. Kein Becken, Thorax oder penetrierendes Trauma. Kriterien nicht erfüllt.",
+            mechanism: "Fahrradsturz über Bordsteinkante (Niedrigenergie). Kriterien nicht erfüllt.",
+            special: "Keine (Alter 29, keine Antikoagulation)."
+          }
         }
       })
     };

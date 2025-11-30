@@ -240,6 +240,33 @@ exports.handler = async (event) => {
         return ok(reply);
     }
 
+    // NEU: NEXUS Info
+    if (low.includes('nexus info')) {
+        reply.accepted = true; 
+        const nexus = H.nexus_criteria || {};
+        let summary = nexus.summary || "Keine Informationen zu ablenkenden Verletzungen vorhanden.";
+        if (H.injuries && H.injuries.length > 0) {
+            summary += `<br>Ablenkende Verletzungen: ${H.injuries.join(', ')}`;
+        }
+        reply.finding = `<b>NEXUS-Kriterien (Risikofaktoren):</b><br>${summary}`;
+        return ok(reply);
+    }
+
+    // NEU: Polytrauma Info
+    if (low.includes('polytrauma info')) {
+        reply.accepted = true; 
+        const poly = H.polytrauma_criteria || {};
+        
+        let summary = `<b>Polytrauma-Faktoren:</b>`;
+        if (poly.vitals) summary += `<br>Vitalparameter: ${poly.vitals}`;
+        if (poly.anatomical) summary += `<br>Anatomische Verletzung: ${poly.anatomical}`;
+        if (poly.mechanism) summary += `<br>Unfallmechanismus: ${poly.mechanism}`;
+        if (poly.special) summary += `<br>Spezielle Faktoren: ${poly.special}`;
+
+        reply.finding = summary;
+        return ok(reply);
+    }
+
     // O2-Gabe Logik (FIX: Auswirkung auf SpO2)
     if (low.includes('o2-gabe')) {
         state.measurements.o2_given = true; 
