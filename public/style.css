@@ -196,3 +196,21 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .monitor-glow-blue {
   filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.6));
 }
+/* FIX: Vitalwerte besser lesbar machen */
+.vital-val { 
+    font-size: 1.4rem; /* Etwas kleiner als vorher (1.6rem), damit "120/80" passt */
+    font-weight: bold; 
+    font-family: 'Courier New', monospace; 
+    letter-spacing: -0.5px; /* Buchstaben enger zusammen */
+    white-space: nowrap; /* Verhindert Zeilenumbruch */
+}
+
+/* Speziell für den Blutdruck noch etwas kleiner, falls nötig */
+.v-rr .vital-val {
+    font-size: 1.25rem;
+}
+
+/* Boxen etwas breiter machen */
+.vitals {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); /* War 100px */
+}
