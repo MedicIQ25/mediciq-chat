@@ -742,24 +742,24 @@ function openHandover() {
     openModal('modalHandover');
 }
 async function openDebrief() {
-  // 1. Nichts löschen! Erst mal nur prüfen.
+  // 1. Sicherheits-Check
   if (!caseState) {
       addMsg("⚠️ Fehler: Kein Fall aktiv.");
       return;
   }
 
-  // 2. Zeit anhalten (damit keine Minuspunkte gesammelt werden)
+  // 2. Zeit & Monitor anhalten (damit Ruhe ist)
   stopTimer();
   stopMonitorLoop();
   
-  // Status ändern, damit der User sieht "Aha, es passiert was"
+  // Status ändern
   const statusEl = document.getElementById('caseStatus');
-  if(statusEl) statusEl.textContent = 'Erstelle Analyse...';
-  
+  if(statusEl) statusEl.textContent = 'Analysiere Fall...';
+
   addMsg("⏳ <em>Sende Daten an Auswertung...</em>");
 
   try {
-    // 3. Anfrage senden (mit dem noch existierenden caseState!)
+    // 3. Anfrage senden (caseState ist noch da!)
     const r = await fetch(API_CASE_STEP, {
         method: 'POST',
         body: JSON.stringify({ 
@@ -768,16 +768,15 @@ async function openDebrief() {
         })
     });
 
-    if (!r.ok) throw new Error("Server Fehler: " + r.status);
+    if (!r.ok) {
+        // Falls Server Fehler meldet, Text auslesen
+        const errText = await r.text();
+        throw new Error(`Server Fehler ${r.status}: ${errText}`);
+    }
 
     const d = await r.json();
     
-    // 4. Jetzt erst aufräumen
-    caseState = null; 
-    updateUI(false);
-    if(statusEl) statusEl.textContent = 'Fall beendet.';
-
-    // 5. Ergebnis anzeigen
+    // 4. Ergebnis anzeigen
     if (d.debrief) {
         addMsg(`
             <div style="background:#f0fdf4; border:2px solid #16a34a; padding:20px; border-radius:12px; margin-top:15px; color:#14532d; font-size: 1rem; line-height: 1.6;">
@@ -785,16 +784,21 @@ async function openDebrief() {
                 ${d.debrief}
             </div>
         `);
-        // Optional: Kurzes Audio-Feedback
-        speak("Hier ist deine Auswertung.");
+        // Optional: Akustisches Feedback, dass es vorbei ist
+        // speak("Fall beendet."); 
     } else {
-        addMsg("⚠️ Auswertung leer. (Server hat geantwortet, aber ohne Text)");
+        addMsg("⚠️ Server hat geantwortet, aber das Debriefing war leer.");
     }
     
+    // 5. JETZT ERST den Fall beenden und UI aufräumen
+    caseState = null;
+    updateUI(false);
+    if(statusEl) statusEl.textContent = 'Fall beendet.';
+    
   } catch(e) {
-    console.error(e);
-    addMsg(`❌ Fehler beim Debriefing: ${e.message}`);
-    // Falls Fehler: Trotzdem aufräumen, damit man neu starten kann
+    console.error("Debrief Error:", e);
+    addMsg(`❌ <strong>Fehler beim Debriefing:</strong> ${e.message}`);
+    // Auch bei Fehler aufräumen, damit man neu starten kann
     caseState = null;
     updateUI(false);
   }
