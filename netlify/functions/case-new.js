@@ -17,66 +17,258 @@ exports.handler = async (event) => {
 
     // ---------- Fallkatalog (DETAILREICH) ----------
     const cases = {
-      internistisch: () => ({
-        id: "rs_asthma_01",
-        specialty: "internistisch",
-        
-        // STORY & DIALOG
-        story: "Einsatzstichwort: 'Atemnot'. Ort: Sportplatz. Du triffst auf Lukas M. (17), der nach einem 100m-Sprint auf der Bank sitzt. Er stützt sich mit den Armen auf den Oberschenkeln ab (Kutschersitz) und ringt deutlich nach Luft.",
-        intro_dialogue: "Hilfe... ich krieg... kaum Luft! *keuch* ... Hab mein Spray... in der Kabine... vergessen!",
-        
-        target_outcome: "Lagerung, Lippenbremse, O2-Gabe, Medikamentengabe (Spray) unterstützen, Transport.",
-        
-        vitals: { RR: "138/86", SpO2: 85, AF: 28, Puls: 124, BZ: 108, Temp: 36.8, GCS: 15 },
-
-        // 4S - WICHTIG: Hier stehen die Details
-        scene_4s: {
-          sicherheit: "Keine akute Eigen- oder Fremdgefährdung. Sportplatz ist offen, Untergrund fest.",
-          szene: "Patient sitzt isoliert auf einer Bank, wirkt panisch. Trainer steht hilflos daneben.",
-          sichtung_personen: "1 Patient (Lukas), ansprechbar aber dyspnoisch. Trainer als Auskunftsperson.",
-          support_empfehlung: "NA-Nachforderung bei Sättigung < 90% trotz O2 oder Erschöpfung erwägen."
-        },
-
-        anamnesis: {
-          SAMPLER: {
-            S: "Akute Atemnot, thorakales Engegefühl, 'wie zugeschnürt'",
-            A: "Birkenpollen, Hausstaubmilben",
-            M: "Salbutamol Spray (Bedarf), Budesonid (morgens)",
-            P: "Bekanntes Asthma bronchiale seit dem 6. Lebensjahr",
-            L: "Müsliriegel vor 1 Stunde",
-            E: "Belastungssprint bei hohem Pollenflug",
-            R: "Keine Auslandsreisen, kein Infektzeichen"
+      internistisch: [
+        // ---------------------------------------------------------
+        // FALL 1: ACS / HINTERWANDINFARKT (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_acs_hwi_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Thoraxschmerz'. Ort: Wohnzimmer. Herr Weber (58) sitzt blass und schweißgebadet auf dem Sofa. Er hält sich die Brust.",
+          intro_dialogue: "Es brennt so... *stöhn*... wie Feuer hinter dem Brustbein. Mir ist schlecht.",
+          target_outcome: "Oberkörper hoch, O2-Gabe, 12-Kanal EKG, NA-Nachforderung, Vorbereitung Zugang.",
+          vitals: { RR: "105/60", SpO2: 95, AF: 18, Puls: 54, BZ: 110, Temp: 36.6, GCS: 15 },
+          scene_4s: {
+            sicherheit: "Keine Gefahr für das Team.",
+            szene: "Ruhige häusliche Umgebung, Ehefrau anwesend.",
+            sichtung_personen: "1 Patient.",
+            support_empfehlung: "NA-Indikation: ACS Verdacht + Bradykardie."
           },
-          vorerkrankungen: ["Asthma bronchiale"],
-          medikation: ["Salbutamol", "Kortisonspray"],
-          allergien: ["Pollen"],
-          antikoagulation: false,
-          OPQRST: {
-            O: "Plötzlich nach Belastungsspitze",
-            P: "Laufen verschlimmert, Sitzen/Kutschersitz lindert leicht",
-            Q: "Engegefühl, Giemen hörbar",
-            R: "Keine Ausstrahlung",
-            S: "Subjektive Luftnot 8/10",
-            T: "Seit ca. 10 Minuten anhaltend"
+          anamnesis: {
+            SAMPLER: {
+              S: "Brennender retrosternaler Schmerz, Übelkeit",
+              A: "Pollen",
+              M: "Betablocker (Bisoprolol)",
+              P: "KHK, Hypertonie",
+              L: "Frühstück vor 1h",
+              E: "Ruheschmerz",
+              R: "Raucher, KHK"
+            },
+            OPQRST: { O: "Seit 20 min", P: "Keine Linderung", Q: "Brennend/Drückend", R: "Ausstrahlung rechter Arm/Oberbauch", S: "8/10", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["ACS", "Infarkt", "STEMI", "Hinterwand"],
+            // X - Blutung
+            bleeding_info: "Keine kritischen Blutungen sichtbar.",
+            // A - Atemweg
+            mouth: "Mundraum frei, keine Zyanose im Mundbereich.",
+            // B - Beatmung
+            lung: "Vesikuläres Atemgeräusch beidseits, keine Rasselgeräusche.",
+            // C - Kreislauf
+            skin: "Fahl, gräulich, kaltschweißig (Schocksymptomatik).",
+            abdomen: "Weich, leichter Druckschmerz im Oberbauch (DD: Infarkt).",
+            // D - Neuro
+            pupils: "Isokor, mittelweit, prompt reagibel.",
+            befast: "Unauffällig. Keine Paresen.",
+            // EKG
+            ekg_pattern: "sinus", 
+            ekg12: "Sinusbradykardie. ST-Hebungen in II, III, aVF (Verdacht auf HWI).",
+            // Schmerz & Verletzungen
+            pain: { nrs: 8, ort: "Brust/Oberbauch", charakter: "Brennend" },
+            injuries: []
           }
-        },
+        }),
 
-        hidden: {
-          diagnosis_keys: ["Asthma", "Obstruktion", "Spastik"],
-          // X-ABCDE DETAILS
-          bleeding_info: "Keine kritischen Blutungen sichtbar. Haut ist intakt, keine Traumazeichen.",
-          mouth: "Mundraum frei, Schleimhäute leicht trocken, kein Fremdkörper, keine Schwellung.",
-          lung: "Auskeultation: Deutlich verlängertes Exspirium mit Giemen und Pfeifen über allen Lungenfeldern. Silent Chest basal nicht auszuschließen.",
-          abdomen: "Bauchdecke weich, kein Druckschmerz, Darmgeräusche vorhanden.",
-          skin: "Haut blass, leicht schweißig, leichte periphere Zyanose an den Lippen.",
-          pupils: "Pupillen isokor, mittelweit, reagieren prompt auf Licht.",
-          befast: "Keine neurologischen Ausfälle. Arme werden seitengleich gehalten, Sprache dyspnoisch abgehackt aber verständlich.",
-          ekg_pattern: "sinus",
-          ekg12: "Sinustachykardie (124/min), Lagetyp unauffällig, keine ST-Strecken-Veränderungen.",
-          pain: { nrs: 0, ort: "Brustkorb", charakter: "Druck/Enge (kein Schmerz)" },
-          injuries: []
-        }
-      }),
+        // ---------------------------------------------------------
+        // FALL 2: COPD EXAZERBATION (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_copd_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Atemnot'. Ort: Verrauchte Kleinwohnung. Frau Müller (68) sitzt im Sessel, nutzt die Atemhilfsmuskulatur und atmet gegen die geschlossenen Lippen (Lippenbremse).",
+          intro_dialogue: "Ich krieg... die alte Luft... nicht raus! *hust*... Mein Spray... hilft nicht!",
+          target_outcome: "Lippenbremse coachen, O2 vorsichtig (Ziel 88-92%), Kutschersitz, Beruhigen.",
+          vitals: { RR: "155/95", SpO2: 86, AF: 26, Puls: 110, BZ: 140, Temp: 37.1, GCS: 15 },
+          scene_4s: {
+            sicherheit: "Starker Zigarettengeruch, Lüften empfohlen.",
+            szene: "Patientin sitzt, wirkt erschöpft. O2-Gerät steht in der Ecke (leer).",
+            sichtung_personen: "1 Patientin.",
+            support_empfehlung: "NA bei Erschöpfung oder Sättigungsabfall."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Luftnot, produktiver Husten",
+              A: "Keine",
+              M: "Foster Spray, Spiriva",
+              P: "COPD Gold IV",
+              L: "Wasser",
+              E: "Verschlechterung seit 2 Tagen, jetzt akut",
+              R: "Raucherin (40 pack years)"
+            },
+            OPQRST: { O: "Schleichend, jetzt akut", P: "Belastung ++", Q: "Enge", R: "-", S: "Luftnot", T: "Dauerzustand verschlimmert" }
+          },
+          hidden: {
+            diagnosis_keys: ["COPD", "Exazerbation", "Obstruktion"],
+            // X
+            bleeding_info: "Keine Blutungen.",
+            // A
+            mouth: "Mundschleimhaut trocken, Lippenzyanose sichtbar.",
+            // B
+            lung: "Verlängertes Exspirium, Giemen und Brummen über allen Lungenfeldern.",
+            // C
+            skin: "Zentral zyanotisch (blaue Lippen), Uhrglasnägel an den Fingern.",
+            abdomen: "Weich, unauffällig.",
+            // D
+            pupils: "Isokor, prompt.",
+            befast: "Unauffällig.",
+            // EKG
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie, P-pulmonale (hohes P).",
+            pain: { nrs: 0, ort: "Thorax", charakter: "Engegefühl" },
+            injuries: []
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 3: LUNGENEMBOLIE (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_lae_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Kollaps/Atemnot'. Ort: Bushaltestelle. Ein junger Mann (28) saß nach einer langen Busreise auf der Bank und hat plötzlich stechende Schmerzen beim Atmen bekommen.",
+          intro_dialogue: "Hilfe! Meine Brust... *keuch*... sticht so beim Atmen! Ich krieg keine Luft!",
+          target_outcome: "Oberkörper hoch, High-Flow O2, Beruhigung, NA-Nachforderung (Verdacht LAE).",
+          vitals: { RR: "100/60", SpO2: 88, AF: 30, Puls: 128, BZ: 98, Temp: 36.8, GCS: 15 },
+          scene_4s: {
+            sicherheit: "Verkehrsraum (Haltestelle), Eigenschutz beachten.",
+            szene: "Patient sitzt vornübergebeugt, panisch.",
+            sichtung_personen: "1 Patient.",
+            support_empfehlung: "NA zwingend (LAE Verdacht, Tachykardie/Hypoxie)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Atemabhängiger Brustschmerz, Dyspnoe",
+              A: "-",
+              M: "-",
+              P: "Kürzlich Knie-OP (vor 2 Wochen)",
+              L: "Snack im Bus",
+              E: "Aufgestanden nach 6h Busfahrt",
+              R: "Immobilisation nach OP"
+            },
+            OPQRST: { O: "Schlagartig", P: "Einatmen schmerzt extrem", Q: "Messerstichartig", R: "Lokalisiert rechts", S: "9/10", T: "Sofort" }
+          },
+          hidden: {
+            diagnosis_keys: ["Lungenembolie", "LAE", "Embolie"],
+            // X
+            bleeding_info: "Keine äußeren Blutungen.",
+            // A
+            mouth: "Frei.",
+            // B
+            lung: "Atemgeräusch seitengleich, evtl. leicht abgeschwächt rechts. Keine Rasselgeräusche.",
+            // C
+            skin: "Marmorierte Haut, gestaute Halsvenen sichtbar.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, prompt.",
+            befast: "Unauffällig.",
+            // EKG
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie. SI-QIII-Typ (McGinn-White) erkennbar.",
+            pain: { nrs: 9, ort: "Thorax rechts", charakter: "Stechend, atemabhängig" },
+            injuries: []
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 4: AKUTES LUNGENÖDEM (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_oedem_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Atemnot akut'. Ort: Schlafzimmer, nachts. Herr Klein (75) sitzt an der Bettkante, ringt massiv nach Luft. Es brodelt hörbar beim Atmen.",
+          intro_dialogue: "*Blubbern*... ich... *röchel*... ersticke!",
+          target_outcome: "Herzbettlagerung (Beine tief!), O2, NA sofort, Beruhigen.",
+          vitals: { RR: "190/110", SpO2: 82, AF: 32, Puls: 100, BZ: 130, Temp: 36.5, GCS: 14 },
+          scene_4s: {
+            sicherheit: "Keine Gefahr.",
+            szene: "Patient sitzt aufrecht, Beine aus dem Bett. Distanzrasseln hörbar.",
+            sichtung_personen: "1 Patient.",
+            support_empfehlung: "NA mit Priorität (Lungenödem)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Todesangst, Luftnot, Brodeln",
+              A: "-",
+              M: "Furosemid, Ramipril",
+              P: "Bekannte Herzinsuffizienz",
+              L: "Abendessen (salzig)",
+              E: "Im Liegen schlimmer geworden",
+              R: "Alter, Hypertonie"
+            },
+            OPQRST: { O: "Zunehmend nachts", P: "Liegen unmöglich", Q: "Ertrinkungsgefühl", R: "-", S: "10/10 (Not)", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["Lungenödem", "Herzinsuffizienz", "Linksherzinsuffizienz"],
+            // X
+            bleeding_info: "Keine Blutung.",
+            // A
+            mouth: "Schaum vor dem Mund (leicht rötlich), Atemwege sonst frei.",
+            // B
+            lung: "Grobblasige Rasselgeräusche beidseits basal bis mittlere Felder ('Brodeln').",
+            // C
+            skin: "Schweißig, blass.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, prompt.",
+            befast: "Unauffällig.",
+            // EKG
+            ekg_pattern: "sinus",
+            ekg12: "Sinusrhythmus, Linkstyp, Zeichen der Hypertrophie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            injuries: []
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 5: HYPERTENSIVE KRISE (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_rr_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Kopfschmerz/Hoher Blutdruck'. Ort: Arztpraxis (Warteraum). Die Arzthelferin ruft euch. Frau Berg (50) klagt über massiven Kopfdruck und Nasenbluten.",
+          intro_dialogue: "Mein Kopf platzt gleich... und es blutet so aus der Nase. Mir ist ganz schwindelig.",
+          target_outcome: "Oberkörper hoch, Beruhigen, Vitalwerte, ggf. NA bei neurologischen Ausfällen.",
+          vitals: { RR: "210/120", SpO2: 97, AF: 16, Puls: 88, BZ: 95, Temp: 36.9, GCS: 15 },
+          scene_4s: {
+            sicherheit: "Keine Gefahr.",
+            szene: "Arzthelferin hat Patientin Papiertücher gegeben (blutig).",
+            sichtung_personen: "1 Patientin.",
+            support_empfehlung: "NA nur bei nicht kontrollierbarem RR oder neurologischen Symptomen."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Kopfschmerz (Stirn), Epistaxis (Nasenbluten), Ohrensausen",
+              A: "Penicillin",
+              M: "Candesartan (heute vergessen)",
+              P: "Arterielle Hypertonie",
+              L: "Kaffee",
+              E: "Stress im Wartezimmer",
+              R: "Tabletten-Non-Compliance"
+            },
+            OPQRST: { O: "Vor 30 min", P: "Licht/Lärm stört", Q: "Pochend, drückend", R: "Ganze Stirn", S: "7/10", T: "Zunehmend" }
+          },
+          hidden: {
+            diagnosis_keys: ["Hypertensive Krise", "Bluthochdruck", "Hypertonie", "Epistaxis"],
+            // X
+            bleeding_info: "Nasenbluten (Epistaxis) - läuft, aber nicht lebensbedrohlich spritzend.",
+            // A
+            mouth: "Blut im Rachenraum durch Nasenbluten, Schluckreflex intakt.",
+            // B
+            lung: "Frei belüftet.",
+            // C
+            skin: "Hochrot (Gesicht/Flush).",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, prompt.",
+            befast: "Keine neurologischen Ausfälle (wichtig zur Abgrenzung Apoplex!).",
+            // EKG
+            ekg_pattern: "sinus",
+            ekg12: "Sinusrhythmus, unauffällig.",
+            pain: { nrs: 7, ort: "Kopf", charakter: "Pochend" },
+            injuries: []
+          }
+        }),
+      ],
 
       neurologisch: () => ({
         id: "rs_hypoglyk_01",
