@@ -3229,6 +3229,1092 @@ trauma: [
           }
         }),
       ],
+      paediatrisch: [
+        // ---------------------------------------------------------
+        // FALL 1: PSEUDOKRUPP (Der Klassiker in der Nacht)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_krupp_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Kindliche Atemnot'. Ort: Kinderzimmer, 23:00 Uhr. Die Mutter steht mit dem Kleinkind (2 Jahre) am offenen Fenster. Man hört schon an der Tür ein bellendes Husten.",
+          intro_dialogue: "(Mutter): Er bekommt keine Luft! Er hat so komisch gehustet... wie ein Seehund! *Kind weint heiser*",
+          target_outcome: "Beruhigung (Eltern & Kind!), Kaltlufttherapie (Fenster/Kühlschrank), O2 nur bei Bedarf (Stress vermeiden), Cortison-Zäpfchen (NA/Eltern).",
+          vitals: { RR: "100/60", SpO2: 94, AF: 35, Puls: 130, BZ: 90, Temp: 37.8, GCS: 15 }, // HF 130 ist bei 2J normal bei Aufregung
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind auf dem Arm der Mutter, weint, zieht beim Einatmen.",
+            sichtung_personen: "1 Kind + besorgte Eltern.",
+            support_empfehlung: "RTW. NA nur wenn Zyanose/Erschöpfung (hier stabil)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Inspiratorischer Stridor (Pfeifen beim Einatmen), bellender Husten",
+              A: "-",
+              M: "-",
+              P: "War heute etwas erkältet",
+              L: "Abendbrei",
+              E: "Plötzlich im Schlaf aufgewacht",
+              R: "-"
+            },
+            OPQRST: { O: "Akut", P: "Weinen verschlechtert", Q: "-", R: "Hals", S: "Mittel", T: "-" }
+          },
+          hidden: {
+            diagnosis_keys: ["Pseudokrupp", "Krupp", "Laryngitis", "Stridor"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Frei. KEINE Inspektion mit Spatel! (Gefahr Laryngospasmus).",
+            // B
+            lung: "Inspiratorischer Stridor hörbar. Lunge sonst frei.",
+            // C
+            skin: "Rosig, leicht warm.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor.",
+            befast: "Kind ist wach, klammert sich an Mama.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie (Stress).",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: [], // Keine Verletzung
+            injuries: [],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 2: FIEBERKRAMPF (Sieht schlimm aus, meist harmlos)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_fieber_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Krampfanfall Kind'. Ort: Wohnzimmer. Ein 3-jähriges Kind liegt auf dem Sofa und schläft tief. Die Eltern sind völlig aufgelöst.",
+          intro_dialogue: "(Vater): Er hat plötzlich die Augen verdreht und gezuckt! Er war ganz blau! Jetzt wird er nicht wach!",
+          target_outcome: "Beruhigung (Postiktale Phase), Fieber messen, Kühlung (Wadenwickel/Paracetamol), Transport zum Ausschluss Meningitis.",
+          vitals: { RR: "95/60", SpO2: 97, AF: 20, Puls: 110, BZ: 85, Temp: 39.8, GCS: 10 }, // Somnolent (postiktal) + Hochfieberhaft
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind krampft NICHT mehr. Ist schweißgebadet.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA, wenn es der erste Anfall war oder >15 min dauerte (zur Sicherheit)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Tonisch-klonische Krämpfe, Fieber, Postiktaler Schlaf",
+              A: "Novalgin",
+              M: "Hustensaft",
+              P: "Infekt seit gestern",
+              L: "-",
+              E: "Fieberanstieg",
+              R: "Familiäre Belastung?"
+            },
+            OPQRST: { O: "Vor 10 min", P: "-", Q: "-", R: "-", S: "-", T: "Dauerte 3 min" }
+          },
+          hidden: {
+            diagnosis_keys: ["Fieberkrampf", "Krampfanfall", "Infekt"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Frei. Kein Zungenbiss.",
+            // B
+            lung: "Frei.",
+            // C
+            skin: "Glühend heiß, rot.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, reagieren prompt.",
+            befast: "Schläfrig (GCS 10), aber erweckbar. Meningismus (Nackensteif) prüfen -> Hier negativ.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: [],
+            injuries: [],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 3: WICKELTISCHSTURZ (SHT Säugling)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_baby_sturz",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Sturz Säugling'. Ort: Kinderzimmer. Ein 8 Monate altes Baby ist vom Wickeltisch gefallen (ca. 90cm). Es schreit schrill.",
+          intro_dialogue: "(Mutter): Ich hab mich nur kurz umgedreht! Er ist auf den Kopf gefallen... auf das Laminat!",
+          target_outcome: "Vorsichtige Immobilisation (Vakuummatratze Kind), Pupillenkontrolle, NA (SHT-Gefahr), Beruhigen.",
+          vitals: { RR: "80/50", SpO2: 98, AF: 40, Puls: 160, BZ: 90, Temp: 37.0, GCS: 15 }, // Schreiend = GCS 15 (beste Antwort)
+          scene_4s: {
+            sicherheit: "Boden hart?",
+            szene: "Baby liegt am Boden, strampelt symmetrisch (gut!).",
+            sichtung_personen: "1 Säugling.",
+            support_empfehlung: "NA (Sturzhöhe > Körpergröße = Polytrauma-Kriterium beim Kind!)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Beule am Kopf, Erbrechen? (noch nicht), Schreien",
+              A: "-",
+              M: "Vitamin D",
+              P: "-",
+              L: "Milch vor 2h",
+              E: "Sturz Wickeltisch",
+              R: "-"
+            },
+            OPQRST: { O: "Sofort", P: "-", Q: "-", R: "Kopf", S: "-", T: "-" }
+          },
+          hidden: {
+            diagnosis_keys: ["SHT", "Sturz", "Kopfplatzwunde"],
+            // X
+            bleeding_info: "Keine offene Blutung.",
+            // A
+            mouth: "Frei.",
+            // B
+            lung: "Frei, schreit kräftig (Lunge okay).",
+            // C
+            skin: "Rosig. Rekap < 2s.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor. Fontanelle im Niveau (nicht vorgewölbt).",
+            befast: "Bewegt alle 4 Extremitäten. Beule (Hämatom) parietal rechts tastbar.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie (160/min bei Schmerz/Angst normal).",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            // NEU: Beule am Kopf
+            injury_map: ["head"],
+            injuries: ["Großes Kopfhämatom rechts", "V.a. SHT"],
+            
+            nexus_criteria: { summary: "Nicht beurteilbar (Säugling). Immobilisation!" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "Sturz > Körperhöhe (Positiv beim Kind)", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 4: EXSIKKOSE (Gastroenteritis)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_exsikk_kind",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Kind apathisch'. Ort: Wohnung. Ein 1-jähriges Kind liegt schlapp im Laufstall. Die Windel ist trocken.",
+          intro_dialogue: "(Vater): Er hat seit 2 Tagen Durchfall und spuckt alles aus. Heute ist er gar nicht richtig wach geworden.",
+          target_outcome: "Schockzeichen erkennen (Fontanelle! Hautfalten!), NA (i.v./i.o. Zugang nötig), Volumengabe.",
+          vitals: { RR: "70/40", SpO2: 95, AF: 25, Puls: 170, BZ: 60, Temp: 37.5, GCS: 11 }, // Tachykard, Hypoton, Somnolent
+          scene_4s: {
+            sicherheit: "Infektionsgefahr (Rota/Noro?).",
+            szene: "Kind wirkt 'wie eine Puppe' (Floppy Infant).",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA (Hypovolämischer Schock, schwieriger Zugang)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Apathie, trockene Windel (Anurie), Erbrechen",
+              A: "-",
+              M: "-",
+              P: "Gesund",
+              L: "Nichts behalten",
+              E: "Magen-Darm-Infekt",
+              R: "Säuglinge trocknen schnell aus"
+            },
+            OPQRST: { O: "Schleichend", P: "-", Q: "-", R: "-", S: "-", T: "Zunehmend apathisch" }
+          },
+          hidden: {
+            diagnosis_keys: ["Exsikkose", "Austrocknung", "Schock", "Gastroenteritis"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Zunge trocken, kein Speichel.",
+            // B
+            lung: "Frei.",
+            // C - ALARMZEICHEN
+            skin: "Blass, marmoriert. Stehende Hautfalten am Bauch. Fontanelle eingesunken (Delle am Kopf). Rekap-Zeit > 4 Sek!",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, träge.",
+            befast: "Kind ist hypoton (schlapp).",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie (170/min!).",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: [],
+            injuries: [],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "RR < syst. Norm, Rekap > 2s (Schock)", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 5: FREMDKÖRPERASPIRATION (Nuss)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_aspiration_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Atemnot / Verschluckt'. Ort: Esszimmer. Ein 4-jähriges Kind hustet stark und würgt. Es hat Erdnüsse gegessen.",
+          intro_dialogue: "*Hustet stoßweise*... *pfeift beim Atmen*... *würg*",
+          target_outcome: "Effektives Husten? -> Ermutigen! Ineffektiv? -> 5x Rückenschläge / Heimlich (je nach Alter). O2, NA, Sitzend transportieren.",
+          vitals: { RR: "110/65", SpO2: 92, AF: 40, Puls: 140, BZ: 100, Temp: 37.0, GCS: 15 },
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind sitzt, speichelt, Panik in den Augen.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA (Verlegung der Atemwege kann dynamisch schlechter werden)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Atemnot, Hustenattacke, Stridor",
+              A: "-",
+              M: "-",
+              P: "-",
+              L: "Erdnüsse",
+              E: "Beim Lachen verschluckt",
+              R: "-"
+            },
+            OPQRST: { O: "Sofort", P: "-", Q: "-", R: "-", S: "Bedrohlich", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["Aspiration", "Verschluckt", "Fremdkörper", "Bolus"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Frei (Fremdkörper sitzt tiefer in der Trachea/Bronchus).",
+            // B
+            lung: "Rechtsseitig abgeschwächtes Atemgeräusch (Nuss rutscht meist nach rechts!). Exspiratorisches Giemen.",
+            // C
+            skin: "Leicht zyanotisch um den Mund bei Hustenattacken.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor.",
+            befast: "Unauffällig.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: ["torso"], // Lunge markieren
+            injuries: ["Fremdkörperaspiration rechter Hauptbronchus"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+        // ---------------------------------------------------------
+        // FALL 6: MENINGOKOKKENSEPSIS (Waterhouse-Friderichsen)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_meningokokken_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Hohes Fieber/Apathie'. Ort: Kinderzimmer. Ein 4-jähriges Mädchen liegt im Bett. Die Eltern sagen, sie habe vor 2 Stunden noch gespielt, jetzt sei sie 'komplett weg'.",
+          intro_dialogue: "(Vater): Schauen Sie mal diese Flecken am Bauch... die waren vorhin noch nicht da! Sie reagiert gar nicht mehr!",
+          target_outcome: "Sofortiger Transport (Voranmeldung!), Eigenschutz (Infektion!), Venöser Zugang (durch NA, intraossär?), Schockbehandlung.",
+          vitals: { RR: "70/40", SpO2: 92, AF: 45, Puls: 160, BZ: 60, Temp: 40.1, GCS: 8 }, // Septischer Schock
+          scene_4s: {
+            sicherheit: "Infektionsgefahr! Schutzkleidung.",
+            szene: "Kind ist marmoriert, wirkt leblos.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA mit höchster Priorität (Meningokokkensepsis verläuft fulminant tödlich)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Fieber, Petechien (Einblutungen), Bewusstseinstrübung",
+              A: "-",
+              M: "Nurofensaft (hat nicht gewirkt)",
+              P: "-",
+              L: "-",
+              E: "Rapide Verschlechterung innerhalb von Stunden",
+              R: "Kindergarten-Kontakt?"
+            },
+            OPQRST: { O: "Heute morgen", P: "-", Q: "-", R: "-", S: "Kritisch", T: "Rasend schnell" }
+          },
+          hidden: {
+            diagnosis_keys: ["Sepsis", "Meningitis", "Meningokokken", "Petechien"],
+            // X
+            bleeding_info: "Keine äußere Blutung, aber Hauteinblutungen (Petechien) am ganzen Körper.",
+            // A
+            mouth: "Trocken.",
+            // B
+            lung: "Tachypnoe, sonst frei.",
+            // C - ALARM
+            skin: "Marmoriert, kalt, Rekap-Zeit > 4 Sek. Dunkelrote Flecken am Rumpf (lassen sich mit Glas nicht wegdrücken).",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, träge.",
+            befast: "Somnolent bis komatös.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: ["torso"], // Petechien markieren
+            injuries: ["Generalisierte Petechien (Hautblutungen)"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "RR niedrig, GCS niedrig (Schock)", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 7: ANAPHYLAXIE KIND (Erdnuss)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_ana_kind",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Atemnot'. Ort: Eisdiele. Ein 6-jähriger Junge hat ein Eis gegessen. Jetzt schwellen seine Lippen an und er röchelt.",
+          intro_dialogue: "(Mutter): Er verträgt keine Nüsse! Da war wohl was im Eis! Er kriegt keine Luft! Hilfe!",
+          target_outcome: "Adrenalin (Pen? Vorhanden?), O2, Verneblung (Adrenalin in Maske?), NA sofort, Oberkörper hoch.",
+          vitals: { RR: "85/50", SpO2: 88, AF: 30, Puls: 150, BZ: 100, Temp: 37.0, GCS: 14 },
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind sitzt auf Stuhl, Panik, kratzt sich am Hals.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA (Anaphylaxie Grad 3 mit Atemwegsbeteiligung)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Schwellung Gesicht, Stridor, Urtikaria",
+              A: "Erdnüsse (bekannt)",
+              M: "Epipen (liegt zuhause...)",
+              P: "Allergisches Asthma",
+              L: "Eis",
+              E: "Kontakt mit Allergen",
+              R: "-"
+            },
+            OPQRST: { O: "Sofort", P: "-", Q: "Engegefühl", R: "Hals", S: "Bedrohlich", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["Anaphylaxie", "Allergie", "Nuss", "Schock"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Lippen und Zunge massiv geschwollen (Angioödem).",
+            // B
+            lung: "Giemen (Obstruktion) und inspiratorischer Stridor (Larynxödem).",
+            // C
+            skin: "Quaddeln, Rötung am ganzen Körper.",
+            abdomen: "Übelkeit/Bauchweh.",
+            // D
+            pupils: "Isokor.",
+            befast: "Unruhig, ängstlich.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: ["head", "torso"], // Schwellung/Rötung
+            injuries: ["Angioödem Gesicht", "Generalisierte Urtikaria"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 8: VERGIFTUNG / VERÄTZUNG (Spülmittel)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_intox_kind",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Kind hat Reiniger getrunken'. Ort: Küche. Ein 2-jähriges Kind sitzt weinend am Boden. Eine Flasche Rohrreiniger ist umgekippt.",
+          intro_dialogue: "(Vater): Er hat geschrien... es riecht so chemisch aus dem Mund! Ich hab ihm Milch gegeben, war das falsch?",
+          target_outcome: "KEIN ERBRECHEN AUSLÖSEN! (Ätzgefahr Speiseröhre), Milch war falsch (keine Flüssigkeit!), Giftnotruf, Mund ausspülen wenn kooperativ, NA.",
+          vitals: { RR: "100/60", SpO2: 98, AF: 30, Puls: 130, BZ: 90, Temp: 36.8, GCS: 15 },
+          scene_4s: {
+            sicherheit: "Chemikalien am Boden? Handschuhe!",
+            szene: "Kind speichelt stark (Schluckbeschwerden).",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA (Verätzungsgefahr Ösophagus/Atemwege). Giftnotruf-Rücksprache."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Starkes Speicheln, Weinen, Rötung Mund",
+              A: "-",
+              M: "-",
+              P: "-",
+              L: "Reiniger",
+              E: "Unbeaufsichtigter Moment",
+              R: "Verätzung"
+            },
+            OPQRST: { O: "Sofort", P: "-", Q: "Brennen", R: "Mund/Hals", S: "Stark", T: "-" }
+          },
+          hidden: {
+            diagnosis_keys: ["Verätzung", "Intoxikation", "Reiniger", "Ingestion"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Rötung/Verweißlichung an den Lippen und im Rachen. Speichelfluss (kann nicht schlucken).",
+            // B
+            lung: "Frei (hoffentlich keine Aspiration).",
+            // C
+            skin: "Rötung im Gesicht (Kontaktverätzung).",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor.",
+            befast: "Wach, weinerlich.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: ["head"], // Mundbereich
+            injuries: ["Verätzung Lippen/Mundhöhle"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "Chemieunfall", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 9: BEINAHE-ERTRINKEN (Sekundäres Ertrinken)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_drowning_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Atemnot nach Schwimmbad'. Ort: Zuhause. Ein 5-jähriges Kind war heute Mittag im Schwimmbad und ist kurz untergegangen. Jetzt (abends) hustet es stark und ist müde.",
+          intro_dialogue: "(Mutter): Er hat im Auto schon so gehustet... jetzt brodelt es beim Atmen und er ist ganz schlapp.",
+          target_outcome: "Verdacht auf Lungenödem (Sekundäres Ertrinken), O2, Oberkörper hoch, NA, PEEP-Beatmung erwägen (CPAP beim Kind schwierig für RS, aber O2 wichtig).",
+          vitals: { RR: "90/60", SpO2: 85, AF: 40, Puls: 140, BZ: 80, Temp: 36.5, GCS: 12 }, // Hypoxie + Erschöpfung
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind liegt im Bett, wirkt grau.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA (Respiratorisches Versagen droht)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Husten, Schaum vor Mund, Müdigkeit",
+              A: "-",
+              M: "-",
+              P: "Gesund",
+              L: "Pommes im Bad",
+              E: "Tauchunfall vor 4 Stunden",
+              R: "Aspiration von Wasser -> Surfactant-Mangel -> Ödem"
+            },
+            OPQRST: { O: "Verzögert", P: "-", Q: "Rasseln", R: "-", S: "Luftnot", T: "Zunehmend" }
+          },
+          hidden: {
+            diagnosis_keys: ["Ertrinken", "Lungenödem", "Aspiration", "Sekundär"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Feinblasiger Schaum vor dem Mund (Lungenödem).",
+            // B
+            lung: "Beidseits feuchte Rasselgeräusche. Tachypnoe.",
+            // C
+            skin: "Blass, zyanotisch, kühl.",
+            abdomen: "Evtl. gebläht (Wasser geschluckt).",
+            // D
+            pupils: "Isokor.",
+            befast: "Somnolent durch Hypoxie (CO2-Narkose?).",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: ["torso"],
+            injuries: ["V.a. Aspirationspneumonie / Toxisches Lungenödem"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "SpO2 < 90", anatomical: "-", mechanism: "Ertrinken", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 10: KINDESWOHLGEFÄHRDUNG (Misshandlung)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_misshandlung_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Sturz vom Stuhl'. Ort: Wohnung (ungepflegt). Ein 3-jähriges Kind sitzt auf dem Sofa. Es hat blaue Flecken am Rücken und im Gesicht. Es weicht Berührungen aus.",
+          intro_dialogue: "(Stiefvater): Der fällt dauernd hin. Ist voll tollpatschig. Jetzt hat er sich halt gestoßen. Braucht er wirklich einen Arzt?",
+          target_outcome: "Plausibilitäts-Check (Verletzung passt nicht zum Unfallhergang!), Hämatome dokumentieren (Bodycheck!), Transport zwingend (Kinderschutz), Polizei/Jugendamt erst in Klinik informieren (Deeskalation vor Ort).",
+          vitals: { RR: "100/60", SpO2: 99, AF: 22, Puls: 110, BZ: 90, Temp: 36.8, GCS: 15 },
+          scene_4s: {
+            sicherheit: "Stimmung aggressiv/abweisend? Eigenschutz.",
+            szene: "Wohnung chaotisch. Erklärung der Eltern passt nicht zu den Verletzungen (verschiedene Altersstufen der Hämatome).",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "RTW (Transport ist das Ziel!). NA nur bei akuter Lebensgefahr."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Hämatome, Angst",
+              A: "Unbekannt",
+              M: "Unbekannt",
+              P: "War schon öfter im KH",
+              L: "-",
+              E: "Angeblich Sturz vom Stuhl",
+              R: "Hämatome an untypischen Stellen (Rücken, Ohren, Innenseite Oberschenkel)"
+            },
+            OPQRST: { O: "Unklar", P: "Kind zuckt zusammen", Q: "-", R: "-", S: "-", T: "-" }
+          },
+          hidden: {
+            diagnosis_keys: ["Misshandlung", "Kindeswohl", "Hämatome", "Gewalt"],
+            // X
+            bleeding_info: "Keine offene Blutung.",
+            // A
+            mouth: "Einriss Lippenbändchen? (Typisches Zeichen für Gewalt). -> Hier: Ja, altes Lippenbändchen-Trauma.",
+            // B
+            lung: "Frei.",
+            // C
+            skin: "Hämatome (Blutergüsse) in verschiedenen Farben (gelb, grün, blau -> unterschiedliches Alter) am Rücken und Gesäß.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor.",
+            befast: "Kind ist wach, aber extrem ängstlich (Frozen Watchfulness).",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie (Angst).",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            // NEU: Verletzungen überall
+            injury_map: ["head", "torso", "leg_r", "leg_l"],
+            injuries: ["Multiple Hämatome unterschiedlichen Alters", "V.a. Kindesmisshandlung (Nicht-akzidentelle Verletzung)"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+        // ---------------------------------------------------------
+        // FALL 11: SIDS / REANIMATION BABY
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_sids_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Säugling atmet nicht'. Ort: Schlafzimmer. Die Mutter führt Reanimation durch (Telefon-Anleitung). Das Baby (3 Monate) liegt auf dem Boden.",
+          intro_dialogue: "(Mutter): Er ist ganz blau! Er bewegt sich nicht! Warum hilft ihm denn keiner?!",
+          target_outcome: "Reanimation übernehmen (30:2 oder 15:2 je nach Protokoll/Helfer), NA nachfordern, Wärmeerhalt, Airway Management (Wendl?), Zugang i.o. (NA).",
+          vitals: { RR: "0/0", SpO2: 0, AF: 0, Puls: 0, BZ: 0, Temp: 35.0, GCS: 3 }, // Kreislaufstillstand
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Baby liegt leblos da. Totenflecken? (Noch nicht).",
+            sichtung_personen: "1 Säugling + extrem psychisch belastete Eltern.",
+            support_empfehlung: "NA + KIT (Krisenintervention) für die Eltern."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Atemstillstand, Zyanose, Leblosigkeit",
+              A: "-",
+              M: "-",
+              P: "Frühchen?",
+              L: "-",
+              E: "Morgens im Bett so aufgefunden",
+              R: "Bauchlage im Schlaf?"
+            },
+            OPQRST: { O: "-", P: "-", Q: "-", R: "-", S: "-", T: "-" }
+          },
+          hidden: {
+            diagnosis_keys: ["Reanimation", "SIDS", "Plötzlicher Kindstod", "Asystolie"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Frei, evtl. etwas Erbrochenes/Milch.",
+            // B
+            lung: "Keine Atmung.",
+            // C
+            skin: "Zyanotisch (blau), kühl, marmoriert.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Weit, lichtstarr.",
+            befast: "Koma (GCS 3).",
+            ekg_pattern: "asystolie",
+            ekg12: "Nulllinie (Asystolie).",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: [],
+            injuries: ["Herz-Kreislauf-Stillstand"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "Reanimation (Positiv)", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 12: KETOAZIDOSE (Diabetes Erstmanifestation)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_dm_typ1_kind",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Kind nicht erweckbar'. Ort: Kinderzimmer. Ein 10-jähriges Mädchen liegt im Bett und atmet sehr tief und schwer.",
+          intro_dialogue: "(Vater): Sie war die letzten Tage schon so schlapp... und hatte so Durst. Heute Morgen krieg ich sie nicht wach.",
+          target_outcome: "BZ messen (High!), Kussmaul-Atmung erkennen, O2, Volumen (vorsichtig!), NA (diabetisches Koma).",
+          vitals: { RR: "95/60", SpO2: 96, AF: 35, Puls: 130, BZ: 500, Temp: 36.8, GCS: 9 }, // BZ High
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Süßlicher Geruch im Zimmer (Aceton/faulige Äpfel). Viele leere Wasserflaschen am Bett.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA (Kritischer Stoffwechselzustand)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Bewusstseinsstörung, Kußmaul-Atmung, Polydipsie (Viel Durst)",
+              A: "-",
+              M: "-",
+              P: "Keine (Diabetes noch nicht bekannt!)",
+              L: "-",
+              E: "Gewichtsabnahme in letzten Wochen",
+              R: "-"
+            },
+            OPQRST: { O: "Schleichend", P: "-", Q: "-", R: "-", S: "-", T: "Zunehmend schlechter" }
+          },
+          hidden: {
+            diagnosis_keys: ["Ketoazidose", "Diabetes", "Erstmanifestation", "Hyperglykämie"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Extrem trocken, Foetor ex ore (Aceton).",
+            // B
+            lung: "Tiefe, maschinenartige Atmung (Kußmaul) zur Säurekompensation.",
+            // C
+            skin: "Trocken, stehende Hautfalten (Exsikkose).",
+            abdomen: "Hart (Pseudoperitonitis durch Säure).",
+            // D
+            pupils: "Isokor.",
+            befast: "Somnolent/Soporös.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: ["torso"], // Bauchweh
+            injuries: ["Diabetisches Koma"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 13: VERBRÜHUNG (Wasserkocher)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_verbruehung_kind",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Verbrühung'. Ort: Küche. Ein Kleinkind (18 Monate) hat am Kabel des Wasserkochers gezogen. Das heiße Wasser ergoss sich über Brust und rechten Arm.",
+          intro_dialogue: "*Schreit gellend*... *Wimmert*",
+          target_outcome: "Kühlung (max. 10 min, lauwarm! Hypothermiegefahr!), Kleidung entfernen (wenn nicht eingebrannt), Steril abdecken, Wärmeerhalt Restkörper, NA (Analgesie!).",
+          vitals: { RR: "90/50", SpO2: 98, AF: 40, Puls: 160, BZ: 100, Temp: 37.2, GCS: 15 },
+          scene_4s: {
+            sicherheit: "Pfütze am Boden (Rutschgefahr).",
+            szene: "Kind auf dem Arm der Mutter, Mutter kühlt bereits mit eiskaltem Wasser (Stoppen! Zu kalt!).",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA (Großflächige Verbrühung beim Kleinkind = Schockgefahr & Schmerz)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Starke Schmerzen, Rötung, Blasenbildung",
+              A: "-",
+              M: "-",
+              P: "-",
+              L: "-",
+              E: "Wasserkocher umgekippt",
+              R: "-"
+            },
+            OPQRST: { O: "Sofort", P: "-", Q: "Brennend", R: "Thorax/Arm", S: "10/10", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["Verbrühung", "Verbrennung", "Wasser", "Trauma"],
+            // X
+            bleeding_info: "Keine Blutung, nässende Wunden.",
+            // A
+            mouth: "Frei (Kein Inhalationstrauma, da heißes Wasser).",
+            // B
+            lung: "Frei, Tachypnoe durch Schmerz/Schreck.",
+            // C
+            skin: "Großflächige Rötung und Blasenbildung (Grad 2a/b) an Thorax und rechtem Arm.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor.",
+            befast: "Wach, schreit.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 10, ort: "Brust/Arm", charakter: "Brennend" },
+            
+            // NEU: Rumpf und Arm
+            injury_map: ["torso", "arm_r"],
+            injuries: ["Verbrühung Grad 2 (ca. 15-20% KOF)"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "Verbrennung > 10% beim Kind", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 14: GRÜNHOLZFRAKTUR (Spielplatz)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_gruenholz_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Armverletzung'. Ort: Spielplatz. Ein 6-jähriger Junge ist vom Klettergerüst gefallen. Er hält seinen linken Unterarm, der 'gebogen' aussieht.",
+          intro_dialogue: "Mein Arm! Er sieht so krumm aus! Mama!",
+          target_outcome: "DMS prüfen, SAM-Splint (Anmodellieren), Dreiecktuch, Kühlung, Schmerzsaft (Nurofen?), Transport.",
+          vitals: { RR: "110/70", SpO2: 99, AF: 24, Puls: 110, BZ: 95, Temp: 36.9, GCS: 15 },
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind sitzt auf Bank, hält Arm schonend.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "RTW (wenn Schmerz erträglich), sonst NA zur Analgesie."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Schmerz, Fehlstellung, Bewegungseinschränkung",
+              A: "-",
+              M: "-",
+              P: "-",
+              L: "Eis",
+              E: "Sturz auf ausgestreckten Arm",
+              R: "-"
+            },
+            OPQRST: { O: "Sofort", P: "Bewegung ++", Q: "Stechend", R: "Unterarm", S: "7/10", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["Fraktur", "Grünholz", "Unterarm", "Bruch"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Frei.",
+            // B
+            lung: "Frei.",
+            // C
+            skin: "Rosig. Unterarm links gebogen (wie ein grüner Zweig), keine offene Wunde.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor.",
+            befast: "Unauffällig. DMS intakt (wichtig!).",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 7, ort: "Arm links", charakter: "Stechend" },
+            
+            // NEU: Arm links
+            injury_map: ["arm_l"],
+            injuries: ["Grünholzfraktur Unterarm links"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "Stabil", anatomical: "-", mechanism: "Sturz (Höhe?)", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 15: APPENDIZITIS (Bauchschmerz)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_appendizitis_kind",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Bauchschmerzen'. Ort: Schule (Sanitätsraum). Ein 8-jähriges Mädchen liegt gekrümmt auf der Liege. Sie hat Fieber und kann das rechte Bein nicht ausstrecken.",
+          intro_dialogue: "Mein Bauch tut weh... hier unten rechts... und mir ist schlecht.",
+          target_outcome: "Schonhaltung unterstützen (Rolle unter Knie), Wärmeerhalt, Transport Chirurgie, V.a. Appendizitis.",
+          vitals: { RR: "105/65", SpO2: 97, AF: 20, Puls: 115, BZ: 90, Temp: 38.8, GCS: 15 },
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind liegt rechtsseitig, Beine angezogen.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "KTW/RTW.",
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Schmerz rechter Unterbauch, Fieber, Übelkeit",
+              A: "-",
+              M: "-",
+              P: "-",
+              L: "Frühstück kaum gegessen",
+              E: "Begann um den Bauchnabel, ist jetzt 'gewandert'",
+              R: "-"
+            },
+            OPQRST: { O: "Seit heute morgen", P: "Hüpfen/Erschütterung tut weh", Q: "Stechend", R: "Rechter Unterbauch", S: "6/10", T: "Zunehmend" }
+          },
+          hidden: {
+            diagnosis_keys: ["Appendizitis", "Blinddarm", "Abdomen", "Bauch"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Frei.",
+            // B
+            lung: "Frei.",
+            // C
+            skin: "Warm, gerötet (Fieberwangen).",
+            abdomen: "Druckschmerz McBurney (rechts unten). Loslassschmerz kontralateral (Blumberg). Abwehrspannung.",
+            // D
+            pupils: "Isokor.",
+            befast: "Unauffällig.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 6, ort: "Rechter Unterbauch", charakter: "Stechend" },
+            
+            // NEU: Bauch
+            injury_map: ["torso"],
+            injuries: ["Akutes Abdomen (V.a. Appendizitis)"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "Stabil", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+        // ---------------------------------------------------------
+        // FALL 16: SHT (Fahrradsturz ohne Helm)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_sht_kind_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Sturz Fahrrad'. Ort: Skatepark. Ein 10-jähriger Junge ist über den Lenker abgestiegen. Er trug keinen Helm. Er ist blass und hat sich erbrochen.",
+          intro_dialogue: "Mir ist schlecht... mein Kopf tut weh... ich will nach Hause... *wirkt verlangsamt*",
+          target_outcome: "HWS-Immobilisation, Wundversorgung, Überwachung (Vigilanz), Transport (CCT nötig).",
+          vitals: { RR: "110/70", SpO2: 97, AF: 20, Puls: 80, BZ: 100, Temp: 36.8, GCS: 14 },
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind sitzt am Boden, hält sich den Kopf.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "RTW + NA (bei Eintrübung oder starken neurologischen Ausfällen)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Kopfschmerz, Übelkeit, Amnesie zum Unfall",
+              A: "-",
+              M: "-",
+              P: "-",
+              L: "Schokoriegel",
+              E: "Sturz auf Beton",
+              R: "Kein Helm"
+            },
+            OPQRST: { O: "Sofort", P: "-", Q: "Brummen", R: "Stirn", S: "6/10", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["SHT", "Commotio", "Sturz", "Kopf"],
+            // X
+            bleeding_info: "Schürfwunde an der Stirn.",
+            // A
+            mouth: "Frei.",
+            // B
+            lung: "Frei.",
+            // C
+            skin: "Blass (Vagale Reaktion / Übelkeit).",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, prompt.",
+            befast: "Retrograde Amnesie (Weiß nicht, wie er hergekommen ist).",
+            ekg_pattern: "sinus",
+            ekg12: "Sinusrhythmus.",
+            pain: { nrs: 6, ort: "Stirn", charakter: "Dumpf" },
+            
+            // NEU: Kopf rot
+            injury_map: ["head"],
+            injuries: ["Platzwunde Stirn", "Commotio Cerebri"],
+            
+            nexus_criteria: { summary: "Vigilanz gemindert (GCS 14)? -> HWS Immobilisation empfohlen." },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "Sturz (Geschwindigkeit?)", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 17: HODENTORSION (Akutes Skrotum)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_hoden_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Akute Schmerzen'. Ort: Sportplatz. Ein 13-jähriger Junge liegt gekrümmt in der Kabine. Er hält sich die Leiste und weint.",
+          intro_dialogue: "Es tut so weh! Untenrum... mir ist kotzübel! Bitte helfen Sie mir!",
+          target_outcome: "Verdacht erkennen (Zeit ist Hoden! < 6h Zeitfenster), Rascher Transport (Urologie/Chirurgie), Analgesie (NA), Schamgefühl beachten.",
+          vitals: { RR: "130/80", SpO2: 98, AF: 24, Puls: 110, BZ: 95, Temp: 36.9, GCS: 15 },
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Patient ist blass und schweißig vor Schmerz.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA zur Analgesie (NRS 9/10). Transport hat Prio 1."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Plötzlicher massiver Schmerz Hoden/Leiste, Übelkeit",
+              A: "-",
+              M: "-",
+              P: "-",
+              L: "-",
+              E: "Beim Fußballspielen (oder spontan)",
+              R: "-"
+            },
+            OPQRST: { O: "Schlagartig", P: "Jede Bewegung", Q: "Vernichtend", R: "Leiste/Bauch", S: "9/10", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["Hodentorsion", "Torsion", "Hoden", "Urologie"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Frei.",
+            // B
+            lung: "Frei.",
+            // C
+            skin: "Schweißig, blass.",
+            abdomen: "Unauffällig, aber Schmerzausstrahlung in Unterbauch möglich.",
+            // D
+            pupils: "Isokor.",
+            befast: "Unauffällig.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 9, ort: "Hoden/Leiste", charakter: "Ziehend/Stechend" },
+            
+            // NEU: Unterleib/Torso
+            injury_map: ["torso"],
+            injuries: ["Akutes Skrotum (V.a. Hodentorsion)"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 18: INVAGINATION (Darmverschluss Kleinkind)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_invagination_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Kind schreit unstillbar'. Ort: Wohnung. Ein 9 Monate altes Baby schreit plötzlich gellend, zieht die Beine an, ist dann kurz ruhig und blass, dann schreit es wieder.",
+          intro_dialogue: "(Mutter): Er ist so blass! Und er hat gerade gebrochen... da war Blut in der Windel, so schleimig!",
+          target_outcome: "Verdacht Invagination (Himbeergelee-Stuhl), Transport Kinderklinik, Zugang (NA), Schockbehandlung.",
+          vitals: { RR: "80/50", SpO2: 96, AF: 35, Puls: 160, BZ: 90, Temp: 37.1, GCS: 14 },
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind wirkt in den schmerzfreien Intervallen apathisch.",
+            sichtung_personen: "1 Säugling.",
+            support_empfehlung: "NA (Akutes Abdomen beim Säugling, Zugang schwierig)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Kolikartige Schmerzen, Erbrechen, Blutiger Schleimstuhl",
+              A: "-",
+              M: "-",
+              P: "Infekt vor kurzem?",
+              L: "Milch erbrochen",
+              E: "Plötzlicher Beginn",
+              R: "-"
+            },
+            OPQRST: { O: "Akut", P: "Beine anziehen", Q: "Wellenartig", R: "Bauch", S: "Stark", T: "Intervalle" }
+          },
+          hidden: {
+            diagnosis_keys: ["Invagination", "Ileus", "Darmverschluss", "Himbeergelee"],
+            // X
+            bleeding_info: "Keine äußere Blutung.",
+            // A
+            mouth: "Frei.",
+            // B
+            lung: "Frei.",
+            // C
+            skin: "Blass, kaltschweißig im Anfall.",
+            abdomen: "Walzenförmige Resistenz im Bauch tastbar? (Vorsicht!). Windelinhalt: 'Himbeergelee-artig' (Blut/Schleim).",
+            // D
+            pupils: "Isokor.",
+            befast: "Apathisch zwischen den Attacken.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: ["torso"],
+            injuries: ["Akutes Abdomen (V.a. Invagination)"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "-", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 19: ALKOHOLINTOXIKATION (Komasaufen)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_c2_jugend_01",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Bewusstlose Person'. Ort: Spielplatz (Nachts). Ein 14-jähriges Mädchen liegt auf einer Parkbank. Umstehende Freunde sind betrunken und kichern.",
+          intro_dialogue: "Die hat voll viel Wodka getrunken... jetzt wacht sie nicht mehr auf. Ist das schlimm?",
+          target_outcome: "Aspirationsschutz (Seitenlage!), Wärmeerhalt (Alkohol weitet Gefäße!), BZ messen (Alkohol macht Hypoglykämie beim Kind!), NA wenn GCS < 9.",
+          vitals: { RR: "95/60", SpO2: 94, AF: 12, Puls: 90, BZ: 55, Temp: 35.5, GCS: 7 }, // Hypoglykämie + Hypothermie Gefahr!
+          scene_4s: {
+            sicherheit: "Aggressive Jugendliche? Scherben?",
+            szene: "Hochprozentiger Alkohol leer. Erbrochenes am Boden.",
+            sichtung_personen: "1 Patientin (+ betrunkene Freunde).",
+            support_empfehlung: "NA (Intubationsschutz? Glucose?)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Bewusstlosigkeit, Foetor alcoholicus, Hypothermie",
+              A: "-",
+              M: "-",
+              P: "-",
+              L: "Alkohol",
+              E: "Wetttrinken",
+              R: "Unterkühlung"
+            },
+            OPQRST: { O: "-", P: "-", Q: "-", R: "-", S: "-", T: "-" }
+          },
+          hidden: {
+            diagnosis_keys: ["Intoxikation", "Alkohol", "C2", "Koma"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Erbrochenes im Mund? -> Ausräumen/Absaugen! Zunge fällt zurück.",
+            // B
+            lung: "Frei, aber flach (Atemdepression beginnend?).",
+            // C
+            skin: "Kühl, marmoriert.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, träge.",
+            befast: "Koma (GCS 7 - keine gezielte Abwehr).",
+            ekg_pattern: "sinus",
+            ekg12: "Sinusrhythmus.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: [],
+            injuries: ["Alkoholvergiftung", "V.a. Hypoglykämie"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "GCS < 13", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 20: STATUS ASTHMATICUS (Kind)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_asthma_status_kind",
+          specialty: "paediatrisch",
+          story: "Einsatzstichwort: 'Akute Atemnot'. Ort: Sporthalle. Ein 12-jähriger Junge sitzt nach dem Sportunterricht am Boden. Er hat sein Spray schon 5x genommen, es hilft nicht.",
+          intro_dialogue: "*Kann nicht sprechen*... *nickt nur*... *Luftnot extrem*",
+          target_outcome: "Sofort O2, Verneblung (Salbutamol/Atrovent) via Maske, Zugang (NA), Kortison i.v., Oberkörper hoch, Beruhigung (Angst frisst O2!).",
+          vitals: { RR: "130/80", SpO2: 82, AF: 40, Puls: 150, BZ: 110, Temp: 36.8, GCS: 14 }, // Silent Chest Gefahr!
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Kind ist zyanotisch, Einsatz der Atemhilfsmuskulatur maximal.",
+            sichtung_personen: "1 Kind.",
+            support_empfehlung: "NA sofort (Lebensgefahr Status Asthmaticus)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Orthopnoe, Sprechdyspnoe, Zyanose",
+              A: "Pollen/Tierhaare",
+              M: "Salbutamol (leer)",
+              P: "Asthma bronchiale",
+              L: "-",
+              E: "Anstrengung",
+              R: "Spray hilft nicht mehr"
+            },
+            OPQRST: { O: "Vor 20 min", P: "-", Q: "Enge", R: "-", S: "Maximal", T: "Verschlechterung" }
+          },
+          hidden: {
+            diagnosis_keys: ["Asthma", "Status", "Obstruktion", "Atemnot"],
+            // X
+            bleeding_info: "Keine.",
+            // A
+            mouth: "Zyanose Lippen.",
+            // B - ALARM
+            lung: "Kaum Atemgeräusch hörbar ('Silent Chest' - fast kein Luftfluss mehr!). Giemen nur leise.",
+            // C
+            skin: "Schweißig, zyanotisch, kalte Extremitäten (Zentralisation durch Stress).",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, weit (Panik).",
+            befast: "Erschöpft, droht respiratorisch zu dekompensieren.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            
+            injury_map: ["torso"],
+            injuries: ["Status Asthmaticus"],
+            
+            nexus_criteria: { summary: "-" },
+            polytrauma_criteria: { vitals: "SpO2 < 90, AF > 29", anatomical: "-", mechanism: "-", special: "-" }
+          }
+        })
+      ] // <--- HIER IST DAS ENDE DER LISTE
+       // <--- ENDE DES ARRAY, KOMMA NICHT VERGESSEN WENN NOCH WAS KOMMT
     };
 
     

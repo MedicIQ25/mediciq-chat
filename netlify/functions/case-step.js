@@ -217,17 +217,18 @@ exports.handler = async (event) => {
         return ok(reply);
     }
 
-    // Wundversorgung / Kühlen (E)
+    // Wundversorgung / Kühlen (E) - UPDATE
     if (low.includes('wundversorgung')) {
         reply.accepted = true; 
         touchStep("E");
         let msg = "Wunde steril abgedeckt / versorgt.";
         
-        // Spezielle Reaktionen je nach Fall
         const dx = (H.diagnosis_keys||[]).join(' ').toLowerCase();
         if (dx.includes('verbrennung') || dx.includes('verätzung')) msg = "✅ Betroffene Stellen werden intensiv gekühlt/gespült.";
         if (dx.includes('eviszeration')) msg = "✅ Darmschlingen feucht & steril abgedeckt.";
         if (dx.includes('amputation')) msg = "✅ Amputat gesichert und gekühlt.";
+        // NEU: Fieber senken
+        if (dx.includes('fieber') || dx.includes('hyperthermie') || dx.includes('hitzschlag')) msg = "✅ Physikalische Kühlung eingeleitet (Wadenwickel / Umgebung kühlen).";
         
         reply.evaluation = msg;
         return ok(reply);
@@ -244,6 +245,40 @@ exports.handler = async (event) => {
         if (dx.includes('auge') || dx.includes('perforation')) msg = "✅ Beide Augen steril abgedeckt (Ruhigstellung).";
         
         reply.evaluation = msg;
+        return ok(reply);
+    }
+    // --- PÄDIATRIE & REANIMATION ---
+
+    // CPR (Reanimation)
+    if (low.includes('cpr starten')) {
+        reply.accepted = true; 
+        touchStep("C");
+        // Prüfen, ob Reanimation nötig ist (Puls fehlt oder Diagnose Reanimation)
+        const isRea = (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('reanimation') || (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('asystolie');
+        
+        if (isRea) {
+            reply.evaluation = "✅ Reanimation (30:2 / 15:2) sofort eingeleitet. Thoraxkompressionen laufen.";
+            reply.finding = "Wichtig: Hochwertige Kompressionen minimieren Pausen!";
+        } else {
+            reply.evaluation = "⚠️ Patient hat Kreislauf! CPR abgebrochen. (Puls tastbar).";
+        }
+        return ok(reply);
+    }
+
+    // Fremdkörper-Manöver (Heimlich / Rückenschläge)
+    if (low.includes('fremdkörpermanöver')) {
+        reply.accepted = true; 
+        touchStep("A");
+        const isBolus = (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('aspiration') || (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('bolus');
+        
+        if (isBolus) {
+            reply.evaluation = "✅ Manöver durchgeführt (Rückenschläge/Heimlich).";
+            reply.finding = "Fremdkörper hat sich evtl. gelöst oder Lage verändert. Atmung prüfen!";
+            // Kleiner Bonus: Sättigung steigt leicht, wenn es klappt
+            updVitals({ SpO2: 90 });
+        } else {
+            reply.evaluation = "Manöver durchgeführt (ohne Effekt/Indikation).";
+        }
         return ok(reply);
     }
     // --- 3. INFOS & MAßNAHMEN ---

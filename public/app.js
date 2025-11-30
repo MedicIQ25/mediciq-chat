@@ -18,7 +18,8 @@ const ACTIONS = {
   A: [ 
       { label: 'Mundraumkontrolle', token: 'Mundraumkontrolle', instant: true }, 
       { label: 'Absaugen', token: 'Absaugen' }, 
-      { label: 'Esmarch-Handgriff', token: 'Esmarch' }, 
+      // NEU: Für verschluckte Nüsse/Bolus
+      { label: 'Rückenschläge / Heimlich', token: 'Fremdkörpermanöver' },
       { label: 'Guedel-Tubus', token: 'Guedel' }, 
       { label: 'Wendel-Tubus', token: 'Wendel' }, 
       { label: 'Beutel-Masken-Beatmung', token: 'Beutel-Masken-Beatmung' } 
@@ -34,6 +35,8 @@ const ACTIONS = {
   C: [ 
       { label: 'RR messen', token: 'RR messen', instant: true }, 
       { label: 'Puls messen', token: 'Puls messen', instant: true }, 
+      // NEU: Die wichtigste Maßnahme überhaupt!
+      { label: 'REANIMATION (CPR) Starten', token: 'CPR Starten', instant: true },
       { label: 'pDMS prüfen', token: 'pDMS Kontrolle', instant: true }, 
       { label: '12-Kanal-EKG', special: 'EKG' }, 
       { label: 'i.V. Zugang legen', token: 'i.V. Zugang legen' }, 
