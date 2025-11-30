@@ -629,12 +629,19 @@ function openOxygen() {
   $id('o2Cancel').onclick = () => closeModal('modalO2');
   openModal('modalO2');
 }
-function openNA() {
-  if(!caseState) return;
-  $id('naReason').value='';
-  $id('naOk').onclick=()=>{ stepCase(`Notarzt nachfordern: ${$id('naReason').value}`); closeModal('modalNA'); };
-  $id('naCancel').onclick=()=>closeModal('modalNA');
-  openModal('modalNA');
+function openNRS() {
+  const r=$id('nrsRange'), v=$id('nrsVal'); r.value=0; v.textContent='0';
+  r.oninput=()=>v.textContent=r.value;
+  $id('nrsFetch').onclick = async () => {
+    const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'Schmerz Info'})});
+    const d = await res.json();
+    if(d.finding) speak(d.finding);
+    // WICHTIG: innerHTML statt textContent
+    $id('nrsInfo').innerHTML = d.finding; 
+  };
+  $id('nrsOk').onclick=()=>{ stepCase(`NRS ${r.value}`); closeModal('modalNRS'); };
+  $id('nrsCancel').onclick=()=>closeModal('modalNRS');
+  openModal('modalNRS');
 }
 function openAFCounter() { if(caseState) stepCase('AF messen'); }
 function openNRS() {
@@ -653,7 +660,9 @@ function openBEFAST() {
   $id('befastFetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'BEFAST Info'})});
     const d = await res.json();
-    $id('befastInfo').textContent = d.finding; 
+    if(d.finding) speak(d.finding);
+    // WICHTIG: innerHTML
+    $id('befastInfo').innerHTML = d.finding; 
   };
   $id('befastOk').onclick=()=>{ stepCase('BEFAST dokumentiert'); closeModal('modalBEFAST'); };
   $id('befastCancel').onclick=()=>closeModal('modalBEFAST');
@@ -661,7 +670,18 @@ function openBEFAST() {
 }
 function openSampler() {
   $id('samplerFetch').onclick=async()=>{
-    await stepCase('SAMPLER Info');
+    // Wir rufen nur Info ab, kein Step (damit es nicht doppelt im Chat steht beim Öffnen)
+    // Oder wir nutzen stepCase mit 'Sampler Info', das Backend liefert den Text.
+    // Wir nutzen hier direkt fetch für die Vorschau im Modal.
+    const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'SAMPLER Info'})});
+    const d = await res.json();
+    
+    // WICHTIG: Text oben anzeigen (innerHTML)
+    if(d.finding) {
+        document.getElementById('samplerInfo').innerHTML = d.finding;
+    }
+    
+    // Auto-Fill Formular (optional, falls strukturierte Daten da sind)
     const S = caseState?.anamnesis?.SAMPLER || {};
     if($id('s_sympt')) $id('s_sympt').value = S.S||'';
     if($id('s_allerg')) $id('s_allerg').value = S.A||'';
@@ -679,7 +699,9 @@ function openFourS() {
   $id('s4Fetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
     const d = await res.json();
-    $id('s4Info').textContent = d.finding; 
+    if(d.finding) speak(d.finding);
+    // WICHTIG: innerHTML
+    $id('s4Info').innerHTML = d.finding;
   };
   $id('s4Ok').onclick=()=>{ stepCase('4S dokumentiert'); closeModal('modal4S'); };
   $id('s4Cancel').onclick=()=>closeModal('modal4S');
