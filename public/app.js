@@ -244,9 +244,12 @@ async function stepCase(txt) {
     renderProgress(caseState.steps_done||[]);
     
     if(d.done) {
-      // Wir rufen NUR openDebrief auf. 
-      // Diese Funktion kümmert sich um alles (Timer stoppen, Aufräumen, UI update).
       openDebrief();
+      caseState = null;
+      updateUI(false); 
+      stopTimer();
+      stopMonitorLoop(); 
+      document.getElementById('caseStatus').textContent = 'Fall beendet.';
     }
   } catch(e) {
     addMsg(`Fehler: ${e.message}`);
@@ -739,64 +742,10 @@ function openHandover() {
     openModal('modalHandover');
 }
 async function openDebrief() {
-  // 1. Sicherheits-Check
-  if (!caseState) {
-      addMsg("⚠️ Fehler: Kein Fall aktiv.");
-      return;
-  }
-
-  // 2. Zeit & Monitor anhalten (damit Ruhe ist)
-  stopTimer();
-  stopMonitorLoop();
-  
-  // Status ändern
-  const statusEl = document.getElementById('caseStatus');
-  if(statusEl) statusEl.textContent = 'Analysiere Fall...';
-
-  addMsg("⏳ <em>Sende Daten an Auswertung...</em>");
-
   try {
-    // 3. Anfrage senden (caseState ist noch da!)
-    const r = await fetch(API_CASE_STEP, {
-        method: 'POST',
-        body: JSON.stringify({ 
-            case_state: caseState, 
-            user_action: 'Debriefing' 
-        })
-    });
-
-    if (!r.ok) {
-        // Falls Server Fehler meldet, Text auslesen
-        const errText = await r.text();
-        throw new Error(`Server Fehler ${r.status}: ${errText}`);
-    }
-
+    const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
     const d = await r.json();
-    
-    // 4. Ergebnis anzeigen
-    if (d.debrief) {
-        addMsg(`
-            <div style="background:#f0fdf4; border:2px solid #16a34a; padding:20px; border-radius:12px; margin-top:15px; color:#14532d; font-size: 1rem; line-height: 1.6;">
-                <h3 style="margin-top:0; color:#166534;">🎓 Fall-Auswertung</h3>
-                ${d.debrief}
-            </div>
-        `);
-        // Optional: Akustisches Feedback, dass es vorbei ist
-        // speak("Fall beendet."); 
-    } else {
-        addMsg("⚠️ Server hat geantwortet, aber das Debriefing war leer.");
-    }
-    
-    // 5. JETZT ERST den Fall beenden und UI aufräumen
-    caseState = null;
-    updateUI(false);
-    if(statusEl) statusEl.textContent = 'Fall beendet.';
-    
-  } catch(e) {
-    console.error("Debrief Error:", e);
-    addMsg(`❌ <strong>Fehler beim Debriefing:</strong> ${e.message}`);
-    // Auch bei Fehler aufräumen, damit man neu starten kann
-    caseState = null;
-    updateUI(false);
-  }
+    addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
+    // KEIN SPEAK MEHR
+  } catch(e){}
 }
