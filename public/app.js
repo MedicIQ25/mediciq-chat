@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Medical Grade SVG Fix)
+// medicIQ – App Logic (Perfect Position & Silent Mode)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -171,6 +171,7 @@ async function startCase() {
 
     addMsg(`<strong>Fallstart:</strong> ${caseState.story}`);
 
+    // LOGIK: NUR hier darf gesprochen werden (Patienten-Dialog)
     if (caseState.intro_dialogue) {
         setTimeout(() => speak(caseState.intro_dialogue), 500);
     } 
@@ -225,6 +226,8 @@ async function stepCase(txt) {
           ${d.finding ? `<div style="color:#b91c1c; margin-top:4px;">${d.finding.replace(/\n/g,'<br>')}</div>` : ''}
           ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
         `);
+        
+        // HIER WURDE GELÖSCHT: Keine speak() Funktion mehr im regulären Ablauf!
     }
 
     caseState = d.case_state || caseState;
@@ -245,7 +248,7 @@ async function stepCase(txt) {
   }
 }
 
-// --- DYNAMIC MONITOR LOGIC (Gapless, High-Res, No-Overlap) ---
+// --- DYNAMIC MONITOR LOGIC (Position fix) ---
 function openEKG() {
     if(!caseState) return;
     const type = caseState.hidden?.ekg_pattern || "sinus";
@@ -272,11 +275,11 @@ function openEKG() {
 
     const viewWidth = 400;
     
-    // FIX: EKG noch etwas höher schieben (50px), um Platz zu schaffen
-    let ekgPath = generateLoopPath(type, 50, viewWidth, 100);
+    // FIX 1: EKG Basislinie auf 75px verschoben (vorher 50, war zu hoch)
+    let ekgPath = generateLoopPath(type, 75, viewWidth, 100);
     
-    // FIX: Pleth deutlich tiefer setzen (150px)
-    let plethPath = generateLoopPath('pleth', 150, viewWidth, spo2Value);
+    // FIX 2: Pleth Basislinie auf 160px verschoben (vorher 150)
+    let plethPath = generateLoopPath('pleth', 160, viewWidth, spo2Value);
 
     const modalBody = document.querySelector('#modalEKG .modal-body');
 
@@ -297,10 +300,10 @@ function openEKG() {
             </g>
 
             <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12" font-weight="bold">II</text>
-            <text x="5" y="120" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
+            <text x="5" y="130" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
             
             <text x="350" y="30" fill="#00ff00" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.Puls || '--'}</text>
-            <text x="350" y="130" fill="#3b82f6" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.SpO2 || '--'}</text>
+            <text x="350" y="140" fill="#3b82f6" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.SpO2 || '--'}</text>
         </svg>
       </div>
       <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
@@ -323,43 +326,25 @@ function openEKG() {
     if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
 }
 
-// Helper: Generiert die Kurven (Hybrid: Kurven für P/T, Linien für QRS)
+// Helper: Generiert die Kurven
 function generateLoopPath(type, yBase, totalWidth, qualityValue) {
     let d = `M 0 ${yBase} `;
     let currentX = 0;
-    let mode = 'curve'; // Default mode
+    let mode = 'curve';
     let beatWidth = 0;
     let commands = []; 
 
     if (type === 'sinus') {
-        mode = 'curve'; // Wir nutzen c-Kurven
-        // Ein Beat ist ca 70px breit für ~70bpm Darstellung
+        mode = 'curve';
         beatWidth = 70; 
         
-        // --- PROFI EKG DEFINITION (Hybrid) ---
-        // c dx1 dy1, dx2 dy2, dx dy (relative Bezier)
-        // l dx dy (relative Line)
-        
         commands = [
-            // P-Welle (Weich, rund)
-            "c 3 -5, 7 -5, 10 0",
-            
-            // PR-Strecke (Kurz, isoelektrisch)
-            "l 5 0",
-            
-            // QRS (SCHARF & SCHMAL) - Hier nutzen wir 'l' Befehle direkt im String
-            // Q (klein runter), R (steil hoch), S (steil runter), J-Point (zurück zur Basis)
-            // Relativ zur P-Welle
-            "l 2 3 l 3 -55 l 3 60 l 2 -8", 
-            
-            // ST-Strecke
-            "l 5 0",
-            
-            // T-Welle (Breiter, weicher)
-            "c 5 -15, 12 -15, 18 0",
-            
-            // Pause bis zum nächsten Schlag
-            "l 22 0"
+            "c 3 -5, 7 -5, 10 0", // P
+            "l 5 0", // PR
+            "l 2 3 l 3 -55 l 3 60 l 2 -8", // QRS (schlank)
+            "l 5 0", // ST
+            "c 5 -15, 12 -15, 18 0", // T
+            "l 22 0" // Pause
         ];
 
     } else if (type === 'vt') {
@@ -370,7 +355,6 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue) {
         mode = 'curve';
         beatWidth = 50;
         
-        // Dynamische Amplitude für Pleth
         let scale = 1.0;
         if(qualityValue < 80) scale = 0.1;
         else if(qualityValue < 88) scale = 0.3;
@@ -394,11 +378,9 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue) {
                 d += `L ${currentX} ${yBase + pt[1]} `;
             });
         } else {
-            // Curve mode (Strings)
             commands.forEach(cmd => {
                 d += cmd + " ";
             });
-            // Manuelles Tracking von X, da SVG Commands keine Info zurückgeben
             currentX += beatWidth;
         }
     }
@@ -670,7 +652,7 @@ async function speak(text) {
     }
 }
 
-// ... Feature Modals ...
+// --- Feature Modals (FIXED: NO SPEAK CALLS) ---
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
@@ -694,8 +676,7 @@ function openNRS() {
   $id('nrsFetch').onclick = async () => {
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'Schmerz Info'})});
     const d = await res.json();
-    if(d.finding) speak(d.finding);
-    $id('nrsInfo').textContent = d.finding;
+    $id('nrsInfo').textContent = d.finding; // NO SPEAK
   };
   $id('nrsOk').onclick=()=>{ stepCase(`NRS ${r.value}`); closeModal('modalNRS'); };
   $id('nrsCancel').onclick=()=>closeModal('modalNRS');
@@ -705,8 +686,7 @@ function openBEFAST() {
   $id('befastFetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'BEFAST Info'})});
     const d = await res.json();
-    if(d.finding) speak(d.finding);
-    $id('befastInfo').textContent = d.finding;
+    $id('befastInfo').textContent = d.finding; // NO SPEAK
   };
   $id('befastOk').onclick=()=>{ stepCase('BEFAST dokumentiert'); closeModal('modalBEFAST'); };
   $id('befastCancel').onclick=()=>closeModal('modalBEFAST');
@@ -732,8 +712,7 @@ function openFourS() {
   $id('s4Fetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
     const d = await res.json();
-    if(d.finding) speak(d.finding);
-    $id('s4Info').textContent = d.finding;
+    $id('s4Info').textContent = d.finding; // NO SPEAK
   };
   $id('s4Ok').onclick=()=>{ stepCase('4S dokumentiert'); closeModal('modal4S'); };
   $id('s4Cancel').onclick=()=>closeModal('modal4S');
@@ -800,6 +779,6 @@ async function openDebrief() {
     const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
     const d = await r.json();
     addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
-    speak("Fall beendet. Hier ist dein Debriefing.");
+    // KEIN SPEAK MEHR
   } catch(e){}
 }
