@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Auto-Update Monitor & Silent Mode)
+// medicIQ – App Logic (COMPLETE MERGED VERSION)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -64,7 +64,7 @@ let isDarkMode = false;
 let selectedSpec = 'internistisch';
 const visibleVitals = {};
 
-// AUDIO CONTEXT VARS
+// AUDIO CONTEXT VARS (DAS FEHLTE!)
 let audioCtx = null;
 let monitorTimeout = null;
 
@@ -211,8 +211,7 @@ async function stepCase(txt) {
           scheduleBeep();
       }
 
-      // FIX: Wenn der Monitor (EKG) offen ist, aktualisieren wir ihn sofort!
-      // Das sorgt dafür, dass der Puls erscheint, sobald er vom Server kommt.
+      // Update Monitor if open
       const modal = document.getElementById('modalEKG');
       if(modal && modal.style.display === 'block') {
           updateEKGView();
@@ -256,10 +255,71 @@ async function stepCase(txt) {
   }
 }
 
-// --- DYNAMIC MONITOR LOGIC (12-Lead Support) ---
+// --- AUDIO ENGINE (DIE FEHLTE!) ---
+function startMonitorLoop() {
+    if(!soundEnabled || !window.AudioContext) return;
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(monitorTimeout) clearTimeout(monitorTimeout);
+    scheduleBeep();
+}
+
+function stopMonitorLoop() {
+    if(monitorTimeout) clearTimeout(monitorTimeout);
+    monitorTimeout = null;
+}
+
+function scheduleBeep() {
+    if(!soundEnabled || !caseState) return;
+    const hasPuls = !!visibleVitals.Puls;
+    const hasSpO2 = !!visibleVitals.SpO2;
+
+    if(!hasPuls && !hasSpO2) {
+        monitorTimeout = setTimeout(scheduleBeep, 1000);
+        return;
+    }
+
+    let hrVal = 60;
+    if(hasPuls) hrVal = parseFloat(String(visibleVitals.Puls).match(/\d+/)?.[0] || 60);
+    else if(hasSpO2) hrVal = parseFloat(caseState.vitals?.Puls || 60);
+    if(hrVal <= 0) hrVal = 60;
+
+    let spo2Val = 99;
+    if(hasSpO2) spo2Val = parseFloat(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
+
+    playBeep(spo2Val);
+    const interval = 60000 / Math.max(30, Math.min(220, hrVal));
+    monitorTimeout = setTimeout(scheduleBeep, interval);
+}
+
+function playBeep(spo2) {
+    if(!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    let freq = 850; 
+    if(spo2 < 100) {
+        const diff = 100 - spo2;
+        freq = 850 - (diff * 20); 
+    }
+    if(freq < 150) freq = 150;
+
+    osc.frequency.value = freq;
+    osc.type = 'triangle';
+    gain.gain.value = 0.05;
+
+    const now = audioCtx.currentTime;
+    osc.start(now);
+    osc.stop(now + 0.12);
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+}
+
+// --- EKG VISUALIZATION ---
 function openEKG() {
     if(!caseState) return;
-    currentLead = 'II'; // Reset auf Standard
+    currentLead = 'II';
 
     const modalBody = document.querySelector('#modalEKG .modal-body');
     
@@ -284,7 +344,7 @@ function openEKG() {
 
       <div class="ekg-screen" style="width:100%; height:200px;">
         <svg id="monitorSvg" width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
-            </svg>
+        </svg>
       </div>
       <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
     `;
@@ -300,11 +360,8 @@ function openEKG() {
     const closeBtn = document.getElementById('ekgClose');
     if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
 
-    // Trigger Update
     updateEKGView();
-    
-    // Trigger Server Action um Pulse freizuschalten
-    stepCase('12-Kanal-EKG');
+    stepCase('12-Kanal-EKG'); // Pulse freischalten
 }
 
 function updateEKGView() {
@@ -312,12 +369,10 @@ function updateEKGView() {
     const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase(); 
     
     const hasSpO2 = !!visibleVitals.SpO2;
-    // ACHTUNG: Pulse kann auch durch EKG kommen
     const hasPuls = !!visibleVitals.Puls; 
 
     let spo2Val = hasSpO2 ? visibleVitals.SpO2.replace(/\D/g,'') : '--';
     let pulsVal = hasPuls ? visibleVitals.Puls.replace(/\D/g,'') : '--';
-    
     let spo2Num = hasSpO2 ? parseInt(spo2Val) : 98;
 
     const svg = document.getElementById('monitorSvg');
@@ -351,16 +406,12 @@ function updateEKGView() {
                 <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
              </g>
         </g>
-
         <rect x="320" y="0" width="80" height="200" fill="#000" stroke-left="1px solid #333" />
         <line x1="320" y1="0" x2="320" y2="200" stroke="#444" stroke-width="2" />
-
         <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="14" font-weight="bold">${currentLead}</text>
-        
         <text x="330" y="25" fill="#00ff00" font-family="sans-serif" font-size="10" font-weight="bold">HF</text>
         <text x="390" y="55" fill="#00ff00" font-family="monospace" font-size="35" font-weight="bold" text-anchor="end" class="monitor-glow">${pulsVal}</text>
         <text x="385" y="25" fill="#00ff00" font-size="10">♥</text>
-
         <text x="330" y="115" fill="#3b82f6" font-family="sans-serif" font-size="10" font-weight="bold">SpO2</text>
         <text x="390" y="145" fill="#3b82f6" font-family="monospace" font-size="35" font-weight="bold" text-anchor="end" class="monitor-glow-blue">${spo2Val}</text>
         <text x="385" y="155" fill="#3b82f6" font-size="10" text-anchor="end">%</text>
@@ -379,39 +430,32 @@ function updateEKGView() {
     }
 }
 
-// --- CORE EKG GENERATOR (GLITCH-FREE) ---
+// Helper: Generiert die Kurven (Stabil)
 function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pathology = '') {
     let d = `M 0 ${yBase} `;
     let currentX = 0;
+    let mode = 'curve';
     let beatWidth = 70; 
 
-    // --- CONFIGURATION DER VEKTOREN ---
+    // Vektoren
     let amp = { p: -5, q: 3, r: -50, s: 15, t: -12 };
     
     if(type === 'sinus') {
-        if (lead === 'aVR') {
-            amp = { p: 5, q: -3, r: 10, s: -40, t: 8 }; 
-        } else if (lead === 'V1') {
-            amp = { p: -3, q: 0, r: -15, s: 40, t: 5 }; 
-        } else if (lead === 'V6' || lead === 'I') {
-            amp = { p: -5, q: 3, r: -45, s: 5, t: -12 };
-        } else if (lead === 'aVL') {
-            amp = { p: -3, q: 2, r: -30, s: 10, t: -8 };
-        } else if (lead === 'III' || lead === 'aVF') {
-            amp = { p: -4, q: 5, r: -40, s: 10, t: -10 };
-        }
+        if (lead === 'aVR') { amp = { p: 5, q: -3, r: 10, s: -40, t: 8 }; } 
+        else if (lead === 'V1') { amp = { p: -3, q: 0, r: -15, s: 40, t: 5 }; } 
+        else if (lead === 'V6' || lead === 'I') { amp = { p: -5, q: 3, r: -45, s: 5, t: -12 }; } 
+        else if (lead === 'aVL') { amp = { p: -3, q: 2, r: -30, s: 10, t: -8 }; } 
+        else if (lead === 'III' || lead === 'aVF') { amp = { p: -4, q: 5, r: -40, s: 10, t: -10 }; }
     }
 
     const isInferior = pathology.includes('hinterwand') || pathology.includes('inferior');
     let stShift = 0; 
-
     if (type === 'sinus' && isInferior) {
         if (['II', 'III', 'aVF'].includes(lead)) stShift = -12; 
         else if (['I', 'aVL'].includes(lead)) stShift = 8; 
     }
 
     while(currentX < totalWidth) {
-        
         if (type === 'sinus') {
             beatWidth = 70;
             const p = `c 3 ${amp.p}, 7 ${amp.p}, 10 0`;
@@ -420,38 +464,29 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pa
             const dyR = amp.r - amp.q;
             const dyS = amp.s - amp.r;
             const dyJ = stShift - amp.s; 
-            
             const qrs = `l 2 ${dyQ} l 3 ${dyR} l 3 ${dyS} l 2 ${dyJ}`;
             const st = `l 5 0`;
-            
             const tPeak = amp.t; 
             const tEnd = -stShift; 
-            
             const t = `c 5 ${tPeak}, 12 ${tPeak}, 18 ${tEnd}`;
             const iso = `l 22 0`;
-            
             d += p + pr + qrs + st + t + iso + " ";
             currentX += beatWidth;
-
         } else if (type === 'vt') {
             beatWidth = 40;
             d += `l 15 -45 l 15 90 l 10 -45 `;
             currentX += beatWidth;
-
         } else if (type === 'pleth') {
             beatWidth = 50;
             let scale = 1.0;
             if(qualityValue < 80) scale = 0.1;
             else if(qualityValue < 88) scale = 0.3;
             else if(qualityValue < 94) scale = 0.6;
-            
             const hasNotch = qualityValue > 90;
             const riseY = -25 * scale;
-            
             let c1 = `c 5 ${riseY}, 10 ${riseY}, 12 -5`; 
             let c2 = hasNotch ? `c 2 8, 5 0, 8 5` : `c 2 2, 5 4, 8 5`; 
             let c3 = `c 5 0, 10 0, 30 0`;
-            
             d += c1 + " " + c2 + " " + c3 + " ";
             currentX += beatWidth;
         } else {
@@ -463,163 +498,95 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pa
     return d;
 }
 
+// --- TTS ---
+let currentAudio = null;
+async function speak(text) {
+    if (!soundEnabled || !text) return;
+    if(currentAudio) { currentAudio.pause(); currentAudio = null; }
 
-// --- INTERACTION ---
-function renderPanel(k) {
-  const panel = document.getElementById('panel');
-  if(!panel) return;
-  panel.innerHTML = '';
-  (ACTIONS[k]||[]).forEach(a => {
-    const b = document.createElement('button');
-    b.className = 'action-card';
-    b.textContent = a.label;
-    b.onclick = () => {
-      if(a.special === 'O2') openOxygen();
-      else if(a.special === 'NA') openNA();
-      else if(a.special === 'IMMO') openImmo();
-      else if(a.special === 'BODYMAP') openBodyMap();
-      else if(a.special === 'EKG') openEKG();
-      else if(a.instant) { stepCase(a.token); }
-      else { queue.push(a); renderQueue(); }
-    };
-    panel.appendChild(b);
-  });
-}
+    let speakText = text
+        .replace(/\//g, ' zu ')
+        .replace(/SpO2/g, 'Sauerstoffsättigung')
+        .replace(/AF/g, 'Atemfrequenz')
+        .replace(/RR/g, 'Blutdruck')
+        .replace(/l\/min/g, 'Liter')
+        .replace(/°C/g, 'Grad');
 
-function renderVitals() {
-  const map = {
-    RR:   document.getElementById('vRR'),
-    SpO2: document.getElementById('vSpO2'),
-    AF:   document.getElementById('vAF'),
-    Puls: document.getElementById('vPuls'),
-    BZ:   document.getElementById('vBZ'),
-    Temp: document.getElementById('vTemp'),
-    GCS:  document.getElementById('vGCS')
-  };
-  for(let k in map) {
-    const el = map[k];
-    if(!el) continue;
-    const valStr = visibleVitals[k] || '--';
-    el.innerHTML = valStr;
-    const box = el.parentElement; 
-    if(box) {
-        box.classList.remove('critical');
-        const valNum = parseFloat(valStr.match(/\d+/)?.[0] || 0);
-        if (k === 'SpO2' && valNum > 0 && valNum < 90) box.classList.add('critical');
-        if (k === 'RR' && valNum > 0 && valNum < 90) box.classList.add('critical'); 
-        if (k === 'Puls' && valNum > 0 && (valNum < 40 || valNum > 140)) box.classList.add('critical');
-        if (k === 'BZ' && valNum > 0 && valNum < 60) box.classList.add('critical');
+    let selectedVoice = "fable"; 
+    if (caseState && caseState.story) {
+        const storyLower = caseState.story.toLowerCase();
+        const specialty = (caseState.specialty || "").toLowerCase();
+        if (specialty === 'paediatrisch' || storyLower.includes('kind') || storyLower.includes('säugling')) {
+            selectedVoice = "alloy"; 
+        } else if (storyLower.includes('frau') || storyLower.includes('patientin') || storyLower.includes('sie ')) {
+            selectedVoice = "nova"; 
+        }
     }
-  }
-}
 
-function startTimer() {
-  startTime = Date.now();
-  lastTickTime = Date.now(); 
-  const el = document.getElementById('missionTimer');
-  if(el) { el.classList.remove('hidden'); el.textContent = "00:00"; }
-  if(timerInterval) clearInterval(timerInterval);
-  timerInterval = setInterval(() => {
-    const now = Date.now();
-    const diff = Math.floor((now - startTime) / 1000);
-    const m = Math.floor(diff / 60).toString().padStart(2,'0');
-    const s = (diff % 60).toString().padStart(2,'0');
-    if(el) el.textContent = `${m}:${s}`;
-    if (now - lastTickTime >= 30000) { 
-        lastTickTime = now;
-        if(caseState && !caseState.measurements?.handover_done) { stepCase('System-Check: 30s vergangen'); }
+    const btn = document.getElementById('btnSound');
+    const oldIcon = btn.textContent;
+    btn.textContent = "⏳..."; 
+
+    try {
+        const response = await fetch('/.netlify/functions/tts', {
+            method: 'POST',
+            body: JSON.stringify({ text: speakText, voice: selectedVoice })
+        });
+        if (!response.ok) throw new Error("TTS Fehler");
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        currentAudio = new Audio(audioUrl);
+        currentAudio.onended = () => { btn.textContent = oldIcon; };
+        currentAudio.onplay = () => { btn.textContent = oldIcon; };
+        currentAudio.play();
+    } catch (e) {
+        btn.textContent = oldIcon; 
     }
-  }, 1000);
 }
 
-function stopTimer() {
-  if(timerInterval) clearInterval(timerInterval);
-}
-
-function updateUI(running) {
-  const specRow = document.getElementById('specRow');
-  const startBtn = document.getElementById('startCase');
-  const finishBtn = document.getElementById('finishCase');
-  const roleSel = document.getElementById('roleSel');
-  const timerEl = document.getElementById('missionTimer');
-  if (running) {
-    if(specRow) specRow.classList.add('hidden');
-    if(startBtn) startBtn.classList.add('hidden');
-    if(finishBtn) finishBtn.classList.remove('hidden');
-    if(roleSel) roleSel.disabled = true;
-  } else {
-    if(specRow) specRow.classList.remove('hidden');
-    if(startBtn) startBtn.classList.remove('hidden');
-    if(finishBtn) finishBtn.classList.add('hidden');
-    if(roleSel) roleSel.disabled = true;
-    if(startBtn) startBtn.disabled = false;
-    if(timerEl) timerEl.classList.add('hidden'); 
+// --- DEBRIEFING ---
+async function openDebrief() {
+  if (!caseState) {
+      addMsg("⚠️ Fehler: Kein Fall aktiv.");
+      return;
   }
-}
+  stopTimer();
+  stopMonitorLoop();
+  
+  const statusEl = document.getElementById('caseStatus');
+  if(statusEl) statusEl.textContent = 'Analysiere Fall...';
+  addMsg("⏳ <em>Sende Daten an Auswertung...</em>");
 
-function renderQueue() {
-  const list = document.getElementById('queueList');
-  if(!list) return;
-  list.innerHTML = '';
-  queue.forEach((it, i) => {
-    const li = document.createElement('li');
-    li.className = 'queue-item';
-    li.innerHTML = `<span>${it.label}</span><button class="btn secondary small">x</button>`;
-    li.querySelector('button').onclick = () => { queue.splice(i,1); renderQueue(); };
-    list.appendChild(li);
-  });
-}
+  try {
+    const r = await fetch(API_CASE_STEP, {
+        method: 'POST',
+        body: JSON.stringify({ case_state: caseState, user_action: 'Debriefing' })
+    });
+    if (!r.ok) throw new Error("Server Fehler");
+    const d = await r.json();
+    
+    caseState = null; 
+    updateUI(false);
+    if(statusEl) statusEl.textContent = 'Fall beendet.';
 
-function renderProgress(doneList) {
-  const s = new Set((doneList||[]).map(x=>x[0]));
-  ['X','A','B','C','D','E'].forEach(l => {
-    const el = document.querySelector(`.chip[data-step="${l}"]`);
-    if(el) {
-      el.classList.toggle('done', s.has(l));
-      el.classList.remove('active');
+    if (d.debrief) {
+        addMsg(`
+            <div style="background:#f0fdf4; border:2px solid #16a34a; padding:20px; border-radius:12px; margin-top:15px; color:#14532d; font-size: 1rem; line-height: 1.6;">
+                <h3 style="margin-top:0; color:#166534;">🎓 Fall-Auswertung</h3>
+                ${d.debrief}
+            </div>
+        `);
+    } else {
+        addMsg("⚠️ Auswertung leer.");
     }
-  });
-  const next = ['X','A','B','C','D','E'].find(l => !s.has(l));
-  if(next) {
-    const el = document.querySelector(`.chip[data-step="${next}"]`);
-    if(el) el.classList.add('active');
+  } catch(e) {
+    caseState = null;
+    updateUI(false);
+    addMsg(`❌ Fehler: ${e.message}`);
   }
 }
 
-function showHint(t) {
-  const ht = document.getElementById('hintText');
-  const hc = document.getElementById('hintCard');
-  if(ht) ht.textContent = t;
-  if(hc) hc.classList.remove('hidden');
-}
-
-function addMsg(h) {
-  const d = document.createElement('div');
-  d.className = 'msg';
-  d.innerHTML = h;
-  const log = document.getElementById('chatLog');
-  if(log) {
-    log.appendChild(d);
-    d.scrollIntoView({block:'end', behavior:'smooth'});
-  }
-}
-
-const $id = (id) => document.getElementById(id);
-const modalBackdrop = document.getElementById('modalBackdrop');
-function openModal(id) { 
-  const el = $id(id);
-  if(!el) return;
-  if(modalBackdrop) modalBackdrop.style.display = 'block';
-  el.style.display = 'block';
-}
-function closeModal(id) { 
-  const el = $id(id);
-  if(!el) return;
-  if(modalBackdrop) modalBackdrop.style.display = 'none';
-  el.style.display = 'none';
-}
-
-// ... Feature Modals (FIXED: NO SPEAK CALLS) ...
+// --- MODALS (FIXED: INNERHTML) ---
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
@@ -629,19 +596,12 @@ function openOxygen() {
   $id('o2Cancel').onclick = () => closeModal('modalO2');
   openModal('modalO2');
 }
-function openNRS() {
-  const r=$id('nrsRange'), v=$id('nrsVal'); r.value=0; v.textContent='0';
-  r.oninput=()=>v.textContent=r.value;
-  $id('nrsFetch').onclick = async () => {
-    const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'Schmerz Info'})});
-    const d = await res.json();
-    if(d.finding) speak(d.finding);
-    // WICHTIG: innerHTML statt textContent
-    $id('nrsInfo').innerHTML = d.finding; 
-  };
-  $id('nrsOk').onclick=()=>{ stepCase(`NRS ${r.value}`); closeModal('modalNRS'); };
-  $id('nrsCancel').onclick=()=>closeModal('modalNRS');
-  openModal('modalNRS');
+function openNA() {
+  if(!caseState) return;
+  $id('naReason').value='';
+  $id('naOk').onclick=()=>{ stepCase(`Notarzt nachfordern: ${$id('naReason').value}`); closeModal('modalNA'); };
+  $id('naCancel').onclick=()=>closeModal('modalNA');
+  openModal('modalNA');
 }
 function openAFCounter() { if(caseState) stepCase('AF messen'); }
 function openNRS() {
@@ -650,7 +610,7 @@ function openNRS() {
   $id('nrsFetch').onclick = async () => {
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'Schmerz Info'})});
     const d = await res.json();
-    $id('nrsInfo').textContent = d.finding; 
+    $id('nrsInfo').innerHTML = d.finding; 
   };
   $id('nrsOk').onclick=()=>{ stepCase(`NRS ${r.value}`); closeModal('modalNRS'); };
   $id('nrsCancel').onclick=()=>closeModal('modalNRS');
@@ -660,8 +620,6 @@ function openBEFAST() {
   $id('befastFetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'BEFAST Info'})});
     const d = await res.json();
-    if(d.finding) speak(d.finding);
-    // WICHTIG: innerHTML
     $id('befastInfo').innerHTML = d.finding; 
   };
   $id('befastOk').onclick=()=>{ stepCase('BEFAST dokumentiert'); closeModal('modalBEFAST'); };
@@ -670,26 +628,9 @@ function openBEFAST() {
 }
 function openSampler() {
   $id('samplerFetch').onclick=async()=>{
-    // Wir rufen nur Info ab, kein Step (damit es nicht doppelt im Chat steht beim Öffnen)
-    // Oder wir nutzen stepCase mit 'Sampler Info', das Backend liefert den Text.
-    // Wir nutzen hier direkt fetch für die Vorschau im Modal.
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'SAMPLER Info'})});
     const d = await res.json();
-    
-    // WICHTIG: Text oben anzeigen (innerHTML)
-    if(d.finding) {
-        document.getElementById('samplerInfo').innerHTML = d.finding;
-    }
-    
-    // Auto-Fill Formular (optional, falls strukturierte Daten da sind)
-    const S = caseState?.anamnesis?.SAMPLER || {};
-    if($id('s_sympt')) $id('s_sympt').value = S.S||'';
-    if($id('s_allerg')) $id('s_allerg').value = S.A||'';
-    if($id('s_med')) $id('s_med').value = S.M||'';
-    if($id('s_hist')) $id('s_hist').value = S.P||'';
-    if($id('s_last')) $id('s_last').value = S.L||'';
-    if($id('s_events')) $id('s_events').value = S.E||'';
-    if($id('s_risk')) $id('s_risk').value = S.R||'';
+    if(d.finding) document.getElementById('samplerInfo').innerHTML = d.finding;
   };
   $id('samplerOk').onclick=()=>{ stepCase('SAMPLER doku'); closeModal('modalSampler'); };
   $id('samplerCancel').onclick=()=>closeModal('modalSampler');
@@ -699,8 +640,6 @@ function openFourS() {
   $id('s4Fetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
     const d = await res.json();
-    if(d.finding) speak(d.finding);
-    // WICHTIG: innerHTML
     $id('s4Info').innerHTML = d.finding;
   };
   $id('s4Ok').onclick=()=>{ stepCase('4S dokumentiert'); closeModal('modal4S'); };
@@ -711,22 +650,13 @@ function openDiagnosis() {
   const dxSel = $id('dxSelect');
   const list = ['ACS','Asthma/Bronchialobstruktion','COPD-Exazerbation','Lungenembolie','Sepsis','Metabolische Entgleisung','Schlaganfall','Krampfanfall','Hypoglykämie','Polytrauma','Fraktur','Fieberkrampf'];
   dxSel.innerHTML = list.map(x=>`<option>${x}</option>`).join('');
-  
-  $id('dxOk').onclick=()=>{
-    stepCase(`Verdachtsdiagnose: ${dxSel.value} | Prio: ${$id('dxPrio').value}`);
-    closeModal('modalDx');
-  };
+  $id('dxOk').onclick=()=>{ stepCase(`Verdachtsdiagnose: ${dxSel.value} | Prio: ${$id('dxPrio').value}`); closeModal('modalDx'); };
   $id('dxCancel').onclick=()=>closeModal('modalDx');
   openModal('modalDx');
 }
 function openImmo() {
   if(!caseState) return;
-  $id('immoOk').onclick = () => {
-    const loc = $id('immoLoc').value;
-    const mat = $id('immoMat').value;
-    stepCase(`Immobilisation: ${mat} an ${loc}`);
-    closeModal('modalImmo');
-  };
+  $id('immoOk').onclick = () => { stepCase(`Immobilisation: ${$id('immoMat').value} an ${$id('immoLoc').value}`); closeModal('modalImmo'); };
   $id('immoCancel').onclick = () => closeModal('modalImmo');
   openModal('modalImmo');
 }
@@ -749,11 +679,7 @@ function openBodyMap() {
 }
 function openHandover() {
     if(!caseState) return;
-    $id('s_ident').value = "";
-    $id('s_event').value = "";
-    $id('s_prio').value = "";
-    $id('s_action').value = "";
-    $id('s_anam').value = "";
+    $id('s_ident').value = ""; $id('s_event').value = ""; $id('s_prio').value = ""; $id('s_action').value = ""; $id('s_anam').value = "";
     $id('handoverOk').onclick = () => {
         const text = `SINNHAFT: I:${$id('s_ident').value} | N:${$id('s_event').value} | N:${$id('s_prio').value} | H:${$id('s_action').value} | A:${$id('s_anam').value}`;
         stepCase(`Übergabe: ${text}`);
@@ -762,12 +688,4 @@ function openHandover() {
     };
     $id('handoverCancel').onclick = () => closeModal('modalHandover');
     openModal('modalHandover');
-}
-async function openDebrief() {
-  try {
-    const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
-    const d = await r.json();
-    addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
-    // KEIN SPEAK MEHR
-  } catch(e){}
 }
