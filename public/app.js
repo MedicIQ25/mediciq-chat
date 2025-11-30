@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bindEvent('btnPrint', 'click', () => window.print());
     bindEvent('startCase', 'click', startCase);
     bindEvent('finishCase', 'click', openHandover);
-    
+    bindEvent('btnSchemaHandover', 'click', openHandover);
     bindEvent('btnRunQueue', 'click', async () => {
         if(!caseState) return;
         while(queue.length) {
