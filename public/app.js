@@ -724,16 +724,44 @@ function openBEFAST() {
   $id('befastCancel').onclick=()=>closeModal('modalBEFAST');
   openModal('modalBEFAST');
 }
+// ...
+
 function openSampler() {
-  $id('samplerFetch').onclick=async()=>{
-    const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'SAMPLER Info'})});
+  // Wenn wir das Modal öffnen, holen wir die Daten direkt aus dem lokalen caseState (falls vorhanden)
+  // oder fragen den Server.
+  
+  $id('samplerFetch').onclick = async () => {
+    // 1. Daten vom Server holen (für Text-Vorschau)
+    const res = await fetch(API_CASE_STEP, {
+        method:'POST', 
+        body:JSON.stringify({case_state:caseState, user_action:'SAMPLER Info'})
+    });
     const d = await res.json();
+    
     if(d.finding) document.getElementById('samplerInfo').innerHTML = d.finding;
+
+    // 2. Felder automatisch füllen
+    // Wir greifen auf caseState.anamnesis.SAMPLER zu
+    const S = caseState?.anamnesis?.SAMPLER || {};
+    
+    // Checken, ob die Elemente existieren, dann füllen
+    if($id('s_sympt')) $id('s_sympt').value = S.S || '';
+    if($id('s_allerg')) $id('s_allerg').value = S.A || '';
+    if($id('s_med')) $id('s_med').value = S.M || '';
+    if($id('s_hist')) $id('s_hist').value = S.P || '';
+    if($id('s_last')) $id('s_last').value = S.L || '';
+    if($id('s_events')) $id('s_events').value = S.E || '';
+    if($id('s_risk')) $id('s_risk').value = S.R || '';
   };
-  $id('samplerOk').onclick=()=>{ stepCase('SAMPLER doku'); closeModal('modalSampler'); };
-  $id('samplerCancel').onclick=()=>closeModal('modalSampler');
+
+  $id('samplerOk').onclick = () => { 
+      stepCase('SAMPLER doku'); 
+      closeModal('modalSampler'); 
+  };
+  $id('samplerCancel').onclick = () => closeModal('modalSampler');
   openModal('modalSampler');
 }
+
 function openFourS() {
   $id('s4Fetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
