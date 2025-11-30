@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Stable Vector EKG Generator)
+// medicIQ – App Logic (Auto-Update Monitor & Silent Mode)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -205,9 +205,17 @@ async function stepCase(txt) {
     if(d.updated_vitals) {
       Object.assign(visibleVitals, d.updated_vitals);
       renderVitals(); 
+      
       if(soundEnabled) {
           if(monitorTimeout) clearTimeout(monitorTimeout);
           scheduleBeep();
+      }
+
+      // FIX: Wenn der Monitor (EKG) offen ist, aktualisieren wir ihn sofort!
+      // Das sorgt dafür, dass der Puls erscheint, sobald er vom Server kommt.
+      const modal = document.getElementById('modalEKG');
+      if(modal && modal.style.display === 'block') {
+          updateEKGView();
       }
     }
     
@@ -292,30 +300,29 @@ function openEKG() {
     const closeBtn = document.getElementById('ekgClose');
     if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
 
+    // Trigger Update
     updateEKGView();
+    
+    // Trigger Server Action um Pulse freizuschalten
+    stepCase('12-Kanal-EKG');
 }
 
 function updateEKGView() {
     const type = caseState.hidden?.ekg_pattern || "sinus";
     const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase(); 
     
-    // Werte holen (Sicherstellen, dass Zahlen da sind)
-    const hasPuls = !!visibleVitals.Puls;
     const hasSpO2 = !!visibleVitals.SpO2;
-    
-    // Parse Zahlenwerte oder Platzhalter
-    let pulsVal = hasPuls ? visibleVitals.Puls.replace(/\D/g,'') : '--';
+    // ACHTUNG: Pulse kann auch durch EKG kommen
+    const hasPuls = !!visibleVitals.Puls; 
+
     let spo2Val = hasSpO2 ? visibleVitals.SpO2.replace(/\D/g,'') : '--';
+    let pulsVal = hasPuls ? visibleVitals.Puls.replace(/\D/g,'') : '--';
     
-    // Für die Kurvengenerierung (Zahl benötigt)
     let spo2Num = hasSpO2 ? parseInt(spo2Val) : 98;
-    // Wenn kein SpO2 gemessen, simulieren wir für die EKG-Kurven-Logik "gesund" (98), 
-    // aber die Pleth-Linie wird unten eh flach gemacht.
 
     const svg = document.getElementById('monitorSvg');
     if(!svg) return;
 
-    // Raster (Grid)
     const defs = `
       <defs>
         <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -329,18 +336,11 @@ function updateEKGView() {
       <rect width="100%" height="100%" fill="url(#grid-bold)" />
     `;
 
-    // Kurven berechnen
-    // Wir nutzen currentLead (globale Variable aus openEKG)
     let ekgPath = generateLoopPath(type, 75, 400, 100, currentLead, pathology);
     let plethPath = hasSpO2 ? generateLoopPath('pleth', 160, 400, spo2Num) : `M 0 160 L 400 160`;
 
-    // VISUALISIERUNG
-    // Wir zeichnen erst die Kurven, dann einen schwarzen Kasten rechts ("Sidebar"),
-    // dann die Texte darauf. So läuft keine Linie durch den Text.
-    
     svg.innerHTML = `
         ${defs}
-        
         <g class="infinite-scroll">
              <g>
                 <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
@@ -356,7 +356,7 @@ function updateEKGView() {
         <line x1="320" y1="0" x2="320" y2="200" stroke="#444" stroke-width="2" />
 
         <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="14" font-weight="bold">${currentLead}</text>
-
+        
         <text x="330" y="25" fill="#00ff00" font-family="sans-serif" font-size="10" font-weight="bold">HF</text>
         <text x="390" y="55" fill="#00ff00" font-family="monospace" font-size="35" font-weight="bold" text-anchor="end" class="monitor-glow">${pulsVal}</text>
         <text x="385" y="25" fill="#00ff00" font-size="10">♥</text>
@@ -364,10 +364,8 @@ function updateEKGView() {
         <text x="330" y="115" fill="#3b82f6" font-family="sans-serif" font-size="10" font-weight="bold">SpO2</text>
         <text x="390" y="145" fill="#3b82f6" font-family="monospace" font-size="35" font-weight="bold" text-anchor="end" class="monitor-glow-blue">${spo2Val}</text>
         <text x="385" y="155" fill="#3b82f6" font-size="10" text-anchor="end">%</text>
-
     `;
 
-    // Status-Text unter dem Monitor aktualisieren
     const txt = document.getElementById('ekgText');
     if(type === "sinus") {
         txt.textContent = "Sinusrhythmus";
@@ -380,103 +378,56 @@ function updateEKGView() {
         txt.style.color = "#ef4444";
     }
 }
+
 // --- CORE EKG GENERATOR (GLITCH-FREE) ---
 function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pathology = '') {
     let d = `M 0 ${yBase} `;
     let currentX = 0;
-    let mode = 'curve';
-    let beatWidth = 70; // Standard
+    let beatWidth = 70; 
 
     // --- CONFIGURATION DER VEKTOREN ---
-    // Wir definieren die Amplituden für P, Q, R, S, T
-    // Standard (II): P+, Q klein, R groß, S klein, T+
     let amp = { p: -5, q: 3, r: -50, s: 15, t: -12 };
     
-    // Lead-Specific Adjustments (Medizinisch angelehnt)
     if(type === 'sinus') {
         if (lead === 'aVR') {
-            // Invertiert alles
-            amp = { p: 5, q: -3, r: 10, s: -40, t: 8 }; // Tiefes S entspricht Hauptvektor
+            amp = { p: 5, q: -3, r: 10, s: -40, t: 8 }; 
         } else if (lead === 'V1') {
-            // Kleines r, tiefes S, T oft flach/inv
             amp = { p: -3, q: 0, r: -15, s: 40, t: 5 }; 
         } else if (lead === 'V6' || lead === 'I') {
-            // Septales q, hohes R
             amp = { p: -5, q: 3, r: -45, s: 5, t: -12 };
         } else if (lead === 'aVL') {
-            // Kleiner
             amp = { p: -3, q: 2, r: -30, s: 10, t: -8 };
         } else if (lead === 'III' || lead === 'aVF') {
-            // Variabel, oft R > S
             amp = { p: -4, q: 5, r: -40, s: 10, t: -10 };
         }
     }
 
-    // --- PATHOLOGIE (STEMI) ---
     const isInferior = pathology.includes('hinterwand') || pathology.includes('inferior');
-    let stShift = 0; // 0 = Isoelektrisch
+    let stShift = 0; 
 
     if (type === 'sinus' && isInferior) {
-        if (['II', 'III', 'aVF'].includes(lead)) stShift = -12; // Hebung
-        else if (['I', 'aVL'].includes(lead)) stShift = 8; // Senkung (reziprok)
+        if (['II', 'III', 'aVF'].includes(lead)) stShift = -12; 
+        else if (['I', 'aVL'].includes(lead)) stShift = 8; 
     }
 
-    // Generator Loop
     while(currentX < totalWidth) {
         
         if (type === 'sinus') {
             beatWidth = 70;
-            
-            // MATH MAGIC: Wir berechnen die relativen Bewegungen so, dass sie IMMER auf 0 enden.
-            // SVG Koordinaten: Y-Negativ ist Oben!
-            
-            // P-Welle (Kurve)
-            // Start bei 0. Ende bei 0. Höhe amp.p
             const p = `c 3 ${amp.p}, 7 ${amp.p}, 10 0`;
-            
-            // PR-Strecke (Linie)
             const pr = `l 5 0`;
-            
-            // QRS (Linien)
-            // Q: runter (pos Y)
-            // R: steil hoch (neg Y)
-            // S: steil runter (pos Y)
-            // J-Point (Rückkehr): Muss zur Basis zurück oder zur ST-Hebung (stShift)
-            
-            // Wir müssen sicherstellen, dass die Summe der Y-Bewegungen = stShift ist (nicht 0, wegen Hebung)
-            // Q (+), R (-), S (+)
-            // Beispiel: Q=+3, R=-50, S=+15.  Summe = -32.  Wir wollen aber zu 0 (oder stShift).
-            // Also muss der letzte Strich (J-Point Return) den Rest ausgleichen.
-            
-            // Wir zeichnen Q, R, S fest:
-            // Q: geht zu y = amp.q
-            // R: geht zu y = amp.r (von der Basis aus gesehen!) -> Delta = amp.r - amp.q
-            // S: geht zu y = amp.s -> Delta = amp.s - amp.r
-            // J: geht zu y = stShift -> Delta = stShift - amp.s
-            
-            // Da SVG 'l' relativ ist, berechnen wir die Deltas:
             const dyQ = amp.q;
             const dyR = amp.r - amp.q;
             const dyS = amp.s - amp.r;
-            const dyJ = stShift - amp.s; // Rückkehr zur ST-Höhe
+            const dyJ = stShift - amp.s; 
             
             const qrs = `l 2 ${dyQ} l 3 ${dyR} l 3 ${dyS} l 2 ${dyJ}`;
-            
-            // ST-Strecke (Horizontal auf stShift Höhe)
             const st = `l 5 0`;
             
-            // T-Welle
-            // Startet auf stShift. Muss zu 0 zurückkehren.
-            // Wir nutzen eine Kurve.
-            // Control Points relativ zur Startposition (stShift).
-            // Ende relativ: Wir müssen um -stShift runter, um auf 0 zu kommen.
-            // Amplitude draufrechnen.
-            const tPeak = amp.t; // relative Spitze
-            const tEnd = -stShift; // Zurück zur Basis
+            const tPeak = amp.t; 
+            const tEnd = -stShift; 
             
             const t = `c 5 ${tPeak}, 12 ${tPeak}, 18 ${tEnd}`;
-            
-            // Pause
             const iso = `l 22 0`;
             
             d += p + pr + qrs + st + t + iso + " ";
@@ -484,14 +435,11 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pa
 
         } else if (type === 'vt') {
             beatWidth = 40;
-            // VT ist Breitkomplex
             d += `l 15 -45 l 15 90 l 10 -45 `;
             currentX += beatWidth;
 
         } else if (type === 'pleth') {
-            mode = 'curve';
             beatWidth = 50;
-            
             let scale = 1.0;
             if(qualityValue < 80) scale = 0.1;
             else if(qualityValue < 88) scale = 0.3;
@@ -500,27 +448,17 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pa
             const hasNotch = qualityValue > 90;
             const riseY = -25 * scale;
             
-            // Hier nutzen wir einfache relative Kurven, die in sich geschlossen sind (dy Summe = 0)
-            // Anstieg: -25. Fall1: +8. Fall2: +17. Summe = 0.
             let c1 = `c 5 ${riseY}, 10 ${riseY}, 12 -5`; 
-            // Fall bis Notch: wir müssen von y=-5 (relativ start) ein stück runter
             let c2 = hasNotch ? `c 2 8, 5 0, 8 5` : `c 2 2, 5 4, 8 5`; 
-            // Rest zurück zur Basis: Wenn wir bei y=0 starteten:
-            // c1 endete bei -5.
-            // c2 (notch) endete bei -5 + 5 = 0.
-            // c3 flacht aus.
             let c3 = `c 5 0, 10 0, 30 0`;
             
             d += c1 + " " + c2 + " " + c3 + " ";
             currentX += beatWidth;
         } else {
-            // Asystolie
             d += `L ${totalWidth} ${yBase}`;
             currentX = totalWidth;
         }
     }
-    
-    // Finish line
     d += `L ${totalWidth} ${yBase}`;
     return d;
 }
@@ -681,113 +619,6 @@ function closeModal(id) {
   el.style.display = 'none';
 }
 
-// --- EKG MONITOR SOUND LOGIC ---
-function startMonitorLoop() {
-    if(!soundEnabled || !window.AudioContext) return;
-    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if(monitorTimeout) clearTimeout(monitorTimeout);
-    scheduleBeep();
-}
-
-function stopMonitorLoop() {
-    if(monitorTimeout) clearTimeout(monitorTimeout);
-    monitorTimeout = null;
-}
-
-function scheduleBeep() {
-    if(!soundEnabled || !caseState) return;
-    const hasPuls = !!visibleVitals.Puls;
-    const hasSpO2 = !!visibleVitals.SpO2;
-
-    if(!hasPuls && !hasSpO2) {
-        monitorTimeout = setTimeout(scheduleBeep, 1000);
-        return;
-    }
-
-    let hrVal = 60;
-    if(hasPuls) hrVal = parseFloat(String(visibleVitals.Puls).match(/\d+/)?.[0] || 60);
-    else if(hasSpO2) hrVal = parseFloat(caseState.vitals?.Puls || 60);
-    if(hrVal <= 0) hrVal = 60;
-
-    let spo2Val = 99;
-    if(hasSpO2) spo2Val = parseFloat(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
-
-    playBeep(spo2Val);
-    const interval = 60000 / Math.max(30, Math.min(220, hrVal));
-    monitorTimeout = setTimeout(scheduleBeep, interval);
-}
-
-function playBeep(spo2) {
-    if(!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    let freq = 850; 
-    if(spo2 < 100) {
-        const diff = 100 - spo2;
-        freq = 850 - (diff * 20); 
-    }
-    if(freq < 150) freq = 150;
-
-    osc.frequency.value = freq;
-    osc.type = 'triangle';
-    gain.gain.value = 0.05;
-
-    const now = audioCtx.currentTime;
-    osc.start(now);
-    osc.stop(now + 0.12);
-    gain.gain.setValueAtTime(0.05, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-}
-
-// --- OPENAI TTS LOGIC ---
-let currentAudio = null;
-async function speak(text) {
-    if (!soundEnabled || !text) return;
-    if(currentAudio) { currentAudio.pause(); currentAudio = null; }
-
-    let speakText = text
-        .replace(/\//g, ' zu ')
-        .replace(/SpO2/g, 'Sauerstoffsättigung')
-        .replace(/AF/g, 'Atemfrequenz')
-        .replace(/RR/g, 'Blutdruck')
-        .replace(/l\/min/g, 'Liter')
-        .replace(/°C/g, 'Grad');
-
-    let selectedVoice = "fable"; 
-    if (caseState && caseState.story) {
-        const storyLower = caseState.story.toLowerCase();
-        const specialty = (caseState.specialty || "").toLowerCase();
-        if (specialty === 'paediatrisch' || storyLower.includes('kind') || storyLower.includes('säugling')) {
-            selectedVoice = "alloy"; 
-        } else if (storyLower.includes('frau') || storyLower.includes('patientin') || storyLower.includes('sie ')) {
-            selectedVoice = "nova"; 
-        }
-    }
-
-    const btn = document.getElementById('btnSound');
-    const oldIcon = btn.textContent;
-    btn.textContent = "⏳..."; 
-
-    try {
-        const response = await fetch('/.netlify/functions/tts', {
-            method: 'POST',
-            body: JSON.stringify({ text: speakText, voice: selectedVoice })
-        });
-        if (!response.ok) throw new Error("TTS Fehler");
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        currentAudio = new Audio(audioUrl);
-        currentAudio.onended = () => { btn.textContent = oldIcon; };
-        currentAudio.onplay = () => { btn.textContent = oldIcon; };
-        currentAudio.play();
-    } catch (e) {
-        btn.textContent = oldIcon; 
-    }
-}
-
 // ... Feature Modals (FIXED: NO SPEAK CALLS) ...
 function openOxygen() {
   if(!caseState) return;
@@ -915,5 +746,6 @@ async function openDebrief() {
     const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
     const d = await r.json();
     addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
+    // KEIN SPEAK MEHR
   } catch(e){}
 }
