@@ -397,7 +397,8 @@ async function speak(text) {
         .replace(/°C/g, 'Grad');
 
    // LOGIK: Stimme wählen basierend auf Patient
-    let selectedVoice = "Fable"; // "Echo" ist wärmer und emotionaler als Onyx
+    // "fable" klingt im Deutschen oft natürlicher/europäischer als "onyx"
+    let selectedVoice = "fable"; 
 
     if (caseState && caseState.story) {
         const storyLower = caseState.story.toLowerCase();
@@ -405,13 +406,12 @@ async function speak(text) {
 
         // Kind
         if (specialty === 'paediatrisch' || storyLower.includes('kind') || storyLower.includes('säugling') || storyLower.includes('junge') || storyLower.includes('mädchen')) {
-            selectedVoice = "alloy"; // Alloy klingt am jüngsten
+            selectedVoice = "alloy"; // Alloy ist am neutralsten für Kinder
         }
         // Frau
         else if (storyLower.includes('frau') || storyLower.includes('patientin') || storyLower.includes('sie ')) {
-            selectedVoice = "nova"; // Nova ist sehr natürlich weiblich
+            selectedVoice = "nova"; // Nova ist die beste Frauenstimme
         }
-        // Falls du Fable testen willst (britischer/erzählerischer), schreibe hier "fable" statt "echo"
     }
 
     const btn = document.getElementById('btnSound');
