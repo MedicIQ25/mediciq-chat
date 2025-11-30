@@ -544,8 +544,11 @@ async function openDebrief() {
     updateUI(false);
     if(statusEl) statusEl.textContent = 'Fall beendet.';
 
+    if(statusEl) statusEl.textContent = 'Fall beendet.';
+
     if (d.debrief) {
-        addMsg(`<div style="background:#f0fdf4; border:2px solid #16a34a; padding:20px; border-radius:12px; margin-top:15px; color:#14532d; font-size: 1rem; line-height: 1.6;"><h3 style="margin-top:0; color:#166534;">🎓 Fall-Auswertung</h3>${d.debrief}</div>`);
+        // NEU: Fügt das gesamte Debriefing-HTML (inkl. Farben) vom Server ein
+        addMsg(d.debrief); 
     } else { addMsg("⚠️ Auswertung leer."); }
   } catch(e) {
     caseState = null; updateUI(false);

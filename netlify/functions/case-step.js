@@ -84,44 +84,66 @@ exports.handler = async (event) => {
         return ok(reply);
     }
 
-    // --- DEBRIEFING LOGIK ---
-    if (/debrief|fall beenden/.test(low)) {
-      reply.done = true;
-      
-      const stepsAll = ["X","A","B","C","D","E"];
-      const missingSteps = stepsAll.filter(s => !state.steps_done.includes(s));
-      const score = state.score;
-      
-      const userDx = (state.measurements.diagnosis || "").toLowerCase();
-      const correctKeys = Array.isArray(H.diagnosis_keys) ? H.diagnosis_keys : [];
-      const isDxCorrect = correctKeys.some(key => userDx.includes(key.toLowerCase()));
+    // --- DEBRIEFING LOGIK (FIX: Farbcodes für Bewertung) ---
+if (/debrief|fall beenden/.test(low)) {
+    reply.done = true;
+    
+    const stepsAll = ["X","A","B","C","D","E"];
+    const missingSteps = stepsAll.filter(s => !state.steps_done.includes(s));
+    const score = state.score;
+    
+    const userDx = (state.measurements.diagnosis || "").toLowerCase();
+    const correctKeys = Array.isArray(H.diagnosis_keys) ? H.diagnosis_keys : [];
+    const isDxCorrect = correctKeys.some(key => userDx.includes(key.toLowerCase()));
 
-      const histStr = state.history.map(h => h && h.action ? h.action.toLowerCase() : "").join(" ");
-      const hasO2 = state.measurements.o2_given; 
-      const hasHandover = state.measurements.handover_done;
+    const hasHandover = state.measurements.handover_done;
 
-      let status = missingSteps.length ? "⚠️ Struktur lückenhaft" : "✅ Bestanden";
-      let summary = `<b>Erreichter Score: ${score}</b><br>`;
-      
-      if (missingSteps.length > 0) {
-          summary += `<br>❌ <b>Fehlende Phasen:</b> ${missingSteps.join(', ')}`;
-      } else {
-          summary += `<br>✅ <b>X-ABCDE:</b> Vollständig abgearbeitet.`;
-      }
+    let status = missingSteps.length ? "⚠️ Struktur lückenhaft" : "✅ Bestanden";
+    let summary = `<b>Erreichter Score: ${score}</b><br>`;
+    
+    // --- NEUE FARB-LOGIK ---
+    let colorClass = { bg: '#fef3c7', border: '#fbbf24', text: '#92400e' }; // GELB (Standard: Mittel)
 
-      summary += `<br><br><b>Diagnose & Maßnahmen:</b>`;
-      if (state.measurements.diagnosis) {
-          summary += `<br>${isDxCorrect ? '✅' : '⚠️'} Diagnose: "${state.measurements.diagnosis}"`;
-      } else {
-          summary += `<br>❌ Keine Diagnose gestellt.`;
-      }
-
-      if (hasHandover) summary += `<br>✅ Übergabe durchgeführt.`;
-      else summary += `<br>❌ Keine Übergabe an den Arzt.`;
-
-      reply.debrief = `<b>${status}</b><br>${summary}`;
-      return ok(reply);
+    const completionRate = (state.steps_done.length / stepsAll.length) * 100;
+    
+    if (completionRate >= 80 && isDxCorrect && hasHandover && score >= 4) {
+        // GRÜN: Gute Struktur, korrekte Diagnose und Übergabe
+        colorClass = { bg: '#f0fdf4', border: '#16a34a', text: '#14532d' };
+        status = "✅ Einsatz erfolgreich und strukturiert";
+    } else if (completionRate < 50 || !hasHandover) {
+        // ROT: Schlechte Struktur, oder keine Übergabe/kritische Schritte fehlen
+        colorClass = { bg: '#fef2f2', border: '#ef4444', text: '#991b1b' };
+        status = "❌ Kritische Mängel in Struktur und/oder Maßnahmen";
     }
+    // Andernfalls bleibt es GELB (mit Lücken oder falscher Diagnose)
+    // --- ENDE FARB-LOGIK ---
+
+    if (missingSteps.length > 0) {
+        summary += `<br>❌ <b>Fehlende Phasen:</b> ${missingSteps.join(', ')}`;
+    } else {
+        summary += `<br>✅ <b>X-ABCDE:</b> Vollständig abgearbeitet.`;
+    }
+
+    summary += `<br><br><b>Diagnose & Maßnahmen:</b>`;
+    if (state.measurements.diagnosis) {
+        summary += `<br>${isDxCorrect ? '✅' : '⚠️'} Diagnose: "${state.measurements.diagnosis}"`;
+    } else {
+        summary += `<br>❌ Keine Diagnose gestellt.`;
+    }
+
+    if (hasHandover) summary += `<br>✅ Übergabe durchgeführt.`;
+    else summary += `<br>❌ Keine Übergabe an den Arzt.`;
+
+    // Sende die Farbcodes mit der Antwort
+    reply.debrief = `
+        <div style="background:${colorClass.bg}; border:2px solid ${colorClass.border}; padding:20px; border-radius:12px; margin-top:15px; color:${colorClass.text}; font-size: 1rem; line-height: 1.6;">
+            <h3 style="margin-top:0; color:${colorClass.text};">🎓 Fall-Auswertung</h3>
+            <p style="font-weight:bold;">${status}</p>
+            ${summary}
+        </div>
+    `;
+    return ok(reply);
+}
     
     // --- 2. MEDIZINISCHE AKTIONEN ---
     
