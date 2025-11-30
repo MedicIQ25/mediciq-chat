@@ -89,21 +89,21 @@
     <div id="panel" class="action-grid" aria-live="polite"></div>
 
     <div class="schemata-row">
-  <button class="schema-btn" data-tool="FOUR_S">4S-Schema</button>
-  <button class="schema-btn" data-tool="SAMPLER">SAMPLER</button>
-  <button class="schema-btn" data-tool="BEFAST">BE-FAST</button>
-  
-  <button class="schema-btn" data-tool="NEXUS">NEXUS-Kriterien</button>
-  <button class="schema-btn" data-tool="POLYTRAUMA">Polytrauma-Kriterien</button>
-  
-  <button class="schema-btn" data-tool="NRS">Schmerzskala (NRS)</button>
-  
-  <button class="schema-btn primary" data-tool="DIAGNOSIS">Verdachtsdiagnose</button>
-  
-  <button id="btnSchemaHandover" class="schema-btn" style="border-color:#0f766e; color:#0f766e; font-weight:bold;">Übergabe (SINNHAFT)</button>
-  
-  <button class="schema-btn" data-tool="DEBRIEF">Debriefing anzeigen</button>
-</div>
+      <button class="schema-btn" data-tool="FOUR_S">4S-Schema</button>
+      <button class="schema-btn" data-tool="SAMPLER">SAMPLER</button>
+      <button class="schema-btn" data-tool="BEFAST">BE-FAST</button>
+      
+      <button class="schema-btn" data-tool="NEXUS">NEXUS-Kriterien</button>
+      <button class="schema-btn" data-tool="POLYTRAUMA">Polytrauma-Kriterien</button>
+      
+      <button class="schema-btn" data-tool="NRS">Schmerzskala (NRS)</button>
+      
+      <button class="schema-btn primary" data-tool="DIAGNOSIS">Verdachtsdiagnose</button>
+      
+      <button id="btnSchemaHandover" class="schema-btn" style="border-color:#0f766e; color:#0f766e; font-weight:bold;">Übergabe (SINNHAFT)</button>
+      
+      <button class="schema-btn" data-tool="DEBRIEF">Debriefing anzeigen</button>
+    </div>
 
     <div class="queue card">
       <div class="queue-head">
@@ -141,7 +141,7 @@
 </div>
 <div id="modalBEFAST" class="modal" style="display:none;">
   <div class="modal-head">BE-FAST Check</div>
-  <div class="modal-body befast-grid"><div id="befastInfo" class="small muted"></div><label><input type="checkbox" id="b_face" /> B – Balance</label><label><input type="checkbox" id="e_eyes" /> E – Eyes</label><label><input type="checkbox" id="f_face" /> F – Face</label><label><input type="checkbox" id="a_arm"  /> A – Arm</label><label><input type="checkbox" id="s_speech" /> S – Speech</label><label>Last known well: <input type="time" id="t_time" /></label></div>
+  <div class="modal-body befast-grid"><div id="befastInfo" class="small muted"></div><label><input type="checkbox" id="b_balance" /> B – Balance</label><label><input type="checkbox" id="e_eyes" /> E – Eyes</label><label><input type="checkbox" id="f_face" /> F – Face</label><label><input type="checkbox" id="a_arm"  /> A – Arm</label><label><input type="checkbox" id="s_speech" /> S – Speech</label><label>Last known well: <input type="time" id="t_time" /></label></div>
   <div class="modal-actions"><button id="befastFetch" class="btn secondary">Infos abrufen</button><button id="befastOk" class="btn">Dokumentieren</button><button id="befastCancel" class="btn secondary">Abbrechen</button></div>
 </div>
 <div id="modalSampler" class="modal" style="display:none;">
@@ -154,6 +154,38 @@
   <div class="modal-body form-grid"><div id="s4Info" class="small muted"></div><label><input type="checkbox" id="s1" /> Sicherheit</label><label><input type="checkbox" id="s2" /> Szene</label><label><input type="checkbox" id="s3" /> Sichtung</label><label><input type="checkbox" id="s4" /> Support</label></div>
   <div class="modal-actions"><button id="s4Fetch" class="btn secondary">Infos abrufen</button><button id="s4Ok" class="btn">Dokumentieren</button><button id="s4Cancel" class="btn secondary">Abbrechen</button></div>
 </div>
+
+<div id="modalNEXUS" class="modal" style="display:none;">
+  <div class="modal-head">NEXUS-Kriterien (HWS-Immobilisation)</div>
+  <div class="modal-body form-grid criteria-modal-body">
+    <div id="nexusInfo" class="small muted"></div>
+    <p style="font-weight:bold;">Zusammenfassung (HWS-Immobilisation erforderlich, wenn einer Ja):</p>
+    <label><input type="checkbox" id="n1" /> 1. Empfindlichkeit in der HWS</label>
+    <label><input type="checkbox" id="n2" /> 2. Neurologische Ausfälle</label>
+    <label><input type="checkbox" id="n3" /> 3. Vigilanz-/Bewusstseinsstörung</label>
+    <label><input type="checkbox" id="n4" /> 4. Intoxikation (Alkohol/Drogen)</label>
+    <label><input type="checkbox" id="n5" /> 5. Ablenkende Verletzung</label>
+  </div>
+  <div class="modal-actions"><button id="nexusFetch" class="btn secondary">Kriterien prüfen</button><button id="nexusOk" class="btn">Dokumentieren</button><button id="nexusCancel" class="btn secondary">Abbrechen</button></div>
+</div>
+
+<div id="modalPolytrauma" class="modal" style="display:none;">
+  <div class="modal-head">Polytrauma-Kriterien (Zentrum-Alarmierung)</div>
+  <div class="modal-body form-grid criteria-modal-body">
+      <div id="polyInfo" class="small muted"></div>
+      <p style="font-weight:bold;">Kriterien für die direkte Zuweisung in ein Traumazentrum:</p>
+      
+      <label><input type="checkbox" id="p1" /> 1. **Physiologie:** GCS $\le$ 13, oder systolischer RR $\le$ 90 mmHg, oder Atemfrequenz $\le$ 10 / $\ge$ 29 / erzwungene Beatmung.</label>
+      
+      <label><input type="checkbox" id="p2" /> 2. **Anatomie:** Zwei oder mehr proximale Knochenfrakturen, Lähmung, instabiles Becken, penetrierendes Trauma (Kopf, Rumpf).</label>
+      
+      <label><input type="checkbox" id="p3" /> 3. **Mechanismus:** Sturz aus $\ge$ 3m, Ejektion, Todesfall im selben Fahrzeug, Fußgänger/Radfahrer von Fahrzeug erfasst.</label>
+      
+      <label><input type="checkbox" id="p4" /> 4. **Spezielle Patienten:** Alter $\ge$ 65, Antikoagulation, End-stage-Disease, Schwangerschaft.</label>
+  </div>
+  <div class="modal-actions"><button id="polyFetch" class="btn secondary">Kriterien prüfen</button><button id="polyOk" class="btn">Dokumentieren</button><button id="polyCancel" class="btn secondary">Abbrechen</button></div>
+</div>
+
 <div id="modalO2" class="modal" style="display:none;">
   <div class="modal-head">Sauerstoffgabe</div>
   <div class="modal-body form-grid"><label>Gerät:<select id="o2Device"><option>Nasenbrille (1–6 l/min)</option><option>Einfache Maske (5–10 l/min)</option><option>Maske mit Reservoir (10–15 l/min)</option><option>Beutel-Maske (15 l/min)</option></select></label><label>Flow: <span id="o2FlowVal">0</span> l/min<input id="o2Flow" type="range" min="0" max="15" step="1" value="0" /></label></div>
@@ -188,16 +220,6 @@
   <div class="modal-head">Übergabe (SINNHAFT)</div>
   <div class="modal-body form-grid"><div class="small muted" style="color:#ef4444; font-weight:bold;">S - Start (Ruhe! Alle bereit?)</div><label>I - Identifikation <input id="s_ident" placeholder="Name, Alter, (Gewicht)..." /></label><label>N - Notfallereignis <input id="s_event" placeholder="Was? Wie? Wann? Wo?" /></label><label>N - Notfallpriorität <input id="s_prio" placeholder="xABCDE, Vitalparameter..." /></label><label>H - Handlungen <input id="s_action" placeholder="Durchgeführte Maßnahmen, Wirkung..." /></label><label>A - Anamnese <input id="s_anam" placeholder="SAMPLER, Besonderheiten..." /></label><div class="small muted" style="margin-top:5px; color:#3b82f6;">F - Fazit (Wiederholung) | T - Teamfragen</div></div>
   <div class="modal-actions"><button id="handoverOk" class="btn">Fall abschließen</button><button id="handoverCancel" class="btn secondary">Abbrechen</button></div>
-</div>
-<div id="modalNEXUS" class="modal" style="display:none;">
-  <div class="modal-head">NEXUS-Kriterien (HWS-Immobilisation)</div>
-  <div class="modal-body form-grid"><div id="nexusInfo" class="small muted"></div><p style="font-weight:bold;">Zusammenfassung (HWS-Immobilisation erforderlich, wenn einer Ja):</p><label><input type="checkbox" id="n1" /> 1. Empfindlichkeit in der HWS</label><label><input type="checkbox" id="n2" /> 2. Neurologische Ausfälle</label><label><input type="checkbox" id="n3" /> 3. Vigilanz-/Bewusstseinsstörung</label><label><input type="checkbox" id="n4" /> 4. Intoxikation (Alkohol/Drogen)</label><label><input type="checkbox" id="n5" /> 5. Ablenkende Verletzung</label></div>
-  <div class="modal-actions"><button id="nexusFetch" class="btn secondary">Kriterien prüfen</button><button id="nexusOk" class="btn">Dokumentieren</button><button id="nexusCancel" class="btn secondary">Abbrechen</button></div>
-</div>
-<div id="modalPolytrauma" class="modal" style="display:none;">
-  <div class="modal-head">Polytrauma-Kriterien (Zentrum-Alarmierung)</div>
-  <div class="modal-body form-grid"><div id="polyInfo" class="small muted"></div><p style="font-weight:bold;">Kriterien (Trauma-Zentrum Alarmierung):</p><label><input type="checkbox" id="p1" /> 1. Vitalparameter (GCS < 13, RR < 90, AF < 10 oder > 29)</label><label><input type="checkbox" id="p2" /> 2. Anatomische Verletzung (z.B. penetrierend, instabiles Becken, Lähmung)</label><label><input type="checkbox" id="p3" /> 3. Unfallmechanismus (Hochgeschwindigkeit, Fußgänger getroffen, Ejektion)</label><label><input type="checkbox" id="p4" /> 4. Spezielle Patienten (Alter, Antikoagulation, Vorerkrankung)</label></div>
-  <div class="modal-actions"><button id="polyFetch" class="btn secondary">Kriterien prüfen</button><button id="polyOk" class="btn">Dokumentieren</button><button id="polyCancel" class="btn secondary">Abbrechen</button></div>
 </div>
 </body>
 </html>

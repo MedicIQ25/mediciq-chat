@@ -186,6 +186,7 @@ trauma: () => ({
       })
     };
 
+    
     // ---------- Fall auswählen ----------
     const createCase = cases[specialty] || cases["internistisch"];
     let c = createCase();
