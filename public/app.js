@@ -397,7 +397,7 @@ async function speak(text) {
         .replace(/°C/g, 'Grad');
 
    // LOGIK: Stimme wählen basierend auf Patient
-    let selectedVoice = "echo"; // "Echo" ist wärmer und emotionaler als Onyx
+    let selectedVoice = "Fable"; // "Echo" ist wärmer und emotionaler als Onyx
 
     if (caseState && caseState.story) {
         const storyLower = caseState.story.toLowerCase();
