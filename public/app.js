@@ -1,12 +1,11 @@
 // ===============================================================
-// medicIQ – App Logic (Medical Grade Monitor & Instant Actions)
+// medicIQ – App Logic (Dynamic Pleth & High-End Monitor)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
 const API_CASE_STEP = '/.netlify/functions/case-step';
 
-// CONSTANTS
-// 'instant: true' sorgt dafür, dass die Maßnahme sofort passiert und nicht in die Warteschlange muss
+// ACTIONS: "instant: true" sorgt für sofortige Ausführung ohne Queue
 const ACTIONS = {
   X: [ 
       { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck', instant: true }, 
@@ -26,13 +25,13 @@ const ACTIONS = {
   ],
   B: [ 
       { label: 'AF messen (zählen)', token: 'AF messen', instant: true }, 
-      { label: 'SpO₂ messen', token: 'SpO2 messen', instant: true }, // <--- JETZT SOFORT
+      { label: 'SpO₂ messen', token: 'SpO2 messen', instant: true }, 
       { label: 'Lunge auskultieren', token: 'Lunge auskultieren', instant: true }, 
       { label: 'Sauerstoff geben', special: 'O2' } 
   ],
   C: [ 
-      { label: 'RR messen', token: 'RR messen', instant: true }, // <--- JETZT SOFORT
-      { label: 'Puls messen', token: 'Puls messen', instant: true }, // <--- JETZT SOFORT
+      { label: 'RR messen', token: 'RR messen', instant: true }, 
+      { label: 'Puls messen', token: 'Puls messen', instant: true }, 
       { label: 'pDMS prüfen', token: 'pDMS Kontrolle', instant: true }, 
       { label: '12-Kanal-EKG', special: 'EKG' }, 
       { label: 'i.V. Zugang legen', token: 'i.V. Zugang legen' }, 
@@ -246,12 +245,25 @@ async function stepCase(txt) {
   }
 }
 
-// --- VISUAL FIX: MONITOR LOGIC (Gapless + Real Pleth Curve) ---
+// --- DYNAMIC MONITOR LOGIC (Visuals adapt to Patient) ---
 function openEKG() {
     if(!caseState) return;
     const type = caseState.hidden?.ekg_pattern || "sinus";
     
-    // Grid definieren
+    // --- NEU: Wir holen uns den echten SpO2 Wert ---
+    let spo2Value = 98; // Default gesund
+    if(visibleVitals.SpO2) {
+        // Nur Zahlen aus String "94%" filtern
+        spo2Value = parseInt(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
+    } else if(caseState.vitals?.SpO2) {
+        // Fallback falls noch nicht gemessen, aber wir wollen Simulation zeigen (oder flatline)
+        // Besser: Wenn nicht gemessen, zeigen wir "Null-Linie" beim Pleth?
+        // Für Simulation zeigen wir den tatsächlichen Wert des Patienten "grau" oder als Vorschau.
+        // Hier: Wir nutzen den echten Wert, um die Kurve zu formen.
+        spo2Value = parseInt(caseState.vitals.SpO2);
+    }
+
+    // Grid
     const gridPattern = `
       <defs>
         <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -267,11 +279,11 @@ function openEKG() {
 
     const viewWidth = 400;
     
-    // 1. EKG ganz oben (Basis 50px)
-    let ekgPath = generateLoopPath(type, 50, viewWidth);
+    // EKG oben
+    let ekgPath = generateLoopPath(type, 60, viewWidth, 100);
     
-    // 2. Pleth/SpO2 ganz unten (Basis 140px) -> Mehr Abstand!
-    let plethPath = generateLoopPath('pleth', 140, viewWidth);
+    // Pleth unten -> Wir übergeben den SpO2 Wert als "Qualitätsfaktor"
+    let plethPath = generateLoopPath('pleth', 130, viewWidth, spo2Value);
 
     const modalBody = document.querySelector('#modalEKG .modal-body');
 
@@ -282,17 +294,20 @@ function openEKG() {
             
             <g class="infinite-scroll">
                  <g>
-                    <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" />
-                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" />
+                    <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
+                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
                  </g>
                  <g transform="translate(400, 0)">
-                    <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" />
-                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" />
+                    <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
+                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
                  </g>
             </g>
 
             <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12" font-weight="bold">II</text>
             <text x="5" y="110" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
+            
+            <text x="360" y="25" fill="#00ff00" font-family="monospace" font-size="14" font-weight="bold">${visibleVitals.Puls || '--'}</text>
+            <text x="360" y="115" fill="#3b82f6" font-family="monospace" font-size="14" font-weight="bold">${visibleVitals.SpO2 || '--'}</text>
         </svg>
       </div>
       <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
@@ -300,7 +315,7 @@ function openEKG() {
 
     const txt = document.getElementById('ekgText');
     if(type === "sinus") {
-        txt.textContent = "Sinusrhythmus (HF ~70/min)";
+        txt.textContent = "Sinusrhythmus";
         txt.style.color = "#00ff00";
     } else if (type === "vt") {
         txt.textContent = "!!! V-TACH (Puls tasten!) !!!";
@@ -311,18 +326,14 @@ function openEKG() {
     }
 
     openModal('modalEKG');
-
     const closeBtn = document.getElementById('ekgClose');
     if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
 }
 
-// Helper: Generiert die Kurven
-function generateLoopPath(type, yBase, totalWidth) {
+// Helper: Generiert Kurven (Mit SpO2 Anpassung)
+function generateLoopPath(type, yBase, totalWidth, qualityValue) {
     let d = `M 0 ${yBase} `;
     let currentX = 0;
-    
-    // Beat Definitionen
-    // "mode": 'line' (gerade Striche) oder 'curve' (bezier)
     let mode = 'line'; 
     let beatWidth = 0;
     let commands = []; 
@@ -341,19 +352,44 @@ function generateLoopPath(type, yBase, totalWidth) {
         beatWidth = 30;
         commands = [[10,-40], [10,80], [10,-40]];
     } else if (type === 'pleth') {
-        // HIER IST DER FIX FÜR DIE RUNDE KURVE
         mode = 'curve';
         beatWidth = 50;
-        // Cubic Bezier: c dx1 dy1, dx2 dy2, dx dy
-        // Wir zeichnen EINE Welle: Steil hoch, Dikrotie, runter
-        commands = [
-            // 1. Steiler Anstieg
-            "c 5 -25, 10 -25, 12 -5", 
-            // 2. Dikrote Welle (kleiner Huckel)
-            "c 2 8, 5 0, 8 5",
-            // 3. Auslauf zur Basis
-            "c 5 5, 10 0, 30 0" 
-        ];
+        
+        // --- DYNAMISCHE AMPLITUDE ---
+        // Wenn SpO2 > 94: Volle Höhe (Skalierung 1.0)
+        // Wenn SpO2 < 85: Flache Linie (Skalierung 0.2)
+        let scale = 1.0;
+        if(qualityValue < 80) scale = 0.1;
+        else if(qualityValue < 88) scale = 0.3;
+        else if(qualityValue < 94) scale = 0.6;
+        
+        // Dikrote Welle verschwindet bei schlechter Versorgung
+        const hasNotch = qualityValue > 90;
+
+        // Definition der Bezier Punkte (Relativ)
+        // Wir skalieren die Y-Werte (zweiter Wert in jedem Paar)
+        
+        const riseY = -25 * scale;
+        const fallY = 5 * scale; // Basis overshoot
+        
+        // 1. Anstieg
+        let cmd1 = `c 5 ${riseY}, 10 ${riseY}, 12 -5`; 
+        
+        // 2. Welle & Notch
+        let cmd2 = "";
+        if(hasNotch) {
+             // Deutlicher Notch
+             cmd2 = `c 2 8, 5 0, 8 5`;
+        } else {
+             // Flacher Abfall ohne Notch (Schock/Zentralisation)
+             cmd2 = `c 2 2, 5 4, 8 6`;
+        }
+
+        // 3. Auslauf
+        let cmd3 = `c 5 5, 10 0, 30 0`;
+        
+        commands = [cmd1, cmd2, cmd3];
+
     } else {
         return `M 0 ${yBase} L ${totalWidth} ${yBase}`;
     }
@@ -365,27 +401,19 @@ function generateLoopPath(type, yBase, totalWidth) {
                 d += `L ${currentX} ${yBase + pt[1]} `;
             });
         } else {
-            // Bei Kurven ist commands ein Array von Strings
-            // Wir müssen currentX manuell erhöhen, da "c" relativ ist
-            // Aber wir brauchen absolute Koordinaten für den Loop-Start? 
-            // Nein, "c" ist relativ zum vorherigen Punkt. Das passt perfekt.
-            // ABER: Wir müssen wissen, wie breit der Beat war, um currentX zu updaten.
             commands.forEach(cmd => {
                 d += cmd + " ";
             });
             currentX += beatWidth;
-            // Kleiner Korrektur-Strich, falls Lücke
-            // d += `l 0 0 `; 
         }
     }
     
-    // Ende sauber schließen
     d += `L ${totalWidth} ${yBase}`;
     return d;
 }
 
 
-// --- INTERACTION FIX: SOFORT AUSFÜHREN ---
+// --- INTERACTION ---
 function renderPanel(k) {
   const panel = document.getElementById('panel');
   if(!panel) return;
@@ -394,22 +422,13 @@ function renderPanel(k) {
     const b = document.createElement('button');
     b.className = 'action-card';
     b.textContent = a.label;
-    
     b.onclick = () => {
-      // Wenn es eine Spezialaktion ist (Modal)
       if(a.special === 'O2') openOxygen();
       else if(a.special === 'NA') openNA();
       else if(a.special === 'IMMO') openImmo();
       else if(a.special === 'BODYMAP') openBodyMap();
       else if(a.special === 'EKG') openEKG();
-      
-      // FIX: Wenn "instant: true" gesetzt ist (siehe oben in ACTIONS), 
-      // dann sofort ausführen und NICHT in die Queue packen!
-      else if(a.instant) {
-          stepCase(a.token);
-      }
-      
-      // Sonst in die Warteschlange
+      else if(a.instant) { stepCase(a.token); }
       else { queue.push(a); renderQueue(); }
     };
     panel.appendChild(b);

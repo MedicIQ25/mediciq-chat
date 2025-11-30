@@ -189,3 +189,10 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .infinite-scroll {
   animation: slideLeft 4s linear infinite; /* 4s für einen Durchlauf */
 }
+/* Echter Monitor-Look */
+.monitor-glow {
+  filter: drop-shadow(0 0 2px rgba(0, 255, 0, 0.6));
+}
+.monitor-glow-blue {
+  filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.6));
+}
