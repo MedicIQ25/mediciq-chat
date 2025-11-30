@@ -727,8 +727,6 @@ function openBEFAST() {
 // ...
 
 function openSampler() {
-  // Wenn wir das Modal öffnen, holen wir die Daten direkt aus dem lokalen caseState (falls vorhanden)
-  // oder fragen den Server.
   
   $id('samplerFetch').onclick = async () => {
     // 1. Daten vom Server holen (für Text-Vorschau)
@@ -738,13 +736,12 @@ function openSampler() {
     });
     const d = await res.json();
     
-    if(d.finding) document.getElementById('samplerInfo').innerHTML = d.finding;
+    // WICHTIG: Text oben löschen, da redundant
+    document.getElementById('samplerInfo').innerHTML = ''; 
 
-    // 2. Felder automatisch füllen
-    // Wir greifen auf caseState.anamnesis.SAMPLER zu
+    // 2. Felder automatisch mit den echten Daten aus dem Fall füllen
     const S = caseState?.anamnesis?.SAMPLER || {};
     
-    // Checken, ob die Elemente existieren, dann füllen
     if($id('s_sympt')) $id('s_sympt').value = S.S || '';
     if($id('s_allerg')) $id('s_allerg').value = S.A || '';
     if($id('s_med')) $id('s_med').value = S.M || '';
@@ -753,12 +750,9 @@ function openSampler() {
     if($id('s_events')) $id('s_events').value = S.E || '';
     if($id('s_risk')) $id('s_risk').value = S.R || '';
   };
-
-  $id('samplerOk').onclick = () => { 
-      stepCase('SAMPLER doku'); 
-      closeModal('modalSampler'); 
-  };
-  $id('samplerCancel').onclick = () => closeModal('modalSampler');
+  
+  $id('samplerOk').onclick=()=>{ stepCase('SAMPLER doku'); closeModal('modalSampler'); };
+  $id('samplerCancel').onclick=()=>closeModal('modalSampler');
   openModal('modalSampler');
 }
 
@@ -802,24 +796,23 @@ function openBodyMap() {
 }
 function openHandover() {
     if(!caseState) return;
-    $id('s_ident').value = "";
-    $id('s_event').value = "";
-    $id('s_prio').value = "";
-    $id('s_action').value = "";
-    $id('s_anam').value = "";
+    // Felder leeren, damit der User sie füllen muss
+    $id('s_ident').value = ""; $id('s_event').value = ""; $id('s_prio').value = ""; $id('s_action').value = ""; $id('s_anam').value = "";
     
     $id('handoverOk').onclick = () => {
-        // Wir bauen einen String, der das Wort "Übergabe" enthält, damit das Backend es erkennt
-        const text = `Übergabe: SINNHAFT: I:${$id('s_ident').value} | N:${$id('s_event').value} | N:${$id('s_prio').value} | H:${$id('s_action').value} | A:${$id('s_anam').value}`;
+        // Hier sollte der User die Felder gefüllt haben
+        const ident = $id('s_ident').value.trim();
+        if (ident.length < 5) {
+             alert('Bitte fülle die Identifikation aus, um fortzufahren.');
+             return;
+        }
+
+        const text = `Übergabe: SINNHAFT: I:${ident} | N:${$id('s_event').value} | N:${$id('s_prio').value} | H:${$id('s_action').value} | A:${$id('s_anam').value}`;
         
         stepCase(text);
         
-        // Modal schließen
         closeModal('modalHandover');
-        
-        // Kurze Verzögerung, dann automatisch beenden?
-        // Besser: Der User klickt danach selbst auf "Debriefing" oder wir triggern es manuell?
-        // User soll aktiv beenden.
+        // Fall ist abgeschlossen, der User klickt danach auf Debriefing
     };
     
     $id('handoverCancel').onclick = () => closeModal('modalHandover');
