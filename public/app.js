@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (COMPLETE MERGED VERSION)
+// medicIQ – App Logic (COMPLETE FIXED VERSION)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -64,14 +64,12 @@ let isDarkMode = false;
 let selectedSpec = 'internistisch';
 const visibleVitals = {};
 
-// AUDIO CONTEXT VARS (DAS FEHLTE!)
+// Audio & Monitor Vars
 let audioCtx = null;
 let monitorTimeout = null;
-
-// EKG State
 let currentLead = 'II'; 
 
-// Wait for DOM
+// --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
     renderPanel('X');
     updateUI(false); 
@@ -139,7 +137,7 @@ function bindEvent(id, event, func) {
     if(el) el.addEventListener(event, func);
 }
 
-// --- Logic ---
+// --- CORE LOGIC ---
 
 async function startCase() {
   const chatLog = document.getElementById('chatLog');
@@ -206,12 +204,13 @@ async function stepCase(txt) {
       Object.assign(visibleVitals, d.updated_vitals);
       renderVitals(); 
       
+      // Update Audio
       if(soundEnabled) {
           if(monitorTimeout) clearTimeout(monitorTimeout);
           scheduleBeep();
       }
 
-      // Update Monitor if open
+      // Update Monitor Visuals (falls offen)
       const modal = document.getElementById('modalEKG');
       if(modal && modal.style.display === 'block') {
           updateEKGView();
@@ -255,7 +254,8 @@ async function stepCase(txt) {
   }
 }
 
-// --- AUDIO ENGINE (DIE FEHLTE!) ---
+// --- MONITOR & AUDIO LOGIC ---
+
 function startMonitorLoop() {
     if(!soundEnabled || !window.AudioContext) return;
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -316,13 +316,11 @@ function playBeep(spo2) {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 }
 
-// --- EKG VISUALIZATION ---
 function openEKG() {
     if(!caseState) return;
     currentLead = 'II';
 
     const modalBody = document.querySelector('#modalEKG .modal-body');
-    
     modalBody.innerHTML = `
       <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
         <label style="font-weight:bold;">Ableitung:</label>
@@ -341,10 +339,8 @@ function openEKG() {
             <option value="V6">V6</option>
         </select>
       </div>
-
       <div class="ekg-screen" style="width:100%; height:200px;">
-        <svg id="monitorSvg" width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
-        </svg>
+        <svg id="monitorSvg" width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none"></svg>
       </div>
       <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
     `;
@@ -352,22 +348,18 @@ function openEKG() {
     openModal('modalEKG');
     
     const sel = document.getElementById('leadSelect');
-    sel.onchange = () => {
-        currentLead = sel.value;
-        updateEKGView();
-    };
+    sel.onchange = () => { currentLead = sel.value; updateEKGView(); };
 
     const closeBtn = document.getElementById('ekgClose');
     if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
 
     updateEKGView();
-    stepCase('12-Kanal-EKG'); // Pulse freischalten
+    stepCase('12-Kanal-EKG'); 
 }
 
 function updateEKGView() {
     const type = caseState.hidden?.ekg_pattern || "sinus";
     const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase(); 
-    
     const hasSpO2 = !!visibleVitals.SpO2;
     const hasPuls = !!visibleVitals.Puls; 
 
@@ -430,14 +422,10 @@ function updateEKGView() {
     }
 }
 
-// Helper: Generiert die Kurven (Stabil)
 function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pathology = '') {
     let d = `M 0 ${yBase} `;
     let currentX = 0;
-    let mode = 'curve';
     let beatWidth = 70; 
-
-    // Vektoren
     let amp = { p: -5, q: 3, r: -50, s: 15, t: -12 };
     
     if(type === 'sinus') {
@@ -459,18 +447,15 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pa
         if (type === 'sinus') {
             beatWidth = 70;
             const p = `c 3 ${amp.p}, 7 ${amp.p}, 10 0`;
-            const pr = `l 5 0`;
             const dyQ = amp.q;
             const dyR = amp.r - amp.q;
             const dyS = amp.s - amp.r;
             const dyJ = stShift - amp.s; 
             const qrs = `l 2 ${dyQ} l 3 ${dyR} l 3 ${dyS} l 2 ${dyJ}`;
-            const st = `l 5 0`;
             const tPeak = amp.t; 
             const tEnd = -stShift; 
             const t = `c 5 ${tPeak}, 12 ${tPeak}, 18 ${tEnd}`;
-            const iso = `l 22 0`;
-            d += p + pr + qrs + st + t + iso + " ";
+            d += p + `l 5 0` + qrs + `l 5 0` + t + `l 22 0` + " ";
             currentX += beatWidth;
         } else if (type === 'vt') {
             beatWidth = 40;
@@ -504,23 +489,13 @@ async function speak(text) {
     if (!soundEnabled || !text) return;
     if(currentAudio) { currentAudio.pause(); currentAudio = null; }
 
-    let speakText = text
-        .replace(/\//g, ' zu ')
-        .replace(/SpO2/g, 'Sauerstoffsättigung')
-        .replace(/AF/g, 'Atemfrequenz')
-        .replace(/RR/g, 'Blutdruck')
-        .replace(/l\/min/g, 'Liter')
-        .replace(/°C/g, 'Grad');
-
+    let speakText = text.replace(/\//g, ' zu ').replace(/SpO2/g, 'Sauerstoffsättigung').replace(/AF/g, 'Atemfrequenz').replace(/RR/g, 'Blutdruck').replace(/l\/min/g, 'Liter').replace(/°C/g, 'Grad');
     let selectedVoice = "fable"; 
     if (caseState && caseState.story) {
         const storyLower = caseState.story.toLowerCase();
         const specialty = (caseState.specialty || "").toLowerCase();
-        if (specialty === 'paediatrisch' || storyLower.includes('kind') || storyLower.includes('säugling')) {
-            selectedVoice = "alloy"; 
-        } else if (storyLower.includes('frau') || storyLower.includes('patientin') || storyLower.includes('sie ')) {
-            selectedVoice = "nova"; 
-        }
+        if (specialty === 'paediatrisch' || storyLower.includes('kind') || storyLower.includes('säugling')) { selectedVoice = "alloy"; } 
+        else if (storyLower.includes('frau') || storyLower.includes('patientin') || storyLower.includes('sie ')) { selectedVoice = "nova"; }
     }
 
     const btn = document.getElementById('btnSound');
@@ -546,12 +521,8 @@ async function speak(text) {
 
 // --- DEBRIEFING ---
 async function openDebrief() {
-  if (!caseState) {
-      addMsg("⚠️ Fehler: Kein Fall aktiv.");
-      return;
-  }
-  stopTimer();
-  stopMonitorLoop();
+  if (!caseState) { addMsg("⚠️ Fehler: Kein Fall aktiv."); return; }
+  stopTimer(); stopMonitorLoop();
   
   const statusEl = document.getElementById('caseStatus');
   if(statusEl) statusEl.textContent = 'Analysiere Fall...';
@@ -570,23 +541,150 @@ async function openDebrief() {
     if(statusEl) statusEl.textContent = 'Fall beendet.';
 
     if (d.debrief) {
-        addMsg(`
-            <div style="background:#f0fdf4; border:2px solid #16a34a; padding:20px; border-radius:12px; margin-top:15px; color:#14532d; font-size: 1rem; line-height: 1.6;">
-                <h3 style="margin-top:0; color:#166534;">🎓 Fall-Auswertung</h3>
-                ${d.debrief}
-            </div>
-        `);
-    } else {
-        addMsg("⚠️ Auswertung leer.");
-    }
+        addMsg(`<div style="background:#f0fdf4; border:2px solid #16a34a; padding:20px; border-radius:12px; margin-top:15px; color:#14532d; font-size: 1rem; line-height: 1.6;"><h3 style="margin-top:0; color:#166534;">🎓 Fall-Auswertung</h3>${d.debrief}</div>`);
+    } else { addMsg("⚠️ Auswertung leer."); }
   } catch(e) {
-    caseState = null;
-    updateUI(false);
+    caseState = null; updateUI(false);
     addMsg(`❌ Fehler: ${e.message}`);
   }
 }
 
-// --- MODALS (FIXED: INNERHTML) ---
+// --- UI HELPERS & MODALS ---
+function renderPanel(k) {
+  const panel = document.getElementById('panel');
+  if(!panel) return;
+  panel.innerHTML = '';
+  (ACTIONS[k]||[]).forEach(a => {
+    const b = document.createElement('button');
+    b.className = 'action-card';
+    b.textContent = a.label;
+    b.onclick = () => {
+      if(a.special === 'O2') openOxygen();
+      else if(a.special === 'NA') openNA();
+      else if(a.special === 'IMMO') openImmo();
+      else if(a.special === 'BODYMAP') openBodyMap();
+      else if(a.special === 'EKG') openEKG();
+      else if(a.instant) { stepCase(a.token); }
+      else { queue.push(a); renderQueue(); }
+    };
+    panel.appendChild(b);
+  });
+}
+
+function renderVitals() {
+  const map = { RR: 'vRR', SpO2: 'vSpO2', AF: 'vAF', Puls: 'vPuls', BZ: 'vBZ', Temp: 'vTemp', GCS: 'vGCS' };
+  for(let k in map) {
+    const el = document.getElementById(map[k]);
+    if(!el) continue;
+    const valStr = visibleVitals[k] || '--';
+    el.innerHTML = valStr;
+    const box = el.parentElement; 
+    if(box) {
+        box.classList.remove('critical');
+        const valNum = parseFloat(valStr.match(/\d+/)?.[0] || 0);
+        if (k === 'SpO2' && valNum > 0 && valNum < 90) box.classList.add('critical');
+        if (k === 'RR' && valNum > 0 && valNum < 90) box.classList.add('critical'); 
+        if (k === 'Puls' && valNum > 0 && (valNum < 40 || valNum > 140)) box.classList.add('critical');
+        if (k === 'BZ' && valNum > 0 && valNum < 60) box.classList.add('critical');
+    }
+  }
+}
+
+function startTimer() {
+  startTime = Date.now();
+  lastTickTime = Date.now(); 
+  const el = document.getElementById('missionTimer');
+  if(el) { el.classList.remove('hidden'); el.textContent = "00:00"; }
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const now = Date.now();
+    const diff = Math.floor((now - startTime) / 1000);
+    const m = Math.floor(diff / 60).toString().padStart(2,'0');
+    const s = (diff % 60).toString().padStart(2,'0');
+    if(el) el.textContent = `${m}:${s}`;
+    if (now - lastTickTime >= 30000) { 
+        lastTickTime = now;
+        if(caseState && !caseState.measurements?.handover_done) { stepCase('System-Check: 30s vergangen'); }
+    }
+  }, 1000);
+}
+
+function stopTimer() { if(timerInterval) clearInterval(timerInterval); }
+
+function updateUI(running) {
+  const specRow = document.getElementById('specRow');
+  const startBtn = document.getElementById('startCase');
+  const finishBtn = document.getElementById('finishCase');
+  const roleSel = document.getElementById('roleSel');
+  const timerEl = document.getElementById('missionTimer');
+  if (running) {
+    if(specRow) specRow.classList.add('hidden');
+    if(startBtn) startBtn.classList.add('hidden');
+    if(finishBtn) finishBtn.classList.remove('hidden');
+    if(roleSel) roleSel.disabled = true;
+  } else {
+    if(specRow) specRow.classList.remove('hidden');
+    if(startBtn) startBtn.classList.remove('hidden');
+    if(finishBtn) finishBtn.classList.add('hidden');
+    if(roleSel) roleSel.disabled = true;
+    if(startBtn) startBtn.disabled = false;
+    if(timerEl) timerEl.classList.add('hidden'); 
+  }
+}
+
+function renderQueue() {
+  const list = document.getElementById('queueList');
+  if(!list) return;
+  list.innerHTML = '';
+  queue.forEach((it, i) => {
+    const li = document.createElement('li');
+    li.className = 'queue-item';
+    li.innerHTML = `<span>${it.label}</span><button class="btn secondary small">x</button>`;
+    li.querySelector('button').onclick = () => { queue.splice(i,1); renderQueue(); };
+    list.appendChild(li);
+  });
+}
+
+function renderProgress(doneList) {
+  const s = new Set((doneList||[]).map(x=>x[0]));
+  ['X','A','B','C','D','E'].forEach(l => {
+    const el = document.querySelector(`.chip[data-step="${l}"]`);
+    if(el) { el.classList.toggle('done', s.has(l)); el.classList.remove('active'); }
+  });
+  const next = ['X','A','B','C','D','E'].find(l => !s.has(l));
+  if(next) { const el = document.querySelector(`.chip[data-step="${next}"]`); if(el) el.classList.add('active'); }
+}
+
+function showHint(t) {
+  const ht = document.getElementById('hintText');
+  const hc = document.getElementById('hintCard');
+  if(ht) ht.textContent = t;
+  if(hc) hc.classList.remove('hidden');
+}
+
+function addMsg(h) {
+  const d = document.createElement('div');
+  d.className = 'msg';
+  d.innerHTML = h;
+  const log = document.getElementById('chatLog');
+  if(log) { log.appendChild(d); d.scrollIntoView({block:'end', behavior:'smooth'}); }
+}
+
+const $id = (id) => document.getElementById(id);
+const modalBackdrop = document.getElementById('modalBackdrop');
+function openModal(id) { 
+  const el = $id(id);
+  if(!el) return;
+  if(modalBackdrop) modalBackdrop.style.display = 'block';
+  el.style.display = 'block';
+}
+function closeModal(id) { 
+  const el = $id(id);
+  if(!el) return;
+  if(modalBackdrop) modalBackdrop.style.display = 'none';
+  el.style.display = 'none';
+}
+
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
@@ -667,10 +765,7 @@ function openBodyMap() {
     if(el) el.setAttribute('fill', '#f1f5f9');
   });
   const loc = caseState.hidden?.injury_map || []; 
-  loc.forEach(l => {
-     const el = document.getElementById(`body_${l}`);
-     if(el) el.setAttribute('fill', '#f87171'); 
-  });
+  loc.forEach(l => { const el = document.getElementById(`body_${l}`); if(el) el.setAttribute('fill', '#f87171'); });
   const txt = caseState.hidden?.injuries?.join(', ') || "Keine sichtbaren Außenverletzungen.";
   $id('bodyMapText').textContent = txt;
   $id('bodyMapClose').onclick = () => closeModal('modalBodyMap');
