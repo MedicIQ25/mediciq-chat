@@ -1,18 +1,57 @@
 // ===============================================================
-// medicIQ – App Logic (Gapless Monitor Edition)
+// medicIQ – App Logic (Medical Grade Monitor & Instant Actions)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
 const API_CASE_STEP = '/.netlify/functions/case-step';
 
 // CONSTANTS
+// 'instant: true' sorgt dafür, dass die Maßnahme sofort passiert und nicht in die Warteschlange muss
 const ACTIONS = {
-  X: [ { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck' }, { label: 'Keine Blutung feststellbar', token: 'X unauffällig' }, { label: 'Druckverband anlegen', token: 'Druckverband' }, { label: 'Tourniquet anlegen', token: 'Tourniquet' }, { label: 'Beckenschlinge anlegen', token: 'Beckenschlinge' }, { label: 'Woundpacking', token: 'Hämostyptikum' } ],
-  A: [ { label: 'Esmarch-Handgriff', token: 'Esmarch' }, { label: 'Absaugen', token: 'Absaugen' }, { label: 'Mundraumkontrolle', token: 'Mundraumkontrolle' }, { label: 'Guedel-Tubus', token: 'Guedel' }, { label: 'Wendel-Tubus', token: 'Wendel' }, { label: 'Beutel-Masken-Beatmung', token: 'Beutel-Masken-Beatmung' } ],
-  B: [ { label: 'AF messen (zählen)', token: 'AF messen' }, { label: 'SpO₂ messen', token: 'SpO2 messen' }, { label: 'Lunge auskultieren', token: 'Lunge auskultieren' }, { label: 'Sauerstoff geben', special: 'O2' } ],
-  C: [ { label: 'RR messen', token: 'RR messen' }, { label: 'Puls messen', token: 'Puls messen' }, { label: 'pDMS prüfen', token: 'pDMS Kontrolle' }, { label: '12-Kanal-EKG', special: 'EKG' }, { label: 'i.V. Zugang legen', token: 'i.V. Zugang legen' }, { label: 'Volumen 500 ml', token: 'Volumen 500 ml' } ],
-  D: [ { label: 'GCS erheben', token: 'GCS erheben' }, { label: 'Pupillen prüfen', token: 'Pupillen' }, { label: 'BZ messen', token: 'BZ messen' } ],
-  E: [ { label: 'Bodycheck (Text)', token: 'Bodycheck' }, { label: 'Bodycheck (Bild)', special: 'BODYMAP' }, { label: 'pDMS prüfen', token: 'pDMS Kontrolle' }, { label: 'Immobilisation / Schienung', special: 'IMMO' }, { label: 'Wärmeerhalt', token: 'Wärmeerhalt' }, { label: 'Temp messen', token: 'Temperatur messen' }, { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' } ]
+  X: [ 
+      { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck', instant: true }, 
+      { label: 'Keine Blutung feststellbar', token: 'X unauffällig' }, 
+      { label: 'Druckverband anlegen', token: 'Druckverband' }, 
+      { label: 'Tourniquet anlegen', token: 'Tourniquet' }, 
+      { label: 'Beckenschlinge anlegen', token: 'Beckenschlinge' }, 
+      { label: 'Woundpacking', token: 'Hämostyptikum' } 
+  ],
+  A: [ 
+      { label: 'Mundraumkontrolle', token: 'Mundraumkontrolle', instant: true }, 
+      { label: 'Absaugen', token: 'Absaugen' }, 
+      { label: 'Esmarch-Handgriff', token: 'Esmarch' }, 
+      { label: 'Guedel-Tubus', token: 'Guedel' }, 
+      { label: 'Wendel-Tubus', token: 'Wendel' }, 
+      { label: 'Beutel-Masken-Beatmung', token: 'Beutel-Masken-Beatmung' } 
+  ],
+  B: [ 
+      { label: 'AF messen (zählen)', token: 'AF messen', instant: true }, 
+      { label: 'SpO₂ messen', token: 'SpO2 messen', instant: true }, // <--- JETZT SOFORT
+      { label: 'Lunge auskultieren', token: 'Lunge auskultieren', instant: true }, 
+      { label: 'Sauerstoff geben', special: 'O2' } 
+  ],
+  C: [ 
+      { label: 'RR messen', token: 'RR messen', instant: true }, // <--- JETZT SOFORT
+      { label: 'Puls messen', token: 'Puls messen', instant: true }, // <--- JETZT SOFORT
+      { label: 'pDMS prüfen', token: 'pDMS Kontrolle', instant: true }, 
+      { label: '12-Kanal-EKG', special: 'EKG' }, 
+      { label: 'i.V. Zugang legen', token: 'i.V. Zugang legen' }, 
+      { label: 'Volumen 500 ml', token: 'Volumen 500 ml' } 
+  ],
+  D: [ 
+      { label: 'GCS erheben', token: 'GCS erheben', instant: true }, 
+      { label: 'Pupillen prüfen', token: 'Pupillen', instant: true }, 
+      { label: 'BZ messen', token: 'BZ messen', instant: true } 
+  ],
+  E: [ 
+      { label: 'Bodycheck (Text)', token: 'Bodycheck', instant: true }, 
+      { label: 'Bodycheck (Bild)', special: 'BODYMAP' }, 
+      { label: 'pDMS prüfen', token: 'pDMS Kontrolle', instant: true }, 
+      { label: 'Immobilisation / Schienung', special: 'IMMO' }, 
+      { label: 'Wärmeerhalt', token: 'Wärmeerhalt' }, 
+      { label: 'Temp messen', token: 'Temperatur messen', instant: true }, 
+      { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' } 
+  ]
 };
 
 // Global Vars
@@ -207,7 +246,7 @@ async function stepCase(txt) {
   }
 }
 
-// --- EKG VISUAL UPDATE (GAPLESS VERSION) ---
+// --- VISUAL FIX: MONITOR LOGIC (Gapless + Real Pleth Curve) ---
 function openEKG() {
     if(!caseState) return;
     const type = caseState.hidden?.ekg_pattern || "sinus";
@@ -226,13 +265,13 @@ function openEKG() {
       <rect width="100%" height="100%" fill="url(#grid-bold)" />
     `;
 
-    // Wir erzeugen einen Pfad, der exakt 400px breit ist (ViewBox Breite)
     const viewWidth = 400;
     
-    // EKG oben (Basis 60px)
-    let ekgPath = generateLoopPath(type, 60, viewWidth);
-    // Pleth unten (Basis 130px)
-    let plethPath = generateLoopPath('pleth', 130, viewWidth);
+    // 1. EKG ganz oben (Basis 50px)
+    let ekgPath = generateLoopPath(type, 50, viewWidth);
+    
+    // 2. Pleth/SpO2 ganz unten (Basis 140px) -> Mehr Abstand!
+    let plethPath = generateLoopPath('pleth', 140, viewWidth);
 
     const modalBody = document.querySelector('#modalEKG .modal-body');
 
@@ -244,16 +283,16 @@ function openEKG() {
             <g class="infinite-scroll">
                  <g>
                     <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" />
-                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" />
+                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" />
                  </g>
                  <g transform="translate(400, 0)">
                     <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" />
-                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" />
+                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" />
                  </g>
             </g>
 
             <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12" font-weight="bold">II</text>
-            <text x="5" y="100" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
+            <text x="5" y="110" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
         </svg>
       </div>
       <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
@@ -273,64 +312,80 @@ function openEKG() {
 
     openModal('modalEKG');
 
-    // FIX: Den Close-Button JEDES MAL neu verbinden, da das Modal neu gerendert wird
     const closeBtn = document.getElementById('ekgClose');
-    if(closeBtn) {
-        closeBtn.onclick = () => closeModal('modalEKG');
-    }
+    if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
 }
 
-// Helper: Generiert einen Pfad, der exakt 'width' Pixel füllt
+// Helper: Generiert die Kurven
 function generateLoopPath(type, yBase, totalWidth) {
     let d = `M 0 ${yBase} `;
     let currentX = 0;
     
-    // Definition der "Bausteine" (Beats)
+    // Beat Definitionen
+    // "mode": 'line' (gerade Striche) oder 'curve' (bezier)
+    let mode = 'line'; 
     let beatWidth = 0;
-    let beatPoints = []; 
+    let commands = []; 
 
     if (type === 'sinus') {
-        beatWidth = 50; // Breite eines Herzschlags
-        // Relativ-Koordinaten [dx, dy]
-        beatPoints = [
+        mode = 'line';
+        beatWidth = 50; 
+        commands = [
            [5,0], [3,-5], [3,5], [4,0], // P
            [2,0], [1,5], [2,-55], [2,60], [2,-10], // QRS
            [3,0], [5,-10], [5,10], // T
            [13,0] // Pause
         ];
     } else if (type === 'vt') {
+        mode = 'line';
         beatWidth = 30;
-        beatPoints = [[10,-40], [10,80], [10,-40]];
+        commands = [[10,-40], [10,80], [10,-40]];
     } else if (type === 'pleth') {
-        beatWidth = 40;
-        beatPoints = [[10,-15], [5,-5], [15,20], [10,0]];
+        // HIER IST DER FIX FÜR DIE RUNDE KURVE
+        mode = 'curve';
+        beatWidth = 50;
+        // Cubic Bezier: c dx1 dy1, dx2 dy2, dx dy
+        // Wir zeichnen EINE Welle: Steil hoch, Dikrotie, runter
+        commands = [
+            // 1. Steiler Anstieg
+            "c 5 -25, 10 -25, 12 -5", 
+            // 2. Dikrote Welle (kleiner Huckel)
+            "c 2 8, 5 0, 8 5",
+            // 3. Auslauf zur Basis
+            "c 5 5, 10 0, 30 0" 
+        ];
     } else {
-        // Asystolie
         return `M 0 ${yBase} L ${totalWidth} ${yBase}`;
     }
 
-    // Wir füllen die Breite auf
     while(currentX < totalWidth) {
-        beatPoints.forEach(pt => {
-            // Skalieren, falls nötig, aber hier nehmen wir fixed pixels
-            // Wir zeichnen absolut, damit keine Rundungsfehler entstehen
-            currentX += pt[0];
-            d += `L ${currentX} ${yBase + pt[1]} `;
-        });
+        if(mode === 'line') {
+            commands.forEach(pt => {
+                currentX += pt[0];
+                d += `L ${currentX} ${yBase + pt[1]} `;
+            });
+        } else {
+            // Bei Kurven ist commands ein Array von Strings
+            // Wir müssen currentX manuell erhöhen, da "c" relativ ist
+            // Aber wir brauchen absolute Koordinaten für den Loop-Start? 
+            // Nein, "c" ist relativ zum vorherigen Punkt. Das passt perfekt.
+            // ABER: Wir müssen wissen, wie breit der Beat war, um currentX zu updaten.
+            commands.forEach(cmd => {
+                d += cmd + " ";
+            });
+            currentX += beatWidth;
+            // Kleiner Korrektur-Strich, falls Lücke
+            // d += `l 0 0 `; 
+        }
     }
     
-    // WICHTIG: Damit der Loop perfekt passt, muss der Pfad GENAU bei totalWidth enden
-    // und auf yBase zurückkommen. Wir ziehen den letzten Strich glatt.
+    // Ende sauber schließen
     d += `L ${totalWidth} ${yBase}`;
-
     return d;
 }
 
 
-// ... (renderPanel, renderVitals, Timer Functions, Modals...)
-// Die Standard-Funktionen bleiben hier unverändert. 
-// Zur Sicherheit füge ich sie kurz ein, damit du copy-paste machen kannst.
-
+// --- INTERACTION FIX: SOFORT AUSFÜHREN ---
 function renderPanel(k) {
   const panel = document.getElementById('panel');
   if(!panel) return;
@@ -339,12 +394,22 @@ function renderPanel(k) {
     const b = document.createElement('button');
     b.className = 'action-card';
     b.textContent = a.label;
+    
     b.onclick = () => {
+      // Wenn es eine Spezialaktion ist (Modal)
       if(a.special === 'O2') openOxygen();
       else if(a.special === 'NA') openNA();
       else if(a.special === 'IMMO') openImmo();
       else if(a.special === 'BODYMAP') openBodyMap();
       else if(a.special === 'EKG') openEKG();
+      
+      // FIX: Wenn "instant: true" gesetzt ist (siehe oben in ACTIONS), 
+      // dann sofort ausführen und NICHT in die Queue packen!
+      else if(a.instant) {
+          stepCase(a.token);
+      }
+      
+      // Sonst in die Warteschlange
       else { queue.push(a); renderQueue(); }
     };
     panel.appendChild(b);
@@ -591,8 +656,7 @@ async function speak(text) {
     }
 }
 
-// ... Feature Modals (openOxygen, openNA, openAFCounter...)
-// Diese bleiben unverändert am Ende stehen
+// ... Feature Modals ...
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
