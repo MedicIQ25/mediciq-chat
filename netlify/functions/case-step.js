@@ -135,7 +135,32 @@ exports.handler = async (event) => {
         reply.finding = finding; touchStep("C"); return ok(reply);
     }
     
-    // --- 3. VITALWERTE & SCHEMATA (FIX: FORMATIERUNG) ---
+    // --- 3. INFORMATIONSANFRAGEN (FIX: HINZUFÜGEN) ---
+    
+    // NRS Info (Abruf der Schmerz-Infos)
+    if (low.includes('schmerz info')) {
+        reply.accepted = true; 
+        const pain = H.pain || {};
+        reply.finding = `<b>Schmerzinformation:</b><br>Ort: ${text(pain.ort)}<br>Charakter: ${text(pain.charakter)}`;
+        return ok(reply);
+    }
+
+    // BEFAST Info (Abruf der neurologischen Infos)
+    if (low.includes('befast info')) {
+        reply.accepted = true; 
+        reply.finding = `<b>BE-FAST-Details:</b><br>${H.befast || "Keine spezifischen neurologischen Symptome hinterlegt."}`;
+        return ok(reply);
+    }
+
+    // 4S Info (Abruf der Szenen-Infos)
+    if (low.includes('4s info')) {
+        reply.accepted = true; 
+        const s = state.scene_4s || {};
+        reply.finding = `<b>4S-Details:</b><br>Sicherheit: ${text(s.sicherheit)}<br>Szene: ${text(s.szene)}<br>Sichtung: ${text(s.sichtung_personen)}<br>Support: ${text(s.support_empfehlung)}`;
+        return ok(reply);
+    }
+    
+    // --- 4. VITALWERTE & SCHEMATA (DOKUMENTATION) ---
     
     // SAMPLER DOKU (FIX: Protokolliert vertikal)
     if (/sampler doku/.test(low)) { 
@@ -156,7 +181,7 @@ exports.handler = async (event) => {
         return ok(reply); 
     }
     
-    // --- 4. ORGA & FALLBACKS ---
+    // --- 5. ORGA & FALLBACKS ---
     if (low.includes("übergabe")) { 
         state.measurements.handover_done = true; 
         reply.accepted = true; 
