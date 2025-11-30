@@ -742,30 +742,55 @@ function openHandover() {
     openModal('modalHandover');
 }
 async function openDebrief() {
-  // 1. SOFORT die Simulation stoppen
-  stopTimer();          // Hält die Zeit an (keine neuen System-Checks mehr)
-  stopMonitorLoop();    // Schaltet das Piepen aus
-  updateUI(false);      // Versteckt Buttons und zeigt "Start"-Button wieder an
+  // 1. Sicherheits-Check: Gibt es überhaupt einen aktiven Fall?
+  if (!caseState) {
+      addMsg("⚠️ Fehler: Kein aktiver Fall für das Debriefing gefunden.");
+      return;
+  }
+
+  // 2. Lokale Kopie des Falls sichern, BEVOR wir aufräumen
+  // Das verhindert, dass der Fall "gelöscht" ist, bevor der Server ihn sieht.
+  const finalState = JSON.parse(JSON.stringify(caseState));
+
+  // 3. UI aufräumen (Timer stopp, Monitor aus)
+  stopTimer();
+  stopMonitorLoop();
+  updateUI(false);
   
-  // Status aktualisieren
   const statusEl = document.getElementById('caseStatus');
   if(statusEl) statusEl.textContent = 'Fall beendet.';
 
-  // 2. Debriefing vom Server holen
+  // 4. Feedback an den User: "Ich arbeite..."
+  addMsg("⏳ <em>Analysiere Fall und erstelle Debriefing...</em>");
+
   try {
+    // 5. Anfrage mit der GESICHERTEN Kopie (finalState) senden
     const r = await fetch(API_CASE_STEP, {
-        method:'POST',
-        body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})
+        method: 'POST',
+        body: JSON.stringify({ case_state: finalState, user_action: 'Debriefing' })
     });
+
+    if (!r.ok) throw new Error("Server Fehler: " + r.status);
+
     const d = await r.json();
     
-    // Nachricht anzeigen
-    addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
+    // 6. Ergebnis anzeigen
+    if (d.debrief) {
+        addMsg(`
+            <div style="background:#ecfdf5; border:1px solid #10b981; padding:15px; border-radius:8px; margin-top:10px; color:#064e3b;">
+                <strong>🎓 DEBRIEFING & ANALYSE</strong><br><br>
+                ${d.debrief.replace(/\n/g,'<br>')}
+            </div>
+        `);
+    } else {
+        addMsg("⚠️ Server hat keine Auswertung gesendet.");
+    }
     
-    // State löschen, damit keine weiteren Aktionen im Hintergrund laufen können
-    caseState = null; 
-    
-  } catch(e){
+  } catch(e) {
     console.error(e);
+    addMsg(`❌ Fehler beim Laden des Debriefings: ${e.message}`);
+  } finally {
+    // 7. JETZT erst den globalen State löschen
+    caseState = null;
   }
 }
