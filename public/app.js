@@ -822,12 +822,156 @@ function openFourS() {
   $id('s4Cancel').onclick=()=>closeModal('modal4S');
   openModal('modal4S');
 }
+// --- DIAGNOSEN KATALOG (Update: 85 Fälle) ---
+const DIAGNOSES_MAP = {
+  internistisch: [
+    "ACS / Herzinfarkt (STEMI/NSTEMI)",
+    "Akutes Abdomen / Ileus",
+    "Allergische Reaktion / Anaphylaxie",
+    "Aortendissektion / Aortenaneurysma",
+    "COPD Exazerbation",
+    "Exsikkose / Synkope",
+    "Gastroenteritis / Norovirus",
+    "Gastrointestinale Blutung (GI-Blutung)",
+    "Herzrhythmusstörung / Vorhofflimmern",
+    "Hitzschlag / Hitzeschaden",
+    "Hyperglykämie / Ketoazidose",
+    "Hypertoner Notfall / Hypertensive Krise",
+    "Hypoglykämie",
+    "Intoxikation (Alkohol / C2)",
+    "Intoxikation (Medikamente / Suizidversuch)",
+    "Lungenembolie (LAE)",
+    "Lungenödem / Herzinsuffizienz",
+    "Myokarditis / Perikarditis",
+    "Nierenkolik / Urolithiasis",
+    "Pneumonie / Sepsis"
+  ],
+  neurologisch: [
+    "Akinetische Krise (Parkinson)",
+    "Akute Psychose / Wahn",
+    "Bandscheibenvorfall / Cauda-Equina",
+    "Commotio Cerebri / SHT (Leicht)",
+    "Epiduralhämatom / SHT (Schwer)",
+    "Generalisierter Krampfanfall (Grand Mal)",
+    "Hirnblutung (ICB / SAB)",
+    "Hirntumor / Erstmanifestation Krampf",
+    "Hypoglykämie (neurologisch)",
+    "Intoxikation (Alkoholentzug / Delir)",
+    "Intoxikation (CO / Kohlenmonoxid)",
+    "Intoxikation (Opiate / Drogen)",
+    "Meningitis / Enzephalitis",
+    "Migräne / Status Migraenosus",
+    "Multiple Sklerose (Schub)",
+    "Psychogener Krampfanfall (PNES)",
+    "Schlaganfall (Apoplex)",
+    "Sepsis (Urosepsis / Enzephalopathie)",
+    "Subduralhämatom (chronisch)",
+    "TIA (Transitorische Ischämische Attacke)",
+    "Transiente Globale Amnesie (TGA)"
+  ],
+  trauma: [
+    "Amputationsverletzung",
+    "Augenverletzung / Perforation",
+    "Beckenfraktur",
+    "Commotio Cerebri / SHT",
+    "Eviszeration (Offenes Bauchtrauma)",
+    "Explosionstrauma / Handverletzung",
+    "Femurschaftfraktur",
+    "Hundebiss / Tierbiss",
+    "Instabiler Thorax / Rippenserienfraktur",
+    "Knalltrauma / Tinnitus",
+    "Offene Fraktur (Unterschenkel)",
+    "Offener Pneumothorax (Saugende Wunde)",
+    "Patellaluxation",
+    "Perthes-Syndrom (Traumatische Asphyxie)",
+    "Pfählungsverletzung",
+    "Polytrauma (Sturz aus Höhe)",
+    "Querschnittslähmung / Wirbelsäulentrauma",
+    "Radiusfraktur (Unterarm)",
+    "Schädelbasisbruch",
+    "Schenkelhalsfraktur",
+    "Skalpierungsverletzung",
+    "Spannungspneumothorax",
+    "Stromunfall",
+    "Stumpfes Bauchtrauma (Milz/Leber)",
+    "Suizidversuch (Strangulation)",
+    "Verbrennung (Thermisch)",
+    "Verätzung (Chemisch)"
+  ],
+  paediatrisch: [
+    "Alkoholintoxikation (Jugendlich)",
+    "Anaphylaxie (Kind)",
+    "Appendizitis / Akutes Abdomen",
+    "Exsikkose / Gastroenteritis",
+    "Fieberkrampf",
+    "Fremdkörperaspiration (Bolus)",
+    "Grünholzfraktur",
+    "Hodentorsion",
+    "Invagination",
+    "Ketoazidose (Erstmanifestation Typ 1)",
+    "Kindeswohlgefährdung / Misshandlung",
+    "Meningokokkensepsis",
+    "Pseudokrupp",
+    "Reanimation (SIDS)",
+    "SHT (Fahrradsturz)",
+    "SHT (Wickeltischsturz)",
+    "Sekundäres Ertrinken / Beinahe-Ertrinken",
+    "Status Asthmaticus (Kind)",
+    "Verbrühung",
+    "Vergiftung / Ingestion (Reiniger)"
+  ]
+};
+// --- NEUE DIAGNOSE FUNKTION ---
 function openDiagnosis() {
-  const dxSel = $id('dxSelect');
-  const list = ['ACS','Asthma/Bronchialobstruktion','COPD-Exazerbation','Lungenembolie','Sepsis','Metabolische Entgleisung','Schlaganfall','Krampfanfall','Hypoglykämie','Polytrauma','Fraktur','Fieberkrampf'];
-  dxSel.innerHTML = list.map(x=>`<option>${x}</option>`).join('');
-  $id('dxOk').onclick=()=>{ stepCase(`Verdachtsdiagnose: ${dxSel.value} | Prio: ${$id('dxPrio').value}`); closeModal('modalDx'); };
-  $id('dxCancel').onclick=()=>closeModal('modalDx');
+  const modal = document.getElementById('modalDx');
+  const specSel = document.getElementById('dxSpec');
+  const dxSel = document.getElementById('dxSelect');
+  const prioSel = document.getElementById('dxPrio');
+  const note = document.getElementById('dxNote');
+
+  // Reset Fields
+  prioSel.value = "mittel (gelb)";
+  note.value = "";
+
+  // 1. Fachrichtung vorwählen (basierend auf dem aktuellen Fall)
+  if (caseState && caseState.specialty) {
+      // Mapping falls Fall-Kategorien slightly anders heißen (z.B. Kleinschreibung)
+      let currentSpec = caseState.specialty.toLowerCase();
+      if (DIAGNOSES_MAP[currentSpec]) {
+          specSel.value = currentSpec;
+      }
+  }
+
+  // 2. Funktion zum Rendern der Liste
+  const renderList = () => {
+      const selectedSpec = specSel.value;
+      const diagnoses = DIAGNOSES_MAP[selectedSpec] || [];
+      
+      // Alphabetisch sortieren für bessere Übersicht
+      diagnoses.sort();
+
+      dxSel.innerHTML = diagnoses.map(d => `<option value="${d}">${d}</option>`).join('');
+      
+      // Fallback, falls Liste leer ist (sollte nicht passieren)
+      if(diagnoses.length === 0) {
+          dxSel.innerHTML = `<option>-- Keine Diagnosen verfügbar --</option>`;
+      }
+  };
+
+  // 3. Event Listener: Wenn User oben Fachrichtung ändert, Liste unten anpassen
+  specSel.onchange = renderList;
+
+  // 4. Initiale Liste rendern
+  renderList();
+
+  // 5. Speicher-Logik
+  document.getElementById('dxOk').onclick = () => { 
+      stepCase(`Verdachtsdiagnose: ${dxSel.value} (${specSel.value}) | Prio: ${prioSel.value} | Notiz: ${note.value}`); 
+      closeModal('modalDx'); 
+  };
+  
+  document.getElementById('dxCancel').onclick = () => closeModal('modalDx');
+  
   openModal('modalDx');
 }
 function openImmo() {
