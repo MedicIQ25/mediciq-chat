@@ -13,12 +13,15 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { text } = JSON.parse(event.body || '{}');
+    // Hier lesen wir jetzt auch die "voice" (Stimme) aus, die die App schickt
+    const { text, voice } = JSON.parse(event.body || '{}');
+    
     if (!text) return { statusCode: 400, body: "Text fehlt" };
 
-    const apiKey = process.env.OPENAI_API_KEY; // Zieht den Key aus Netlify
-    
-    // Wir nutzen das Node.js https modul nativ um externe Abhängigkeiten zu vermeiden
+    // Standard-Fallback, falls keine Stimme gewählt wurde
+    const selectedVoice = voice || "onyx"; 
+    const apiKey = process.env.OPENAI_API_KEY;
+
     return new Promise((resolve, reject) => {
         const req = https.request('https://api.openai.com/v1/audio/speech', {
             method: 'POST',
@@ -44,11 +47,12 @@ exports.handler = async (event) => {
             resolve({ statusCode: 500, headers, body: JSON.stringify({ error: e.message }) });
         });
 
+        // Wir nutzen das Modell "tts-1" (High Speed) statt "tts-1-hd" (High Quality, aber langsam)
         req.write(JSON.stringify({
             model: "tts-1",
             input: text,
-            voice: "onyx", // "onyx" (männlich, tief) oder "nova" (weiblich, klar) oder "shimmer" (weiblich, sanft)
-            speed: 1.0
+            voice: selectedVoice, 
+            speed: 1.05 // Ein Hauch schneller (5%) wirkt oft natürlicher und spart Zeit
         }));
         req.end();
     });

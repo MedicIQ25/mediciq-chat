@@ -378,16 +378,16 @@ function closeModal(id) {
   el.style.display = 'none';
 }
 
-// High-End OpenAI Sprachausgabe
+// High-End OpenAI Sprachausgabe mit Geschlechter-Erkennung
 let currentAudio = null;
 
 async function speak(text) {
     if (!soundEnabled || !text) return;
     
-    // Falls gerade wer spricht -> abwürgen
+    // Altes Audio stoppen
     if(currentAudio) { currentAudio.pause(); currentAudio = null; }
 
-    // Text für die KI optimieren (Zahlen ausschreiben hilft der Betonung)
+    // Text reinigen
     let speakText = text
         .replace(/\//g, ' zu ')
         .replace(/SpO2/g, 'Sauerstoffsättigung')
@@ -396,15 +396,39 @@ async function speak(text) {
         .replace(/l\/min/g, 'Liter')
         .replace(/°C/g, 'Grad');
 
-    // Button Feedback geben
+    // --- LOGIK: WELCHE STIMME? ---
+    // Standard: Mann (onyx)
+    let selectedVoice = "onyx"; 
+
+    // Wir schauen uns die Story des aktuellen Falls an
+    // (caseState ist die globale Variable, wo der Fall drin liegt)
+    if (caseState && caseState.story) {
+        const storyLower = caseState.story.toLowerCase();
+        const specialty = (caseState.specialty || "").toLowerCase();
+
+        // Check auf Kind (Pädiatrie oder Schlüsselwörter)
+        if (specialty === 'paediatrisch' || storyLower.includes('kind') || storyLower.includes('säugling') || storyLower.includes('junge') || storyLower.includes('mädchen')) {
+            selectedVoice = "alloy"; // "Alloy" ist neutraler/heller, passt am besten für junge Patienten
+        }
+        // Check auf Frau
+        else if (storyLower.includes('frau') || storyLower.includes('patientin') || storyLower.includes('sie ')) {
+            selectedVoice = "nova"; // "Nova" ist eine sehr gute weibliche Stimme
+        }
+    }
+    // -----------------------------
+
     const btn = document.getElementById('btnSound');
     const oldIcon = btn.textContent;
-    btn.textContent = "⏳..."; // Zeigt dem User: "Ich lade Audio"
+    btn.textContent = "⏳..."; 
 
     try {
+        // Wir schicken jetzt Text UND die gewünschte Stimme an den Server
         const response = await fetch('/.netlify/functions/tts', {
             method: 'POST',
-            body: JSON.stringify({ text: speakText })
+            body: JSON.stringify({ 
+                text: speakText,
+                voice: selectedVoice
+            })
         });
 
         if (!response.ok) throw new Error("TTS Fehler");
@@ -414,8 +438,6 @@ async function speak(text) {
         currentAudio = new Audio(audioUrl);
         
         currentAudio.onended = () => { btn.textContent = oldIcon; };
-        
-        // Sobald es abspielt, Icon zurücksetzen
         currentAudio.onplay = () => { btn.textContent = oldIcon; };
         
         currentAudio.play();
