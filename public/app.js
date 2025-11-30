@@ -207,7 +207,7 @@ async function stepCase(txt) {
             speak(d.finding);
         }
         }
-        
+
 
     caseState = d.case_state || caseState;
     document.getElementById('caseScore').textContent = `Score: ${caseState.score||0}`;
@@ -378,43 +378,52 @@ function closeModal(id) {
   el.style.display = 'none';
 }
 
-// Verbesserte Sprachausgabe
-function speak(text) {
-    if(!soundEnabled || !window.speechSynthesis || !text) return;
-    if(text.length > 300) return;
+// High-End OpenAI Sprachausgabe
+let currentAudio = null;
 
-    window.speechSynthesis.cancel();
+async function speak(text) {
+    if (!soundEnabled || !text) return;
+    
+    // Falls gerade wer spricht -> abwürgen
+    if(currentAudio) { currentAudio.pause(); currentAudio = null; }
 
-    // 1. Text für die Sprache "reinigen" (Zahlen und Einheiten lesbar machen)
+    // Text für die KI optimieren (Zahlen ausschreiben hilft der Betonung)
     let speakText = text
-        .replace(/\//g, ' zu ')           // RR 120/80 -> 120 zu 80
+        .replace(/\//g, ' zu ')
         .replace(/SpO2/g, 'Sauerstoffsättigung')
         .replace(/AF/g, 'Atemfrequenz')
-        .replace(/HF/g, 'Herzfrequenz')
         .replace(/RR/g, 'Blutdruck')
-        .replace(/l\/min/g, 'Liter pro Minute')
-        .replace(/mg\/dl/g, 'Milligramm')
-        .replace(/°C/g, 'Grad')
-        .replace(/%/g, ' Prozent')
-        .replace(/\-/g, ' ');             // Bindestriche entfernen
+        .replace(/l\/min/g, 'Liter')
+        .replace(/°C/g, 'Grad');
 
-    const u = new SpeechSynthesisUtterance(speakText);
-    u.lang = 'de-DE';
+    // Button Feedback geben
+    const btn = document.getElementById('btnSound');
+    const oldIcon = btn.textContent;
+    btn.textContent = "⏳..."; // Zeigt dem User: "Ich lade Audio"
 
-    // 2. Beste Stimme suchen (Reihenfolge optimiert für Realismus)
-    // "Google Deutsch" ist oft gut, "Microsoft ... Natural" (Edge) ist am besten
-    let voices = window.speechSynthesis.getVoices();
-    let bestVoice = voices.find(v => v.lang === 'de-DE' && v.name.includes('Natural')); // Edge/Windows
-    if (!bestVoice) bestVoice = voices.find(v => v.lang === 'de-DE' && v.name.includes('Google')); // Chrome
-    if (!bestVoice) bestVoice = voices.find(v => v.lang === 'de-DE'); // Fallback
+    try {
+        const response = await fetch('/.netlify/functions/tts', {
+            method: 'POST',
+            body: JSON.stringify({ text: speakText })
+        });
 
-    if (bestVoice) { 
-        u.voice = bestVoice; 
-        u.pitch = 1.0; 
-        u.rate = 1.0;  // Etwas langsamer als vorher (war 1.1), hilft bei Zahlen
+        if (!response.ok) throw new Error("TTS Fehler");
+
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        currentAudio = new Audio(audioUrl);
+        
+        currentAudio.onended = () => { btn.textContent = oldIcon; };
+        
+        // Sobald es abspielt, Icon zurücksetzen
+        currentAudio.onplay = () => { btn.textContent = oldIcon; };
+        
+        currentAudio.play();
+
+    } catch (e) {
+        console.error("Audio Fehler:", e);
+        btn.textContent = oldIcon; 
     }
-
-    window.speechSynthesis.speak(u);
 }
 
 // Feature implementations (Modals)
