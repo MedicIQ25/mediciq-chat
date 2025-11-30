@@ -196,24 +196,26 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .monitor-glow-blue {
   filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.6));
 }
-/* --- FIX: ANZEIGEFEHLER VITALWERTE --- */
+/* --- FINALE REPARATUR VITALWERTE --- */
 
-/* 1. Das Gitter zwingen, breitere Boxen zu machen */
+/* 1. Gitter-Layout erzwingen (Breitere Boxen) */
 .vitals {
-    /* Erhöhe die Mindestbreite pro Box von 100px auf 130px */
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+    /* Mindestens 120px breit pro Box, damit lange Zahlen passen */
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important;
 }
 
-/* 2. Die Schrift generell etwas kleiner machen */
+/* 2. Speziell den Blutdruck (RR) kleiner machen */
+/* Wir nutzen die ID #vRR, das ist spezifischer als Klassen */
+#vRR {
+    font-size: 1.2rem !important; /* Deutlich kleiner */
+    letter-spacing: -1px !important; /* Enger zusammen */
+    display: inline-block;
+    width: 100%;
+    overflow: visible !important; /* Darf nicht abschneiden */
+}
+
+/* 3. Alle Werte etwas anpassen */
 .vital-val {
-    font-size: 1.3rem !important;
-}
-
-/* 3. SPEZIALBEHANDLUNG FÜR BLUTDRUCK (NIBP) */
-/* Da "120/80" breiter ist als "98", muss die Schrift hier kleiner sein */
-.v-rr .vital-val {
-    font-size: 1.15rem !important; /* Deutlich kleiner */
-    letter-spacing: -1px !important; /* Buchstaben enger zusammenrücken */
-    white-space: nowrap !important; /* Umbruch verbieten */
-    overflow: visible !important; /* Abschneiden verbieten */
+    font-size: 1.4rem !important; /* Standardgröße etwas reduzieren */
+    white-space: nowrap !important; /* Kein Umbruch */
 }
