@@ -742,17 +742,17 @@ function openHandover() {
     openModal('modalHandover');
 }
 async function openDebrief() {
-  // 1. Sicherheits-Check: Gibt es überhaupt einen aktiven Fall?
+  // 1. Sicherheits-Check
   if (!caseState) {
-      addMsg("⚠️ Fehler: Kein aktiver Fall für das Debriefing gefunden.");
+      addMsg("⚠️ Fehler: Kein aktiver Fall gefunden.");
       return;
   }
 
-  // 2. Lokale Kopie des Falls sichern, BEVOR wir aufräumen
-  // Das verhindert, dass der Fall "gelöscht" ist, bevor der Server ihn sieht.
+  // 2. Klonen und Sichern des Zustands
   const finalState = JSON.parse(JSON.stringify(caseState));
 
-  // 3. UI aufräumen (Timer stopp, Monitor aus)
+  // 3. SOFORTIGES Aufräumen (verhindert Race Conditions)
+  caseState = null; // System deaktivieren
   stopTimer();
   stopMonitorLoop();
   updateUI(false);
@@ -760,11 +760,11 @@ async function openDebrief() {
   const statusEl = document.getElementById('caseStatus');
   if(statusEl) statusEl.textContent = 'Fall beendet.';
 
-  // 4. Feedback an den User: "Ich arbeite..."
+  // 4. Ladeanzeige
   addMsg("⏳ <em>Analysiere Fall und erstelle Debriefing...</em>");
 
   try {
-    // 5. Anfrage mit der GESICHERTEN Kopie (finalState) senden
+    // 5. Anfrage mit dem GESICHERTEN (kopierten) State
     const r = await fetch(API_CASE_STEP, {
         method: 'POST',
         body: JSON.stringify({ case_state: finalState, user_action: 'Debriefing' })
@@ -774,12 +774,12 @@ async function openDebrief() {
 
     const d = await r.json();
     
-    // 6. Ergebnis anzeigen
+    // 6. Anzeige
     if (d.debrief) {
         addMsg(`
-            <div style="background:#ecfdf5; border:1px solid #10b981; padding:15px; border-radius:8px; margin-top:10px; color:#064e3b;">
-                <strong>🎓 DEBRIEFING & ANALYSE</strong><br><br>
-                ${d.debrief.replace(/\n/g,'<br>')}
+            <div style="background:#ecfdf5; border:1px solid #10b981; padding:15px; border-radius:8px; margin-top:10px; color:#064e3b; font-size: 0.95rem;">
+                <strong>🎓 DEBRIEFING</strong><br>
+                ${d.debrief}
             </div>
         `);
     } else {
@@ -789,8 +789,5 @@ async function openDebrief() {
   } catch(e) {
     console.error(e);
     addMsg(`❌ Fehler beim Laden des Debriefings: ${e.message}`);
-  } finally {
-    // 7. JETZT erst den globalen State löschen
-    caseState = null;
   }
 }
