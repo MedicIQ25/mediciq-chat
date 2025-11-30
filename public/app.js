@@ -774,13 +774,26 @@ function openBodyMap() {
 }
 function openHandover() {
     if(!caseState) return;
-    $id('s_ident').value = ""; $id('s_event').value = ""; $id('s_prio').value = ""; $id('s_action').value = ""; $id('s_anam').value = "";
+    $id('s_ident').value = "";
+    $id('s_event').value = "";
+    $id('s_prio').value = "";
+    $id('s_action').value = "";
+    $id('s_anam').value = "";
+    
     $id('handoverOk').onclick = () => {
-        const text = `SINNHAFT: I:${$id('s_ident').value} | N:${$id('s_event').value} | N:${$id('s_prio').value} | H:${$id('s_action').value} | A:${$id('s_anam').value}`;
-        stepCase(`Übergabe: ${text}`);
-        setTimeout(() => stepCase('Fall beenden'), 800);
+        // Wir bauen einen String, der das Wort "Übergabe" enthält, damit das Backend es erkennt
+        const text = `Übergabe: SINNHAFT: I:${$id('s_ident').value} | N:${$id('s_event').value} | N:${$id('s_prio').value} | H:${$id('s_action').value} | A:${$id('s_anam').value}`;
+        
+        stepCase(text);
+        
+        // Modal schließen
         closeModal('modalHandover');
+        
+        // Kurze Verzögerung, dann automatisch beenden?
+        // Besser: Der User klickt danach selbst auf "Debriefing" oder wir triggern es manuell?
+        // User soll aktiv beenden.
     };
+    
     $id('handoverCancel').onclick = () => closeModal('modalHandover');
     openModal('modalHandover');
 }

@@ -1,6 +1,6 @@
 /**
  * Netlify Function: case-step
- * (Final Fix: O2-Regex, pDMS Logic, HTML formatting & Protocol)
+ * (Final Medical Logic Repair)
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -11,7 +11,7 @@ exports.handler = async (event) => {
     const ua    = String(body.user_action || "").trim();
     const low   = ua.toLowerCase();
 
-    // Init
+    // 1. State Init
     state.vitals     = state.vitals || {};
     state.steps_done = Array.isArray(state.steps_done) ? state.steps_done : [];
     state.history    = Array.isArray(state.history) ? state.history : [];
@@ -28,7 +28,7 @@ exports.handler = async (event) => {
     const H = state.hidden || {};
     const baseVitals = H.vitals_baseline || { SpO2: 96, RR: "120/80", AF: 14, Puls: 80 };
 
-    // Helper
+    // --- HELPER ---
     const updVitals = (obj) => {
       for (const k in obj) {
         state.vitals[k] = obj[k];
@@ -48,12 +48,18 @@ exports.handler = async (event) => {
     };
 
     const text = (v) => (v === undefined || v === null || v === "") ? "—" : String(v).trim();
-    const touchStep = (l) => { if(!state.steps_done.includes(l.toUpperCase())) { state.steps_done.push(l.toUpperCase()); state.score+=1; } };
+    const touchStep = (l) => { 
+        if(!state.steps_done.includes(l.toUpperCase())) { 
+            state.steps_done.push(l.toUpperCase()); 
+            state.score += 1; 
+        } 
+    };
+    
     function ok(body) { return { statusCode: 200, headers, body: JSON.stringify(body) }; }
 
-    // --- SYSTEM CHECK ---
+    // --- 0. SYSTEM CHECK ---
     if (ua.includes("System-Check")) {
-        const hasO2 = state.history.some(h => h && h.action && h.action.includes('O2-Gabe'));
+        const hasO2 = state.history.some(h => h && h.action && (h.action.includes('O2-Gabe')));
         const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0]);
         reply.accepted = true; 
         if (curSpO2 < 93 && !hasO2) {
@@ -64,146 +70,142 @@ exports.handler = async (event) => {
         return ok(reply);
     }
 
-    // --- 1. MEDIZINISCHE UNTERSUCHUNGEN ---
+    // --- 1. MEDIZINISCHE MAẞNAHMEN (XABCDE) ---
     
-    // X, A, B Standards
-    if (/blutung/.test(low)) { reply.accepted=true; reply.finding=H.bleeding_info||"Keine kritische Blutung."; reply.evaluation="X: Blutungscheck."; touchStep("X"); return ok(reply); }
-    if (/mund/.test(low)) { reply.accepted=true; reply.finding=H.mouth||"Mundraum frei."; reply.evaluation="A: Mundraum."; touchStep("A"); return ok(reply); }
-    if (/absaugen/.test(low)) { reply.accepted=true; reply.evaluation="Abgesaugt."; reply.finding="Atemweg frei."; touchStep("A"); return ok(reply); }
-    if (/lunge|auskult/.test(low)) { reply.accepted=true; reply.finding=H.lung||"Vesikuläratmen bds."; reply.evaluation="B: Auskultation."; touchStep("B"); return ok(reply); }
-    
-    // pDMS (FIX: Echte Daten liefern)
-    if (/pdms/.test(low)) {
-        reply.accepted = true;
-        
-        let pDMS_text = "DMS an allen Extremitäten intakt (x4).";
-        
-        // Wenn Trauma oder Schlaganfall, dann spezifischer Befund
-        if (state.specialty === 'trauma') {
-            const loc = H.injury_map?.[0] || "Arm/Bein";
-            // Einfache Logik: Schmerz/Einschränkung bei Trauma
-            pDMS_text = `DMS eingeschränkt an ${loc} (schmerzbedingt). Durchblutung erhalten (Rekap < 2s). Sensibilität vorhanden.`;
-        } else if (state.specialty === 'neurologisch' && H.befast && !H.befast.includes('ohne Auffälligkeiten')) {
-            pDMS_text = "Motorische Schwäche einseitig erkennbar. Sensibilität reduziert.";
-        }
-
-        reply.finding = pDMS_text;
-        reply.evaluation = "pDMS geprüft.";
-        touchStep("C"); // oder E
+    // X - Exsanguination
+    // WICHTIG: "Blutungscheck" ODER "X unauffällig" triggert Phase X
+    if (low.includes('blutung') || low.includes('x unauffällig')) {
+        reply.accepted = true; 
+        // Holen der Info aus hidden.bleeding_info
+        reply.finding = H.bleeding_info || "Keine kritische Blutung sichtbar.";
+        reply.evaluation = "X: Blutungscheck durchgeführt.";
+        touchStep("X"); // <--- HIER WIRD DAS KREUZCHEN GESETZT
         return ok(reply);
     }
-
-    // E - Bodycheck
-    if (/bodycheck/.test(low)) {
-        reply.accepted = true;
-        let info = H.skin || "Haut rosig/warm.";
-        if(H.injuries && H.injuries.length > 0) info += " Verletzungen: " + H.injuries.join(', ');
-        reply.finding = info;
-        reply.evaluation = "E: Bodycheck.";
-        touchStep("E"); return ok(reply);
+    if (/tourniquet|abbinden/.test(low)) {
+        reply.accepted = true; reply.evaluation = "Tourniquet angelegt (Zeit notiert)."; 
+        reply.finding = "Blutung steht."; touchStep("X"); return ok(reply);
+    }
+    if (/druckverband/.test(low)) {
+        reply.accepted = true; reply.evaluation = "Druckverband angelegt."; 
+        reply.finding = "Blutung kontrolliert."; touchStep("X"); return ok(reply);
     }
 
-    // --- 2. MAẞNAHMEN ---
-    
-    // O2 GABE (FIX: Regex korrigiert, damit er nicht die "2" aus "O2" nimmt)
+    // A - Airway
+    if (/mund/.test(low) || /rachen/.test(low)) {
+        reply.accepted = true; 
+        reply.finding = H.mouth || "Mundraum frei.";
+        reply.evaluation = "A: Mundraum inspiziert.";
+        touchStep("A"); return ok(reply);
+    }
+    if (/absaugen/.test(low)) {
+        reply.accepted = true; reply.evaluation = "Atemwege abgesaugt."; 
+        reply.finding = "Weg wieder frei."; touchStep("A"); return ok(reply);
+    }
+    if (/guedel|wendel|esmarch/.test(low)) {
+        reply.accepted = true; reply.evaluation = "Atemwegshilfe eingelegt/angewendet."; 
+        reply.finding = "Atemweg gesichert."; touchStep("A"); return ok(reply);
+    }
+
+    // B - Breathing
+    if (/auskultieren|lunge|abhören/.test(low)) {
+        reply.accepted = true; 
+        reply.finding = H.lung || "Vesikuläratmen bds., keine RG.";
+        reply.evaluation = "B: Lunge auskultiert.";
+        touchStep("B"); return ok(reply);
+    }
     if (ua.includes('O2-Gabe')) {
-      // Sucht nach einer Zahl, die VOR "l/min" steht
-      const match = ua.match(/mit\s+(\d+)\s*l\/min/); 
-      const flow = match ? parseInt(match[1]) : 2; // Fallback 2, falls Parsing scheitert
-      
+      const flow = parseInt(ua.match(/\d+/)?.[0] || 0);
       const cur = parseFloat(String(state.vitals.SpO2 || 96).match(/\d+/)?.[0]);
-      // Simulation: Sättigung steigt
       updVitals({ SpO2: Math.min(100, cur + (flow * 1.5)) });
-      
-      reply.accepted = true; 
-      reply.evaluation = `O2-Gabe: ${flow} l/min.`; 
-      reply.finding = "Sättigungstrend steigend."; 
-      touchStep("B"); 
-      return ok(reply);
+      reply.accepted = true; reply.evaluation = `O2: ${flow}l/min`; reply.finding = "SpO2 steigt."; touchStep("B"); return ok(reply);
+    }
+    if (/beatmung|beutel/.test(low)) {
+        reply.accepted = true; reply.evaluation = "Beatmung gestartet."; 
+        reply.finding = "Thorax hebt sich."; touchStep("B"); return ok(reply);
     }
 
-    if (/zugang/.test(low)) { state.measurements.iv_access=true; reply.accepted=true; reply.evaluation="i.V. Zugang liegt."; touchStep("C"); return ok(reply); }
+    // C - Circulation
+    if (/zugang/.test(low)) { state.measurements.iv_access = true; reply.accepted=true; reply.evaluation="i.V. Zugang liegt."; touchStep("C"); return ok(reply); }
     if (/volumen/.test(low)) { 
         if(!state.measurements.iv_access) { reply.accepted=false; reply.finding="Kein Zugang!"; return ok(reply); }
-        reply.accepted=true; reply.evaluation="500ml Vollelektrolytlösung laufen."; touchStep("C"); return ok(reply); 
+        reply.accepted=true; reply.evaluation="Infusion läuft."; touchStep("C"); return ok(reply); 
     }
-    if (/immobilisation/.test(low)) { reply.accepted=true; reply.evaluation="Immobilisation erfolgt."; reply.finding="Schmerzreduktion."; touchStep("E"); return ok(reply); }
-    if (/lagerung/.test(low)) { reply.accepted=true; reply.evaluation="Patient gelagert."; touchStep("E"); return ok(reply); }
+    if (/notarzt/.test(low)) { reply.accepted=true; reply.evaluation="NA alarmiert."; touchStep("C"); return ok(reply); }
+    if (/reanimation|cpr|drücken/.test(low)) { reply.accepted=true; reply.evaluation="CPR gestartet (30:2)."; touchStep("C"); return ok(reply); }
 
-    // --- 3. VITALWERTE ---
-    if (/spo2/.test(low)) { state.measurements.vitals.SpO2=true; state.measurements.vitals.Puls=true; updVitals({ SpO2: state.vitals.SpO2, Puls: state.vitals.Puls }); reply.accepted=true; reply.evaluation="Sensor am Finger."; touchStep("B"); return ok(reply); }
-    if (/ekg/.test(low)) { state.measurements.vitals.Puls=true; updVitals({ Puls: state.vitals.Puls }); reply.accepted=true; reply.finding=H.ekg12||"Sinus"; reply.evaluation="12-Kanal EKG."; touchStep("C"); return ok(reply); }
-    if (/rr|blutdruck/.test(low)) { state.measurements.vitals.RR=true; updVitals({ RR: state.vitals.RR }); reply.accepted=true; reply.evaluation="RR gemessen."; touchStep("C"); return ok(reply); }
-    if (/puls/.test(low)) { state.measurements.vitals.Puls=true; updVitals({ Puls: state.vitals.Puls }); reply.accepted=true; reply.evaluation="Puls getastet."; touchStep("C"); return ok(reply); }
-    if (/gcs/.test(low)) { state.measurements.vitals.GCS=true; updVitals({ GCS: state.vitals.GCS }); reply.accepted=true; reply.evaluation="GCS geprüft."; touchStep("D"); return ok(reply); }
-    if (/bz/.test(low)) { state.measurements.vitals.BZ=true; updVitals({ BZ: state.vitals.BZ }); reply.accepted=true; reply.evaluation="BZ gemessen."; touchStep("D"); return ok(reply); }
-    if (/temp/.test(low)) { state.measurements.vitals.Temp=true; updVitals({ Temp: state.vitals.Temp }); reply.accepted=true; reply.evaluation="Temp gemessen."; touchStep("E"); return ok(reply); }
-    if (/af/.test(low)) { state.measurements.vitals.AF=true; updVitals({ AF: state.vitals.AF }); reply.accepted=true; reply.evaluation="AF gezählt."; touchStep("B"); return ok(reply); }
-
-    // --- 4. SCHEMATA (FIX: Formatierung und Protokollierung) ---
-    
-    // 4S
-    if (/4s info/.test(low)) {
+    // D - Disability
+    if (/pupillen/.test(low)) {
         reply.accepted = true;
-        const s = state.scene_4s || {};
-        reply.finding = `<b>Sicherheit:</b> ${text(s.sicherheit)}<br><b>Szene:</b> ${text(s.szene)}<br><b>Support:</b> ${text(s.support_empfehlung)}`;
-        return ok(reply);
-    }
-    if (/4s doku/.test(low)) { 
-        reply.accepted = true; 
-        const s = state.scene_4s || {};
-        // Wir schreiben den Inhalt auch bei "Doku" in die evaluation/finding, damit es im Chat erscheint
-        reply.evaluation = "4S dokumentiert.";
-        reply.finding = `Sicherheit: ${text(s.sicherheit)} | Szene: ${text(s.szene)}`;
-        return ok(reply); 
-    }
-
-    // SAMPLER (Kompakter)
-    if (/sampler info/.test(low)) {
-      reply.accepted = true;
-      const s = state.anamnesis?.SAMPLER || {};
-      // FIX: Kompaktere Darstellung ohne viele Absätze
-      reply.finding = `
-      <b>S:</b> ${text(s.S)}<br>
-      <b>A:</b> ${text(s.A)}<br>
-      <b>M:</b> ${text(s.M)}<br>
-      <b>P:</b> ${text(s.P)}<br>
-      <b>L:</b> ${text(s.L)}<br>
-      <b>E:</b> ${text(s.E)}<br>
-      <b>R:</b> ${text(s.R)}`;
-      return ok(reply);
-    }
-    if (/sampler doku/.test(low)) { 
-        reply.accepted=true; 
-        reply.evaluation="SAMPLER dokumentiert."; 
-        const s = state.anamnesis?.SAMPLER || {};
-        reply.finding = `S: ${text(s.S)} | A: ${text(s.A)} | M: ${text(s.M)}`; // Short preview in chat
-        return ok(reply); 
-    }
-
-    // BEFAST
-    if (/befast info/.test(low)) {
-        reply.accepted = true;
-        reply.finding = `<b>Neurologischer Check:</b><br>${H.befast || "Keine Auffälligkeiten."}`;
+        reply.finding = H.pupils || "Isokor, mittelweit, lichtreagibel."; // <--- HIER WAR DAS PROBLEM
+        reply.evaluation = "D: Pupillenkontrolle.";
         touchStep("D"); return ok(reply);
     }
-    if (/befast doku/.test(low)) {
-        reply.accepted = true;
-        reply.evaluation = "BE-FAST dokumentiert.";
-        reply.finding = H.befast || "o.B.";
-        return ok(reply);
-    }
-    
-    // NRS
-    if (/schmerz info|nrs/.test(low)) {
-        const p = H.pain || {};
-        reply.finding = `<b>Schmerz:</b> NRS ${p.nrs || 0}/10<br>Ort: ${p.ort || '-'}`;
-        reply.accepted = true; return ok(reply);
-    }
+    if (/gcs/.test(low)) { state.measurements.vitals.GCS = true; updVitals({ GCS: state.vitals.GCS || 15 }); reply.accepted=true; reply.evaluation="GCS erhoben."; touchStep("D"); return ok(reply); }
+    if (/bz/.test(low)) { state.measurements.vitals.BZ = true; updVitals({BZ: state.vitals.BZ || 100}); reply.accepted=true; reply.evaluation="BZ gemessen."; touchStep("D"); return ok(reply); }
 
-    // --- 5. ORGA ---
-    if (ua.includes("Verdachtsdiagnose")) { state.measurements.diagnosis = ua.split(":")[1]; reply.accepted = true; reply.evaluation="Verdacht notiert."; return ok(reply); }
-    if (ua.includes("Übergabe:")) { state.measurements.handover_done = true; reply.accepted = true; reply.evaluation="Übergabe erfolgt."; return ok(reply); }
+    // E - Exposure / Other
+    if (/bodycheck/.test(low)) { 
+        reply.accepted=true; 
+        let info = H.skin || "Haut unauffällig.";
+        if(H.injuries && H.injuries.length > 0) info += " Verletzungen: " + H.injuries.join(', ');
+        reply.finding = info; 
+        reply.evaluation="E: Bodycheck durchgeführt."; touchStep("E"); return ok(reply); 
+    }
+    if (/immobilisation|schiene|stifneck/.test(low)) { 
+        reply.accepted=true; reply.evaluation="Immobilisation durchgeführt."; 
+        reply.finding = "Patient stabilisiert, Schmerz etwas gebessert."; touchStep("E"); return ok(reply); 
+    }
+    if (/wärme|decke/.test(low)) { reply.accepted=true; reply.evaluation="Wärmeerhalt (Decke)."; touchStep("E"); return ok(reply); }
+    if (/lagerung|oberkörper/.test(low)) { reply.accepted=true; reply.evaluation="Patient gelagert."; touchStep("E"); return ok(reply); }
+
+
+    // --- 2. VITALWERTE (Messen & Anzeigen) ---
+    if (/spo2/.test(low)) { 
+        state.measurements.vitals.SpO2 = true; state.measurements.vitals.Puls = true; 
+        updVitals({ SpO2: state.vitals.SpO2 || baseVitals.SpO2, Puls: state.vitals.Puls || baseVitals.Puls });
+        reply.accepted = true; reply.evaluation = "Sensor angelegt."; touchStep("B"); return ok(reply); 
+    }
+    if (/ekg/.test(low)) { 
+        state.measurements.vitals.Puls = true;
+        updVitals({ Puls: state.vitals.Puls || baseVitals.Puls });
+        reply.accepted = true; reply.finding = H.ekg12 || "Sinus"; reply.evaluation = "EKG geschrieben."; touchStep("C"); return ok(reply); 
+    }
+    if (/rr|blutdruck/.test(low)) { 
+        state.measurements.vitals.RR = true; 
+        updVitals({ RR: state.vitals.RR || baseVitals.RR }); 
+        reply.accepted=true; reply.evaluation="RR gemessen."; touchStep("C"); return ok(reply); 
+    }
+    if (/puls/.test(low)) { state.measurements.vitals.Puls = true; updVitals({Puls: state.vitals.Puls || baseVitals.Puls}); reply.accepted=true; reply.evaluation="Puls getastet."; touchStep("C"); return ok(reply); }
+    if (/temp/.test(low)) { state.measurements.vitals.Temp = true; updVitals({Temp: state.vitals.Temp || 36.5}); reply.accepted=true; reply.evaluation="Temp gemessen."; touchStep("E"); return ok(reply); }
+    if (/af/.test(low)) { state.measurements.vitals.AF = true; updVitals({AF: state.vitals.AF || 14}); reply.accepted=true; reply.evaluation="AF gezählt."; touchStep("B"); return ok(reply); }
+
+
+    // --- 3. SCHEMATA ---
+    if (/sampler info/.test(low)) {
+      const s = state.anamnesis?.SAMPLER || {};
+      reply.finding = `S: ${text(s.S)}\nA: ${text(s.A)}\nM: ${text(s.M)}\nP: ${text(s.P)}\nL: ${text(s.L)}\nE: ${text(s.E)}\nR: ${text(s.R)}`;
+      reply.accepted = true; return ok(reply);
+    }
+    if (/befast info/.test(low)) { reply.finding = H.befast || "o.B."; reply.accepted = true; return ok(reply); }
+    if (/schmerz info/.test(low)) { const p = H.pain || {}; reply.finding = `NRS ${p.nrs||0}`; reply.accepted=true; return ok(reply); }
+    if (/4s info/.test(low)) { const s = state.scene_4s || {}; reply.finding = `Sicherheit: ${s.sicherheit}`; reply.accepted=true; return ok(reply); }
+    
+    // Dokumentation
+    if (/doku/.test(low)) { reply.accepted=true; reply.evaluation="Dokumentiert."; return ok(reply); }
+
+
+    // --- 4. ORGANISATION (Diagnose, Übergabe, Debriefing) ---
+    if (ua.includes("Verdachtsdiagnose")) { state.measurements.diagnosis = ua.split(":")[1]; reply.accepted = true; reply.evaluation="Diagnose notiert."; return ok(reply); }
+    
+    // FIX ÜBERGABE:
+    // Der String im Frontend heißt "Übergabe: SINNHAFT: ..." -> Wir suchen nach "übergabe"
+    if (low.includes("übergabe") && !low.includes("fehlt")) { 
+        state.measurements.handover_done = true; 
+        reply.accepted = true; 
+        reply.evaluation="Übergabe an Klinik/Arzt erfolgt."; 
+        return ok(reply); 
+    }
 
     if (/debrief|fall beenden/.test(low)) {
       reply.done = true;
@@ -221,23 +223,24 @@ exports.handler = async (event) => {
           status = "⚠️ Struktur lückenhaft";
           summary += `<br>❌ <b>Fehlende Phasen:</b> ${missingSteps.join(', ')}`;
       } else {
-          summary += `<br>✅ <b>X-ABCDE:</b> Vollständig.`;
+          summary += `<br>✅ <b>X-ABCDE:</b> Vollständig abgearbeitet.`;
       }
 
       summary += `<br><br><b>Diagnose & Maßnahmen:</b>`;
       if (state.measurements.diagnosis) {
           summary += `<br>${isDxCorrect ? '✅' : '⚠️'} Diagnose: "${state.measurements.diagnosis}"`;
-          if(!isDxCorrect && correctKeys.length) summary += ` (Erwartet: ${correctKeys.join(' / ')})`;
-      } else summary += `<br>❌ Keine Diagnose.`;
+      } else {
+          summary += `<br>❌ Keine Diagnose gestellt.`;
+      }
 
-      if (state.measurements.handover_done) summary += `<br>✅ Übergabe erfolgt.`;
-      else summary += `<br>❌ Übergabe fehlte.`;
+      if (state.measurements.handover_done) summary += `<br>✅ Übergabe durchgeführt.`;
+      else summary += `<br>❌ Keine Übergabe an den Arzt.`;
 
       reply.debrief = `<b>${status}</b><br>${summary}`;
       return ok(reply);
     }
 
-    // Fallback
+    // --- FALLBACK ---
     reply.accepted = true; reply.evaluation = "Maßnahme registriert.";
     return ok(reply);
 
