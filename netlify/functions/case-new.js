@@ -379,8 +379,23 @@ trauma: () => ({
     };
 
     
-    // ---------- Fall auswählen ----------
-    const createCase = cases[specialty] || cases["internistisch"];
+    // ---------- Fall auswählen (MIT ZUFALLS-LOGIK) ----------
+    
+    // 1. Hole den Eintrag für die gewählte Fachrichtung (oder Fallback auf internistisch)
+    const selection = cases[specialty] || cases["internistisch"];
+    let createCase;
+
+    // 2. Prüfen: Ist es eine Liste (Array) von Fällen?
+    if (Array.isArray(selection)) {
+        // JA: Wähle zufällig einen aus
+        const randomIndex = Math.floor(Math.random() * selection.length);
+        createCase = selection[randomIndex];
+    } else {
+        // NEIN: Es ist noch ein einzelner Fall (alte Logik für trauma/neuro etc.)
+        createCase = selection;
+    }
+
+    // 3. Fall generieren (Funktion ausführen)
     let c = createCase();
 
     // ---------- Defaults & Fallbacks ----------
@@ -392,6 +407,10 @@ trauma: () => ({
     
     // Safety Fallbacks
     c.vitals = c.vitals || { RR: "120/80", SpO2: 96, AF: 16, Puls: 80, BZ: 100, Temp: 36.5, GCS: 15 };
+    c.measurements = c.measurements || {}; // Wichtig für Initialisierung
+    
+    // Hidden Fallbacks
+    c.hidden = c.hidden || {};
     c.hidden.vitals_baseline = c.hidden.vitals_baseline || { ...c.vitals };
     c.hidden.injuries = c.hidden.injuries || [];
     c.hidden.diagnosis_keys = c.hidden.diagnosis_keys || [];
@@ -402,6 +421,7 @@ trauma: () => ({
       body: JSON.stringify(c)
     };
   } catch (err) {
+    console.error(err); // Fehler im Netlify Log anzeigen
     return {
       statusCode: 500,
       headers,
