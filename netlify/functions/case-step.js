@@ -16,7 +16,8 @@ exports.handler = async (event) => {
     state.steps_done = Array.isArray(state.steps_done) ? state.steps_done : [];
     state.history    = Array.isArray(state.history) ? state.history : [];
     state.score      = state.score || 0;
-    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false, handover_done: false };
+    // Hinzugefügt: o2_given Flag zur Verfolgung der O2-Gabe
+    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false, handover_done: false, o2_given: false };
     
     // History
     if (ua && !low.includes('debriefing')) {
@@ -35,8 +36,11 @@ exports.handler = async (event) => {
         if (state.measurements.vitals[k]) {
             if (k === 'RR') { reply.updated_vitals[k] = obj[k]; } 
             else {
-                const oldVal = parseFloat(String(state.vitals[k]).match(/\d+/)?.[0] || 0);
+                // Konvertierung des aktuellen Werts
+                const currentValStr = String(state.vitals[k] || baseVitals[k]).match(/\d+/)?.[0] || 0;
+                const oldVal = parseFloat(currentValStr);
                 const newVal = parseFloat(String(obj[k]).match(/\d+/)?.[0] || 0);
+
                 let arrow = "";
                 if (newVal > oldVal) arrow = " ⬆";
                 if (newVal < oldVal) arrow = " ⬇";
@@ -55,16 +59,28 @@ exports.handler = async (event) => {
     };
     function ok(body) { return { statusCode: 200, headers, body: JSON.stringify(body) }; }
 
-    // --- 0. SYSTEM CHECK ---
+    // --- 0. SYSTEM CHECK (FIX: Verbesserte Verschlechterung) ---
     if (ua.includes("System-Check")) {
-        const hasO2 = state.history.some(h => h && h.action && (h.action.includes('O2-Gabe')));
+        const hasO2 = state.measurements.o2_given; 
         const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0]);
         reply.accepted = true; 
+        
+        // Verschlechterung, wenn SpO2 niedrig ist UND noch kein O2 gegeben wurde
         if (curSpO2 < 93 && !hasO2) {
+            // Reduziere SpO2 weiter
             const newSpO2 = Math.max(70, curSpO2 - 2);
             updVitals({ SpO2: newSpO2 });
-            if (state.measurements.vitals?.SpO2) reply.finding = `⚠️ SpO₂ fällt auf ${newSpO2}%`;
+            // Zeige Warnung nur, wenn der Wert gemessen wird
+            if (state.measurements.vitals?.SpO2) reply.finding = `⚠️ SpO₂ fällt auf ${newSpO2}% (dringender Handlungsbedarf!)`;
         } 
+        // ACHTUNG: Auch wenn O2 gegeben wurde, kann sich der Zustand verschlechtern (z.B. schweres Asthma)
+        else if (hasO2 && curSpO2 < 88) {
+            // Wenn der Wert niedrig bleibt, sinkt er trotzdem weiter, aber langsamer
+            const newSpO2 = Math.max(84, curSpO2 - 1); 
+            updVitals({ SpO2: newSpO2 });
+            if (state.measurements.vitals?.SpO2) reply.finding = `⚠️ SpO₂ bleibt kritisch bei ${newSpO2}% trotz O₂-Gabe. Notarzt zwingend erforderlich!`;
+        }
+        
         return ok(reply);
     }
 
@@ -82,7 +98,7 @@ exports.handler = async (event) => {
 
       const histStr = state.history.map(h => h && h.action ? h.action.toLowerCase() : "").join(" ");
       const hasImmo = histStr.includes("immobilisation");
-      const hasO2 = histStr.includes("o2-gabe") || histStr.includes("sauerstoff");
+      const hasO2 = state.measurements.o2_given; // Verwende das neue Flag
       const hasHandover = state.measurements.handover_done;
 
       let status = missingSteps.length ? "⚠️ Struktur lückenhaft" : "✅ Bestanden";
@@ -157,6 +173,24 @@ exports.handler = async (event) => {
         reply.accepted = true; 
         const s = state.scene_4s || {};
         reply.finding = `<b>4S-Details:</b><br>Sicherheit: ${text(s.sicherheit)}<br>Szene: ${text(s.szene)}<br>Sichtung: ${text(s.sichtung_personen)}<br>Support: ${text(s.support_empfehlung)}`;
+        return ok(reply);
+    }
+
+    // O2-Gabe Logik (FIX: Auswirkung auf SpO2)
+    if (low.includes('o2-gabe')) {
+        state.measurements.o2_given = true; 
+        reply.accepted = true; 
+        reply.evaluation = `Sauerstoffgabe erfolgt: ${ua}`; 
+        touchStep("B");
+
+        const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0] || 85);
+        
+        if (curSpO2 < 95) {
+            // Erhöht SpO2 um 5% (simulierte Wirkung)
+            const newSpO2 = Math.min(98, curSpO2 + 5); 
+            updVitals({ SpO2: newSpO2 });
+            reply.finding = `✅ SpO₂ steigt auf ${newSpO2}%`;
+        }
         return ok(reply);
     }
     
