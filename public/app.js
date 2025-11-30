@@ -396,8 +396,8 @@ async function speak(text) {
         .replace(/l\/min/g, 'Liter')
         .replace(/°C/g, 'Grad');
 
-    // LOGIK: Stimme wählen basierend auf Patient
-    let selectedVoice = "onyx"; 
+   // LOGIK: Stimme wählen basierend auf Patient
+    let selectedVoice = "echo"; // "Echo" ist wärmer und emotionaler als Onyx
 
     if (caseState && caseState.story) {
         const storyLower = caseState.story.toLowerCase();
@@ -405,12 +405,13 @@ async function speak(text) {
 
         // Kind
         if (specialty === 'paediatrisch' || storyLower.includes('kind') || storyLower.includes('säugling') || storyLower.includes('junge') || storyLower.includes('mädchen')) {
-            selectedVoice = "alloy"; 
+            selectedVoice = "alloy"; // Alloy klingt am jüngsten
         }
         // Frau
         else if (storyLower.includes('frau') || storyLower.includes('patientin') || storyLower.includes('sie ')) {
-            selectedVoice = "nova"; 
+            selectedVoice = "nova"; // Nova ist sehr natürlich weiblich
         }
+        // Falls du Fable testen willst (britischer/erzählerischer), schreibe hier "fable" statt "echo"
     }
 
     const btn = document.getElementById('btnSound');

@@ -49,7 +49,7 @@ exports.handler = async (event) => {
 
         // Wir nutzen das Modell "tts-1" (High Speed) statt "tts-1-hd" (High Quality, aber langsam)
         req.write(JSON.stringify({
-            model: "tts-1",
+            model: "tts-1-hd",
             input: text,
             voice: selectedVoice, 
             speed: 1.05 // Ein Hauch schneller (5%) wirkt oft natürlicher und spart Zeit
