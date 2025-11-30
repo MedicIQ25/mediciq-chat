@@ -268,6 +268,250 @@ exports.handler = async (event) => {
             injuries: []
           }
         }),
+        // ---------------------------------------------------------
+        // FALL 6: ANAPHYLAXIE (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_ana_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Allergische Reaktion'. Ort: Gartenfest. Tim (24) wurde beim Grillen gestochen. Er hat jetzt eine kloßige Stimme und rote Flecken am Hals.",
+          intro_dialogue: "Ich hab... so einen Kloß im Hals... *schluck*... und alles juckt!",
+          target_outcome: "Allergen entfernen (Stachel?), O2, Kühlen, NA sofort (Atemwege bedroht!), Überwachung.",
+          vitals: { RR: "100/60", SpO2: 93, AF: 22, Puls: 115, BZ: 100, Temp: 37.0, GCS: 15 },
+          scene_4s: {
+            sicherheit: "Wespen noch in der Nähe? Eigenschutz.",
+            szene: "Patient sitzt auf Gartenstuhl, kratzt sich.",
+            sichtung_personen: "1 Patient.",
+            support_empfehlung: "NA zwingend (beginnender anaphylaktischer Schock)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Juckreiz, Globusgefühl (Kloß), Atemnot beginnend",
+              A: "Wespengift (bekannt)",
+              M: "Hat sein Notfallset nicht dabei",
+              P: "Allergie",
+              L: "Bratwurst",
+              E: "Stich in den Unterarm vor 5 min",
+              R: "-"
+            },
+            OPQRST: { O: "Sofort nach Stich", P: "-", Q: "Juckend, schwellend", R: "Ganzer Körper (Exanthem)", S: "Bedrohlich", T: "Schnell fortschreitend" }
+          },
+          hidden: {
+            diagnosis_keys: ["Anaphylaxie", "Allergie", "Schock"],
+            // X
+            bleeding_info: "Keine Blutung, aber starke Rötung (Exanthem).",
+            // A - Kritisch hier!
+            mouth: "Zunge leicht geschwollen, Uvulaödem sichtbar (Atemweg gefährdet!).",
+            // B
+            lung: "Leichtes Giemen (beginnende Obstruktion), Stridor über Hals hörbar.",
+            // C
+            skin: "Urtikaria (Quaddeln) am ganzen Stamm, Rötung, warm.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, prompt.",
+            befast: "Unauffällig.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 3, ort: "Einstichstelle Arm", charakter: "Brennend/Juckend" },
+            injuries: [] // Keine Verletzungen, nur der Stich
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 7: GASTROINTESTINALE BLUTUNG (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_gi_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Erbrechen'. Ort: Badezimmer. Herr Schmidt (55) kniet vor der Toilette. In der Schüssel ist kaffeesatzartiges Erbrechen.",
+          intro_dialogue: "Mir ist so schlecht... *würg*... und mir wird schwarz vor Augen, wenn ich aufstehe.",
+          target_outcome: "Flachlagerung, Vitalwerte, Zugang vorbereiten, NA (Volumenmangel/Schockgefahr).",
+          vitals: { RR: "90/50", SpO2: 96, AF: 20, Puls: 118, BZ: 105, Temp: 36.4, GCS: 14 },
+          scene_4s: {
+            sicherheit: "Infektionsgefahr (Blut/Erbrochenes) -> Handschuhe!",
+            szene: "Blutiges/Schwarzes Erbrechen in Toilette. Streng fauliger Geruch.",
+            sichtung_personen: "1 Patient.",
+            support_empfehlung: "NA erforderlich (Kreislaufinstabilität, GI-Blutung)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Hämatemesis (Kaffeesatz), Schwindel, Schwäche",
+              A: "-",
+              M: "Ibuprofen 600 (wegen Rückenschmerzen, nimmt er oft)",
+              P: "Gastritis bekannt",
+              L: "Gestern Abend",
+              E: "Übelkeit seit Stunden",
+              R: "NSAR-Abusus, Alkohol"
+            },
+            OPQRST: { O: "Heute morgen", P: "Aufstehen (Schwindel)", Q: "Übelkeit", R: "Oberbauch", S: "Schwindel stark", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["GI-Blutung", "Magenblutung", "Ulcus"],
+            // X
+            bleeding_info: "Keine äußere Spritzblutung, aber Hämatemesis (Erbrechen von Blut).",
+            // A
+            mouth: "Reste von kaffeesatzartigem Erbrechen im Mundwinkel.",
+            // B
+            lung: "Frei.",
+            // C
+            skin: "Blass, kaltschweißig, verlängerte Rekap-Zeit (> 2 Sek).",
+            abdomen: "Druckschmerz im Epigastrium (Oberbauch). Abwehrspannung weich.",
+            // D
+            pupils: "Isokor, prompt.",
+            befast: "Unauffällig.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie (Volumenmangel).",
+            pain: { nrs: 4, ort: "Oberbauch", charakter: "Drückend/Brennend" },
+            injuries: []
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 8: HYPERGLYKÄMIE / KETOAZIDOSE (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_hyper_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Übelkeit/Erbrechen'. Ort: Jugendzimmer. Lisa (16) liegt im Bett, wirkt schläfrig. Es riecht komisch im Zimmer (süßlich/Obstatom).",
+          intro_dialogue: "Ich hab so Durst... *stöhn*... und Bauchweh... muss dauernd aufs Klo...",
+          target_outcome: "BZ messen (!), Flüssigkeit vorbereiten, NA (Ketoazidose), Überwachung.",
+          vitals: { RR: "105/70", SpO2: 98, AF: 28, Puls: 112, BZ: 450, Temp: 37.2, GCS: 13 },
+          scene_4s: {
+            sicherheit: "-",
+            szene: "Acetongeruch (Nagellackentferner/faulige Äpfel) in der Luft.",
+            sichtung_personen: "1 Patientin, Eltern besorgt.",
+            support_empfehlung: "NA (diabetisches Koma droht)."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Polydipsie (Durst), Polyurie (viel Urin), Bauchschmerzen",
+              A: "-",
+              M: "Insulin (Pumpe - Schlauch abgeknickt?)",
+              P: "Diabetes Typ 1",
+              L: "Wasser",
+              E: "Pumpe hat wohl Alarm gegeben, wurde ignoriert",
+              R: "Infekt als Auslöser?"
+            },
+            OPQRST: { O: "Seit gestern schlechter", P: "-", Q: "Bauchweh diffus", R: "-", S: "-", T: "Verschlechterung" }
+          },
+          hidden: {
+            diagnosis_keys: ["Hyperglykämie", "Ketoazidose", "Diabetes"],
+            // X
+            bleeding_info: "Keine Blutung.",
+            // A
+            mouth: "Mundhöhle sehr trocken, Acetongeruch.",
+            // B
+            lung: "Tiefe, angestrengte Atmung (Kussmaul-Atmung) zum Abatmen der Säure.",
+            // C
+            skin: "Trocken, warm, stehende Hautfalten (Exsikkose).",
+            abdomen: "Harter Bauch (Pseudoperitonitis durch Azidose).",
+            // D
+            pupils: "Isokor, träge.",
+            befast: "Verwaschene Sprache durch Somnolenz/trockenen Mund.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinustachykardie.",
+            pain: { nrs: 5, ort: "Bauch", charakter: "Diffus" },
+            injuries: []
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 9: SYNKOPE / EXSIKKOSE (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_exsikkose_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Hilflose Person'. Ort: Überhitzte Dachgeschosswohnung im Sommer. Frau Krause (82) wurde von der Tochter am Boden gefunden, ist jetzt wieder ansprechbar.",
+          intro_dialogue: "Wo bin ich? Ich wollte nur zum Fenster... dann ging das Licht aus.",
+          target_outcome: "Vitalwerte, Flüssigkeit (Trinken lassen oder Zugang), kühle Umgebung, Sturz abklären.",
+          vitals: { RR: "95/60", SpO2: 94, AF: 18, Puls: 98, BZ: 110, Temp: 37.8, GCS: 14 },
+          scene_4s: {
+            sicherheit: "Wohnung extrem warm.",
+            szene: "Patientin liegt am Boden, keine offensichtlichen Frakturen.",
+            sichtung_personen: "1 Patientin.",
+            support_empfehlung: "KTW ausreichend, wenn keine Verletzung. NA nur bei Schock."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Schwindel, Schwäche, trockener Mund",
+              A: "-",
+              M: "Wassertabletten (Diuretika), Betablocker",
+              P: "Herzschwäche",
+              L: "Frühstück kaum gegessen, wenig getrunken",
+              E: "Hitzeperiode seit 3 Tagen",
+              R: "Alter, Hitze, Diuretika"
+            },
+            OPQRST: { O: "Plötzlich schwarz vor Augen", P: "Aufstehen", Q: "-", R: "-", S: "-", T: "Akut" }
+          },
+          hidden: {
+            diagnosis_keys: ["Exsikkose", "Synkope", "Austrocknung", "Kollaps"],
+            // X
+            bleeding_info: "Minimale Blutung am Hinterkopf (Platzwunde).",
+            // A
+            mouth: "Zunge trocken wie Borke, kaum Speichel.",
+            // B
+            lung: "Frei.",
+            // C
+            skin: "Stehende Hautfalte am Handrücken, warm.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, prompt.",
+            befast: "Unauffällig.",
+            ekg_pattern: "sinus",
+            ekg12: "Sinusrhythmus.",
+            pain: { nrs: 2, ort: "Hinterkopf", charakter: "Pochern" },
+            injuries: ["Kleine Platzwunde Hinterkopf"]
+          }
+        }),
+
+        // ---------------------------------------------------------
+        // FALL 10: ALKOHOLINTOXIKATION (Vollständig)
+        // ---------------------------------------------------------
+        () => ({
+          id: "rs_c2_01",
+          specialty: "internistisch",
+          story: "Einsatzstichwort: 'Nicht ansprechbar'. Ort: Parkbank. Passanten haben einen Mann (ca. 45) gefunden, der nicht auf Ansprache reagiert. Neben ihm liegen leere Flaschen.",
+          intro_dialogue: "*Lallt unverständlich*... lass misch... *schläft ein*",
+          target_outcome: "Stabile Seitenlage, BZ-Ausschluss (!), Wärmeerhalt, Überwachung, Eigenschutz.",
+          vitals: { RR: "110/70", SpO2: 95, AF: 12, Puls: 80, BZ: 85, Temp: 35.8, GCS: 10 },
+          scene_4s: {
+            sicherheit: "Keine Gewalt, aber Flaschen (Scherben?).",
+            szene: "Starker Foetor ex ore (Alkoholgeruch).",
+            sichtung_personen: "1 Patient.",
+            support_empfehlung: "RTW ausreichend, wenn Atemwege sicher. NA bei GCS < 8 oder Trauma."
+          },
+          anamnesis: {
+            SAMPLER: {
+              S: "Somnolenz, Lallen",
+              A: "Unbekannt",
+              M: "Unbekannt",
+              P: "Unbekannt",
+              L: "Alkohol",
+              E: "Alkoholkonsum",
+              R: "Aspirationsgefahr"
+            },
+            OPQRST: { O: "-", P: "-", Q: "-", R: "-", S: "-", T: "-" }
+          },
+          hidden: {
+            diagnosis_keys: ["Intoxikation", "C2", "Alkohol", "Vollrausch"],
+            // X
+            bleeding_info: "Keine Blutung.",
+            // A
+            mouth: "Frei, aber Geruch nach Alkohol. Zunge fällt leicht zurück (Schnarchen?).",
+            // B
+            lung: "Frei, keine Aspiration hörbar.",
+            // C
+            skin: "Kühl, rosig.",
+            abdomen: "Weich.",
+            // D
+            pupils: "Isokor, leicht verzögert.",
+            befast: "Nicht beurteilbar (Somnolenz).",
+            ekg_pattern: "sinus",
+            ekg12: "Sinusrhythmus.",
+            pain: { nrs: 0, ort: "-", charakter: "-" },
+            injuries: []
+          }
+        })
       ],
 
       neurologisch: () => ({
