@@ -1,6 +1,6 @@
 /**
  * Netlify Function: case-step
- * (Fix: Robust Measurements Initialization)
+ * (Fix: SAMPLER Complete & 4S Details visible)
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -17,13 +17,13 @@ exports.handler = async (event) => {
     state.history    = Array.isArray(state.history) ? state.history : [];
     state.score      = state.score || 0;
     
-    // FIX: Sicherstellen, dass measurements und Unterobjekte existieren
+    // Sicherstellen, dass measurements existiert
     state.measurements = state.measurements || {};
     state.measurements.vitals = state.measurements.vitals || {};
     state.measurements.schemas = state.measurements.schemas || {};
     state.measurements.pain = state.measurements.pain || {};
     
-    // Flags initialisieren, falls nicht vorhanden
+    // Flags initialisieren
     if (state.measurements.iv_access === undefined) state.measurements.iv_access = false;
     if (state.measurements.handover_done === undefined) state.measurements.handover_done = false;
     if (state.measurements.o2_given === undefined) state.measurements.o2_given = false;
@@ -44,12 +44,10 @@ exports.handler = async (event) => {
     const updVitals = (obj) => {
       for (const k in obj) {
         state.vitals[k] = obj[k];
-        // Nur Werte zurückgeben, die der User bereits "gemessen" hat
         if (state.measurements.vitals[k]) {
             if (k === 'RR') { 
                 reply.updated_vitals[k] = obj[k]; 
             } else {
-                // Trend-Pfeile berechnen
                 const currentValStr = String(state.vitals[k] || baseVitals[k]).match(/\d+/)?.[0] || 0;
                 const oldVal = parseFloat(currentValStr);
                 const newVal = parseFloat(String(obj[k]).match(/\d+/)?.[0] || 0);
@@ -72,7 +70,7 @@ exports.handler = async (event) => {
     };
     function ok(body) { return { statusCode: 200, headers, body: JSON.stringify(body) }; }
 
-    // --- 0. SYSTEM CHECK (Verschlechterung) ---
+    // --- 0. SYSTEM CHECK ---
     if (ua.includes("System-Check")) {
         const hasO2 = state.measurements.o2_given; 
         const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0]);
@@ -90,7 +88,7 @@ exports.handler = async (event) => {
         return ok(reply);
     }
 
-    // --- DEBRIEFING LOGIK ---
+    // --- DEBRIEFING ---
     if (/debrief|fall beenden/.test(low)) {
         reply.done = true;
         
@@ -214,6 +212,8 @@ exports.handler = async (event) => {
     if (/befast info/.test(low)) {
         reply.accepted = true; reply.finding = `<b>BE-FAST:</b><br>${H.befast || "Keine Auffälligkeiten."}`; return ok(reply);
     }
+    
+    // ** FIX 4S INFO **
     if (/4s info/.test(low)) {
         reply.accepted = true; 
         const s = state.scene_4s || {};
@@ -259,15 +259,28 @@ exports.handler = async (event) => {
         return ok(reply);
     }
     
-    // DOKU
+    // --- 4. DOKUMENTATION (FIXED) ---
+    
+    // ** FIX SAMPLER DOKU **
     if (/sampler doku/.test(low)) { 
-        reply.accepted=true; const s = state.anamnesis?.SAMPLER || {};
-        reply.evaluation="SAMPLER dokumentiert:"; reply.finding = `S: ${text(s.S)}<br>A: ${text(s.A)}<br>M: ${text(s.M)}`; 
+        reply.accepted=true; 
+        const s = state.anamnesis?.SAMPLER || {};
+        reply.evaluation="SAMPLER dokumentiert:"; 
+        // Hier fehlten P, L, E und R -> Jetzt hinzugefügt!
+        reply.finding = `S: ${text(s.S)}<br>A: ${text(s.A)}<br>M: ${text(s.M)}<br>P: ${text(s.P)}<br>L: ${text(s.L)}<br>E: ${text(s.E)}<br>R: ${text(s.R)}`; 
         return ok(reply); 
     }
+    
+    // ** FIX 4S DOKU **
     if (/4s doku/.test(low)) { 
-        reply.accepted = true; reply.evaluation = "4S dokumentiert."; return ok(reply); 
+        reply.accepted = true; 
+        const s = state.scene_4s || {};
+        reply.evaluation = "4S dokumentiert.";
+        // Hier fehlte die Ausgabe -> Jetzt hinzugefügt!
+        reply.finding = `Sicherheit: ${text(s.sicherheit)}<br>Szene: ${text(s.szene)}<br>Sichtung: ${text(s.sichtung_personen)}<br>Support: ${text(s.support_empfehlung)}`;
+        return ok(reply); 
     }
+
     if (/übergabe/.test(low)) { state.measurements.handover_done = true; reply.accepted = true; reply.evaluation="Übergabe erfolgt."; return ok(reply); }
     if (/verdachtsdiagnose/.test(low)) { state.measurements.diagnosis = ua.split(":")[1]; reply.accepted = true; reply.evaluation="Verdacht notiert."; return ok(reply); }
 
