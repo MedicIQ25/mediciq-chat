@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Realism: No SpO2 = Flatline)
+// medicIQ – App Logic (12-Lead EKG Support & Pathology)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -67,6 +67,9 @@ const visibleVitals = {};
 // AUDIO CONTEXT VARS
 let audioCtx = null;
 let monitorTimeout = null;
+
+// EKG State
+let currentLead = 'II'; // Standard-Ableitung
 
 // Wait for DOM
 document.addEventListener('DOMContentLoaded', () => {
@@ -245,22 +248,71 @@ async function stepCase(txt) {
   }
 }
 
-// --- DYNAMIC MONITOR LOGIC (Conditional Pleth) ---
+// --- DYNAMIC MONITOR LOGIC (12-Lead Support) ---
 function openEKG() {
     if(!caseState) return;
-    const type = caseState.hidden?.ekg_pattern || "sinus";
+    currentLead = 'II'; // Reset auf Standard
+
+    const modalBody = document.querySelector('#modalEKG .modal-body');
     
-    // Check, ob SpO2 überhaupt gemessen wurde
+    // UI mit Dropdown für Ableitungen
+    modalBody.innerHTML = `
+      <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+        <label style="font-weight:bold;">Ableitung:</label>
+        <select id="leadSelect" style="padding:5px; border-radius:4px; font-weight:bold;">
+            <option value="I">I</option>
+            <option value="II" selected>II</option>
+            <option value="III">III</option>
+            <option value="aVR">aVR</option>
+            <option value="aVL">aVL</option>
+            <option value="aVF">aVF</option>
+            <option value="V1">V1</option>
+            <option value="V2">V2</option>
+            <option value="V3">V3</option>
+            <option value="V4">V4</option>
+            <option value="V5">V5</option>
+            <option value="V6">V6</option>
+        </select>
+      </div>
+
+      <div class="ekg-screen" style="width:100%; height:200px;">
+        <svg id="monitorSvg" width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
+            </svg>
+      </div>
+      <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
+    `;
+
+    openModal('modalEKG');
+    
+    // Event Listener für Dropdown
+    const sel = document.getElementById('leadSelect');
+    sel.onchange = () => {
+        currentLead = sel.value;
+        updateEKGView();
+    };
+
+    const closeBtn = document.getElementById('ekgClose');
+    if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
+
+    // Erster Render
+    updateEKGView();
+}
+
+function updateEKGView() {
+    const type = caseState.hidden?.ekg_pattern || "sinus";
+    const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase(); // z.B. "hinterwand"
+    
+    // SpO2 Logic
     const hasSpO2 = !!visibleVitals.SpO2;
     let spo2Value = 98; 
+    if(hasSpO2) spo2Value = parseInt(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
+    else if(caseState.vitals?.SpO2) spo2Value = parseInt(caseState.vitals.SpO2);
 
-    if(hasSpO2) {
-        spo2Value = parseInt(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
-    } else if(caseState.vitals?.SpO2) {
-        spo2Value = parseInt(caseState.vitals.SpO2);
-    }
+    const svg = document.getElementById('monitorSvg');
+    if(!svg) return;
 
-    const gridPattern = `
+    // Grid Definition
+    const defs = `
       <defs>
         <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
           <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#222" stroke-width="1"/>
@@ -273,87 +325,131 @@ function openEKG() {
       <rect width="100%" height="100%" fill="url(#grid-bold)" />
     `;
 
-    const viewWidth = 400;
-    
-    // EKG oben (75px Basis)
-    let ekgPath = generateLoopPath(type, 75, viewWidth, 100);
-    
-    // Pleth unten (160px Basis)
-    let plethPath = "";
-    
-    if (hasSpO2) {
-        // Kurve berechnen, wenn Wert da ist
-        plethPath = generateLoopPath('pleth', 160, viewWidth, spo2Value);
-    } else {
-        // Flache Linie, wenn NICHT gemessen (Nulllinie)
-        plethPath = `M 0 160 L ${viewWidth} 160`;
-    }
+    // Paths berechnen
+    // Übergeben wir auch die pathology und currentLead an den Generator
+    let ekgPath = generateLoopPath(type, 75, 400, 100, currentLead, pathology);
+    let plethPath = hasSpO2 ? generateLoopPath('pleth', 160, 400, spo2Value) : `M 0 160 L 400 160`;
 
-    const modalBody = document.querySelector('#modalEKG .modal-body');
-
-    modalBody.innerHTML = `
-      <div class="ekg-screen" style="width:100%; height:200px;">
-        <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
-            ${gridPattern}
-            
-            <g class="infinite-scroll">
-                 <g>
-                    <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
-                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
-                 </g>
-                 <g transform="translate(400, 0)">
-                    <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
-                    <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
-                 </g>
-            </g>
-
-            <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12" font-weight="bold">II</text>
-            <text x="5" y="130" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
-            
-            <text x="350" y="30" fill="#00ff00" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.Puls || '--'}</text>
-            <text x="350" y="140" fill="#3b82f6" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.SpO2 || '--'}</text>
-        </svg>
-      </div>
-      <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
+    svg.innerHTML = `
+        ${defs}
+        <g class="infinite-scroll">
+             <g>
+                <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
+                <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
+             </g>
+             <g transform="translate(400, 0)">
+                <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
+                <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
+             </g>
+        </g>
+        <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12" font-weight="bold">${currentLead}</text>
+        <text x="5" y="130" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
+        <text x="350" y="30" fill="#00ff00" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.Puls || '--'}</text>
+        <text x="350" y="140" fill="#3b82f6" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.SpO2 || '--'}</text>
     `;
 
+    // Diagnose-Text anpassen
     const txt = document.getElementById('ekgText');
     if(type === "sinus") {
         txt.textContent = "Sinusrhythmus";
         txt.style.color = "#00ff00";
     } else if (type === "vt") {
-        txt.textContent = "!!! V-TACH (Puls tasten!) !!!";
+        txt.textContent = "!!! V-TACH !!!";
         txt.style.color = "#ef4444";
     } else {
-        txt.textContent = "Asystolie / Nulllinie";
+        txt.textContent = "Asystolie";
         txt.style.color = "#ef4444";
     }
-
-    openModal('modalEKG');
-    const closeBtn = document.getElementById('ekgClose');
-    if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
 }
 
-// Helper: Generiert die Kurven
-function generateLoopPath(type, yBase, totalWidth, qualityValue) {
+// Helper: Generiert die Kurven (Mit Pathologie & Ableitung)
+function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pathology = '') {
     let d = `M 0 ${yBase} `;
     let currentX = 0;
     let mode = 'curve';
     let beatWidth = 0;
     let commands = []; 
 
+    // --- FAKTOREN FÜR ABLEITUNGEN ---
+    let polarity = 1.0; // 1 = Positiv, -1 = Negativ (aVR)
+    let amplitude = 1.0; // Höhe
+    
+    if (lead === 'aVR') {
+        polarity = -1.0; 
+    } else if (lead === 'V1' || lead === 'aVL') {
+        // Oft kleiner oder biphasisch
+        amplitude = 0.8;
+    }
+
+    // --- PATHOLOGIE ERKENNUNG (STEMI HINTERWAND) ---
+    // Betroffene Ableitungen: II, III, aVF (Hebung)
+    // Reziprok: I, aVL (Senkung)
+    const isInferiorWall = pathology.includes('hinterwand') || pathology.includes('inferior');
+    
+    let stElevation = 0; // 0 = Isoelektrisch
+    
+    if (type === 'sinus' && isInferiorWall) {
+        if (['II', 'III', 'aVF'].includes(lead)) {
+            stElevation = -15; // Hebung nach oben (SVG Y ist invertiert, also minus)
+        } else if (['I', 'aVL'].includes(lead)) {
+            stElevation = 10; // Senkung nach unten
+        }
+    }
+
     if (type === 'sinus') {
         mode = 'curve';
         beatWidth = 70; 
         
-        commands = [
-            "c 3 -5, 7 -5, 10 0", // P
-            "l 5 0", // PR
-            "l 2 3 l 3 -55 l 3 60 l 2 -8", // QRS
-            "l 5 0", // ST
-            "c 5 -15, 12 -15, 18 0", // T
-            "l 22 0" // Pause
-        ];
+        // BASIS-KURVE (Lead II)
+        // Wir modifizieren die Y-Werte basierend auf Polarity & ST-Strecke
+        
+        // P-Welle
+        let pY = -5 * polarity * amplitude;
+        let qrsTop = -55 * polarity * amplitude;
+        let qrsBot = 60 * polarity * amplitude;
+        let tY = -15 * polarity * amplitude;
+        
+        // ST-Segment Y-Shift
+        // ST-Hebung zieht den J-Punkt (Ende S) und Start T hoch
+        // Bei Hebung: S-Zacke geht nicht ganz zur Basis zurück
+        
+        // QRS Ende (J-Point)
+        let jPointY = -8 + stElevation; 
+        // Wir müssen sicherstellen, dass die Linie dort landet.
+        
+        // Bei Invertierung (aVR) müssen wir aufpassen:
+        // P negativ, QRS hauptvektor negativ (tiefes S/QS), T negativ
+        
+        if(lead === 'aVR') {
+             // Spezialform aVR: P negativ, QRS ist meist rS oder QS (tief)
+             commands = [
+                "c 3 5, 7 5, 10 0", // P (negativ)
+                "l 5 0", // PR
+                "l 2 -5 l 3 60 l 3 -55 l 2 5", // QRS (klein hoch, tief runter)
+                "l 5 0", // ST
+                "c 5 10, 12 10, 18 0", // T (negativ)
+                "l 22 0" 
+             ];
+        } else {
+            // Standard (mit ST-Shift)
+            commands = [
+                `c 3 ${pY}, 7 ${pY}, 10 0`, // P
+                "l 5 0", // PR
+                // QRS:
+                `l 2 3 l 3 ${qrsTop} l 3 ${qrsBot} l 2 ${-8 + stElevation}`, // Ende bei J-Point (Shifted!)
+                
+                // ST-Strecke (Horizontal auf neuer Höhe)
+                "l 5 0", 
+                
+                // T-Welle (Startet auf ST-Höhe, endet auf 0)
+                // c dx1 dy1, dx2 dy2, dx dy (relativ!)
+                // Wir starten bei stElevation. Ende muss 0 sein (Basis).
+                // Die Y-Differenz zum Ende ist: -stElevation
+                `c 5 ${tY}, 12 ${tY}, 18 ${-stElevation}`, 
+                
+                "l 22 0" // Pause
+            ];
+        }
 
     } else if (type === 'vt') {
         mode = 'line';
@@ -362,15 +458,12 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue) {
     } else if (type === 'pleth') {
         mode = 'curve';
         beatWidth = 50;
-        
         let scale = 1.0;
         if(qualityValue < 80) scale = 0.1;
         else if(qualityValue < 88) scale = 0.3;
         else if(qualityValue < 94) scale = 0.6;
-        
         const hasNotch = qualityValue > 90;
         const riseY = -25 * scale;
-        
         let cmd1 = `c 5 ${riseY}, 10 ${riseY}, 12 -5`; 
         let cmd2 = hasNotch ? `c 2 8, 5 0, 8 5` : `c 2 2, 5 4, 8 6`;
         let cmd3 = `c 5 5, 10 0, 30 0`;
@@ -787,5 +880,6 @@ async function openDebrief() {
     const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
     const d = await r.json();
     addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
+    // KEIN SPEAK MEHR
   } catch(e){}
 }
