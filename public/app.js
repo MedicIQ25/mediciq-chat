@@ -742,10 +742,30 @@ function openHandover() {
     openModal('modalHandover');
 }
 async function openDebrief() {
+  // 1. SOFORT die Simulation stoppen
+  stopTimer();          // Hält die Zeit an (keine neuen System-Checks mehr)
+  stopMonitorLoop();    // Schaltet das Piepen aus
+  updateUI(false);      // Versteckt Buttons und zeigt "Start"-Button wieder an
+  
+  // Status aktualisieren
+  const statusEl = document.getElementById('caseStatus');
+  if(statusEl) statusEl.textContent = 'Fall beendet.';
+
+  // 2. Debriefing vom Server holen
   try {
-    const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
+    const r = await fetch(API_CASE_STEP, {
+        method:'POST',
+        body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})
+    });
     const d = await r.json();
+    
+    // Nachricht anzeigen
     addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
-    // KEIN SPEAK MEHR
-  } catch(e){}
+    
+    // State löschen, damit keine weiteren Aktionen im Hintergrund laufen können
+    caseState = null; 
+    
+  } catch(e){
+    console.error(e);
+  }
 }
