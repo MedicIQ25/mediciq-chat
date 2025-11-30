@@ -727,19 +727,17 @@ function openBEFAST() {
 // ...
 
 function openSampler() {
-  
-  $id('samplerFetch').onclick = async () => {
-    // 1. Daten vom Server holen (für Text-Vorschau)
+  $id('samplerFetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {
         method:'POST', 
         body:JSON.stringify({case_state:caseState, user_action:'SAMPLER Info'})
     });
     const d = await res.json();
     
-    // WICHTIG: Text oben löschen, da redundant
-    document.getElementById('samplerInfo').innerHTML = ''; 
+    // WICHTIG: Text oben anzeigen
+    if(d.finding) document.getElementById('samplerInfo').innerHTML = d.finding;
 
-    // 2. Felder automatisch mit den echten Daten aus dem Fall füllen
+    // Felder automatisch füllen
     const S = caseState?.anamnesis?.SAMPLER || {};
     
     if($id('s_sympt')) $id('s_sympt').value = S.S || '';
@@ -750,7 +748,6 @@ function openSampler() {
     if($id('s_events')) $id('s_events').value = S.E || '';
     if($id('s_risk')) $id('s_risk').value = S.R || '';
   };
-  
   $id('samplerOk').onclick=()=>{ stepCase('SAMPLER doku'); closeModal('modalSampler'); };
   $id('samplerCancel').onclick=()=>closeModal('modalSampler');
   openModal('modalSampler');
@@ -796,11 +793,11 @@ function openBodyMap() {
 }
 function openHandover() {
     if(!caseState) return;
-    // Felder leeren, damit der User sie füllen muss
+    
+    // Die Felder für SINNHAFT leeren (da der User sie füllen soll)
     $id('s_ident').value = ""; $id('s_event').value = ""; $id('s_prio').value = ""; $id('s_action').value = ""; $id('s_anam').value = "";
     
     $id('handoverOk').onclick = () => {
-        // Hier sollte der User die Felder gefüllt haben
         const ident = $id('s_ident').value.trim();
         if (ident.length < 5) {
              alert('Bitte fülle die Identifikation aus, um fortzufahren.');
@@ -812,7 +809,6 @@ function openHandover() {
         stepCase(text);
         
         closeModal('modalHandover');
-        // Fall ist abgeschlossen, der User klickt danach auf Debriefing
     };
     
     $id('handoverCancel').onclick = () => closeModal('modalHandover');
