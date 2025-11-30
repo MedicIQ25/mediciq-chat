@@ -367,16 +367,42 @@ function closeModal(id) {
   el.style.display = 'none';
 }
 
+// Verbesserte Sprachausgabe
 function speak(text) {
     if(!soundEnabled || !window.speechSynthesis || !text) return;
     if(text.length > 300) return;
+
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+
+    // 1. Text für die Sprache "reinigen" (Zahlen und Einheiten lesbar machen)
+    let speakText = text
+        .replace(/\//g, ' zu ')           // RR 120/80 -> 120 zu 80
+        .replace(/SpO2/g, 'Sauerstoffsättigung')
+        .replace(/AF/g, 'Atemfrequenz')
+        .replace(/HF/g, 'Herzfrequenz')
+        .replace(/RR/g, 'Blutdruck')
+        .replace(/l\/min/g, 'Liter pro Minute')
+        .replace(/mg\/dl/g, 'Milligramm')
+        .replace(/°C/g, 'Grad')
+        .replace(/%/g, ' Prozent')
+        .replace(/\-/g, ' ');             // Bindestriche entfernen
+
+    const u = new SpeechSynthesisUtterance(speakText);
     u.lang = 'de-DE';
-    let bestVoice = availableVoices.find(v => v.lang === 'de-DE' && v.name.includes('Google'));
-    if (!bestVoice) bestVoice = availableVoices.find(v => v.lang === 'de-DE' && v.name.includes('Natural'));
-    if (!bestVoice) bestVoice = availableVoices.find(v => v.lang === 'de-DE');
-    if (bestVoice) { u.voice = bestVoice; u.pitch = 1.0; u.rate = 1.1; }
+
+    // 2. Beste Stimme suchen (Reihenfolge optimiert für Realismus)
+    // "Google Deutsch" ist oft gut, "Microsoft ... Natural" (Edge) ist am besten
+    let voices = window.speechSynthesis.getVoices();
+    let bestVoice = voices.find(v => v.lang === 'de-DE' && v.name.includes('Natural')); // Edge/Windows
+    if (!bestVoice) bestVoice = voices.find(v => v.lang === 'de-DE' && v.name.includes('Google')); // Chrome
+    if (!bestVoice) bestVoice = voices.find(v => v.lang === 'de-DE'); // Fallback
+
+    if (bestVoice) { 
+        u.voice = bestVoice; 
+        u.pitch = 1.0; 
+        u.rate = 1.0;  // Etwas langsamer als vorher (war 1.1), hilft bei Zahlen
+    }
+
     window.speechSynthesis.speak(u);
 }
 
