@@ -244,12 +244,9 @@ async function stepCase(txt) {
     renderProgress(caseState.steps_done||[]);
     
     if(d.done) {
+      // Wir rufen NUR openDebrief auf. 
+      // Diese Funktion kümmert sich um alles (Timer stoppen, Aufräumen, UI update).
       openDebrief();
-      caseState = null;
-      updateUI(false); 
-      stopTimer();
-      stopMonitorLoop(); 
-      document.getElementById('caseStatus').textContent = 'Fall beendet.';
     }
   } catch(e) {
     addMsg(`Fehler: ${e.message}`);
