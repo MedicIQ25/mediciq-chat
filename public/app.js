@@ -509,51 +509,135 @@ async function speak(text) {
     }
 }
 
-// --- EKG VISUAL UPDATE ---
+// --- PROFI EKG VISUALISIERUNG ---
 function openEKG() {
     if(!caseState) return;
     const type = caseState.hidden?.ekg_pattern || "sinus";
-    const line = $id('ekgLine');
-    const txt  = $id('ekgText');
-    line.classList.add('ekg-anim');
     
-    // Kurven mit 'bezier' statt zackiger Linien
-    let d = "M 0 75 ";
-    const pWave = "c 2 -5, 5 -5, 8 0 ";   
-    const segment = "l 5 0 ";            
-    const qrs = "l 2 5 l 3 -45 l 3 55 l 2 -15 "; 
-    const tWave = "c 5 -10, 10 -10, 15 0 "; 
-    const base = "l 10 0 "; 
+    // Wir bauen das Modal-Inhalt neu auf, um SVG sauber zu initialisieren
+    const modalBody = document.querySelector('#modalEKG .modal-body');
     
+    // SVG mit Raster (Grid) Definition
+    const gridPattern = `
+      <defs>
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#333" stroke-width="1"/>
+        </pattern>
+        <pattern id="grid-bold" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#grid)" />
+          <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#555" stroke-width="2"/>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#grid-bold)" />
+    `;
+
+    // Kanal 1: EKG (Grün)
+    let ekgPath = generateRhythmPath(type, 50, 400); // Y-Basis bei 50
+    
+    // Kanal 2: Plethysmogramm (Blau) - Simuliert SpO2 Welle
+    // Pleth ist meist nur eine weiche Welle
+    let plethPath = generateRhythmPath('pleth', 120, 400); // Y-Basis bei 120
+
+    modalBody.innerHTML = `
+      <div class="ekg-screen" style="width:100%; height:180px;">
+        <svg width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="none">
+            ${gridPattern}
+            
+            <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12">II</text>
+            <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="ekg-line" />
+            
+            <text x="5" y="100" fill="#3b82f6" font-family="monospace" font-size="12">Pleth</text>
+            <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" class="ekg-line" style="animation-duration: 6s;" />
+        </svg>
+      </div>
+      <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
+    `;
+
+    const txt = document.getElementById('ekgText');
+
     if(type === "sinus") {
-        for(let i=0; i<8; i++) {
-             d += base + pWave + segment + qrs + segment + tWave + base;
-        }
-        const svg = document.getElementById('ekgSvg');
-        svg.innerHTML = `<path id="ekgLine" d="${d}" fill="none" stroke="#00ff00" stroke-width="2" class="ekg-anim" />`;
-        txt.textContent = "Monitorbild (Ableitung II) - Sinus";
-        txt.style.color = "#0f766e";
-        
+        txt.textContent = "Sinusrhythmus (HF ~70/min)";
+        txt.style.color = "#00ff00";
     } else if (type === "vt") {
-        for(let i=0; i<15; i++) {
-            d += "l 10 -40 l 10 80 l 5 -40 "; 
-        }
-        const svg = document.getElementById('ekgSvg');
-        svg.innerHTML = `<path id="ekgLine" d="${d}" fill="none" stroke="#ef4444" stroke-width="2" class="ekg-anim" />`;
-        txt.textContent = "Monitorbild - VT (Puls prüfen!)";
+        txt.textContent = "!!! V-TACH (Puls tasten!) !!!";
         txt.style.color = "#ef4444";
     } else {
-        const svg = document.getElementById('ekgSvg');
-        svg.innerHTML = `<path id="ekgLine" d="M 0 75 L 400 75" fill="none" stroke="#ef4444" stroke-width="2" class="ekg-anim" />`;
-        txt.textContent = "Monitorbild - Asystolie";
+        txt.textContent = "Asystolie / Nulllinie";
         txt.style.color = "#ef4444";
     }
 
-    $id('ekgClose').onclick = () => closeModal('modalEKG');
-    openModal('modalEKG');
-    stepCase('12-Kanal-EKG');
+    // Modal öffnen
+    const modal = document.getElementById('modalEKG');
+    const backdrop = document.getElementById('modalBackdrop');
+    if(modal && backdrop) {
+        modal.style.display = 'block';
+        backdrop.style.display = 'block';
+    }
+    
+    // Close Handler neu binden (da wir innerHTML überschrieben haben)
+    const closeBtn = document.getElementById('ekgClose'); 
+    // Achtung: Der Close Button ist im HTML "modal-actions", das haben wir NICHT überschrieben.
+    // Aber falls du den Button im Body hattest, müssen wir aufpassen.
+    // Laut deiner HTML Datei ist der Button in "modal-actions", also alles gut.
 }
 
+// Helper: Generiert saubere Pfade ohne Lücken
+function generateRhythmPath(type, yBase, width) {
+    let d = `M 0 ${yBase} `;
+    let x = 0;
+    
+    // Definition eines "Beats" als relative Koordinaten [dx, dy]
+    // dy ist relativ zur Basislinie. Wir müssen immer zu 0 zurückkehren.
+    let beat = [];
+
+    if (type === 'sinus') {
+        // P-Welle (klein hoch), Q (leicht runter), R (hoch), S (runter), T (breit hoch)
+        // Format: [dx, y_offset_from_base]
+        // Wir nutzen Bezier-Kurven Annäherung durch viele Punkte oder einfache Linien
+        // Hier einfache Linien für Performance:
+        beat = [
+            [5, 0], [2, -5], [2, 0], // P
+            [3, 0], // Iso
+            [1, 2], [2, -45], [2, 50], [1, -7], // QRS
+            [2, 0], // Iso
+            [3, -8], [3, -8], [3, 0], // T
+            [10, 0] // Pause
+        ];
+    } else if (type === 'vt') {
+        // Breite, schnelle Zacken
+        beat = [
+            [5, -30], [5, 60], [5, -30] 
+        ];
+    } else if (type === 'pleth') {
+        // SpO2 Welle (Dikrotie angedeutet)
+        beat = [
+            [5, -10], [5, -15], [5, 25], [5, -5], [5, 5]
+        ];
+    } else {
+        // Asystolie
+        return `M 0 ${yBase} L ${width} ${yBase}`;
+    }
+
+    // Pfad zusammenbauen bis Breite gefüllt ist
+    while (x < width) {
+        if(type === 'sinus' || type === 'pleth') {
+            // Beat zeichnen
+            beat.forEach(pt => {
+                x += pt[0];
+                // Wir nutzen L (LineTo absolute) für bessere Kontrolle
+                // yBase + pt[1] ist die absolute Y-Position
+                d += `L ${x} ${yBase + pt[1]} `;
+            });
+        } else {
+            // VT ist chaotischer
+             beat.forEach(pt => {
+                x += pt[0];
+                d += `L ${x} ${yBase + pt[1]} `;
+            });
+        }
+    }
+    return d;
+}
 // ... Restliche Funktionen (openOxygen, openNA, openAFCounter...)
 function openOxygen() {
   if(!caseState) return;

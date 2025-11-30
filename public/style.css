@@ -157,3 +157,22 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
   #missionTimer { border: 1px solid #000; color: #000; background: #fff; display:block !important; }
   .msg { border: 1px solid #eee; background: #fff; color: #000; }
 }
+/* EKG Monitor Styles */
+.ekg-screen {
+  background-color: #000;
+  border: 4px solid #333;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+}
+/* Animation für die Kurven (laufen von rechts nach links) */
+@keyframes dash {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+.ekg-line {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: dash 5s linear infinite;
+}
