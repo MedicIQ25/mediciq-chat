@@ -299,14 +299,23 @@ function updateEKGView() {
     const type = caseState.hidden?.ekg_pattern || "sinus";
     const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase(); 
     
+    // Werte holen (Sicherstellen, dass Zahlen da sind)
+    const hasPuls = !!visibleVitals.Puls;
     const hasSpO2 = !!visibleVitals.SpO2;
-    let spo2Value = 98; 
-    if(hasSpO2) spo2Value = parseInt(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
-    else if(caseState.vitals?.SpO2) spo2Value = parseInt(caseState.vitals.SpO2);
+    
+    // Parse Zahlenwerte oder Platzhalter
+    let pulsVal = hasPuls ? visibleVitals.Puls.replace(/\D/g,'') : '--';
+    let spo2Val = hasSpO2 ? visibleVitals.SpO2.replace(/\D/g,'') : '--';
+    
+    // Für die Kurvengenerierung (Zahl benötigt)
+    let spo2Num = hasSpO2 ? parseInt(spo2Val) : 98;
+    // Wenn kein SpO2 gemessen, simulieren wir für die EKG-Kurven-Logik "gesund" (98), 
+    // aber die Pleth-Linie wird unten eh flach gemacht.
 
     const svg = document.getElementById('monitorSvg');
     if(!svg) return;
 
+    // Raster (Grid)
     const defs = `
       <defs>
         <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -320,12 +329,18 @@ function updateEKGView() {
       <rect width="100%" height="100%" fill="url(#grid-bold)" />
     `;
 
-    // Path Generation (Safe & Stable)
+    // Kurven berechnen
+    // Wir nutzen currentLead (globale Variable aus openEKG)
     let ekgPath = generateLoopPath(type, 75, 400, 100, currentLead, pathology);
-    let plethPath = hasSpO2 ? generateLoopPath('pleth', 160, 400, spo2Value) : `M 0 160 L 400 160`;
+    let plethPath = hasSpO2 ? generateLoopPath('pleth', 160, 400, spo2Num) : `M 0 160 L 400 160`;
 
+    // VISUALISIERUNG
+    // Wir zeichnen erst die Kurven, dann einen schwarzen Kasten rechts ("Sidebar"),
+    // dann die Texte darauf. So läuft keine Linie durch den Text.
+    
     svg.innerHTML = `
         ${defs}
+        
         <g class="infinite-scroll">
              <g>
                 <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
@@ -336,12 +351,23 @@ function updateEKGView() {
                 <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
              </g>
         </g>
-        <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12" font-weight="bold">${currentLead}</text>
-        <text x="5" y="130" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
-        <text x="350" y="30" fill="#00ff00" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.Puls || '--'}</text>
-        <text x="350" y="140" fill="#3b82f6" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.SpO2 || '--'}</text>
+
+        <rect x="320" y="0" width="80" height="200" fill="#000" stroke-left="1px solid #333" />
+        <line x1="320" y1="0" x2="320" y2="200" stroke="#444" stroke-width="2" />
+
+        <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="14" font-weight="bold">${currentLead}</text>
+
+        <text x="330" y="25" fill="#00ff00" font-family="sans-serif" font-size="10" font-weight="bold">HF</text>
+        <text x="390" y="55" fill="#00ff00" font-family="monospace" font-size="35" font-weight="bold" text-anchor="end" class="monitor-glow">${pulsVal}</text>
+        <text x="385" y="25" fill="#00ff00" font-size="10">♥</text>
+
+        <text x="330" y="115" fill="#3b82f6" font-family="sans-serif" font-size="10" font-weight="bold">SpO2</text>
+        <text x="390" y="145" fill="#3b82f6" font-family="monospace" font-size="35" font-weight="bold" text-anchor="end" class="monitor-glow-blue">${spo2Val}</text>
+        <text x="385" y="155" fill="#3b82f6" font-size="10" text-anchor="end">%</text>
+
     `;
 
+    // Status-Text unter dem Monitor aktualisieren
     const txt = document.getElementById('ekgText');
     if(type === "sinus") {
         txt.textContent = "Sinusrhythmus";
@@ -354,7 +380,6 @@ function updateEKGView() {
         txt.style.color = "#ef4444";
     }
 }
-
 // --- CORE EKG GENERATOR (GLITCH-FREE) ---
 function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pathology = '') {
     let d = `M 0 ${yBase} `;
