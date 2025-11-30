@@ -16,8 +16,8 @@ exports.handler = async (event) => {
     state.steps_done = Array.isArray(state.steps_done) ? state.steps_done : [];
     state.history    = Array.isArray(state.history) ? state.history : [];
     state.score      = state.score || 0;
-    // Hinzugefügt: o2_given und immo_done Flags zur Verfolgung der Maßnahmen
-    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false, handover_done: false, o2_given: false, immo_done: false };
+    // Hinzugefügt: bleeding_controlled Flag zur Verfolgung der Blutstillung
+    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false, handover_done: false, o2_given: false, immo_done: false, bleeding_controlled: false };
     
     // History
     if (ua && !low.includes('debriefing')) {
@@ -125,11 +125,36 @@ exports.handler = async (event) => {
     
     // --- 2. MEDIZINISCHE AKTIONEN ---
     
-    // X - Exsanguination
-    if (low.includes('blutung') || low.includes('x unauffällig')) {
-        reply.accepted = true; reply.finding = H.bleeding_info || "Keine kritische Blutung sichtbar.";
-        reply.evaluation = "X: Blutungscheck durchgeführt."; touchStep("X"); return ok(reply);
+    // Massnahmen zur Blutstillung (FIX: Setzt das Flag bleeding_controlled)
+    if (low.includes('druckverband') || low.includes('tourniquet') || low.includes('beckenschlinge') || low.includes('hämostyptikum')) {
+        state.measurements.bleeding_controlled = true;
+        reply.accepted = true; 
+        reply.evaluation = `${ua} erfolgreich angelegt.`; 
+        // Bei Trauma sollte nach Blutstillung C berührt werden.
+        if (state.specialty === 'trauma') touchStep("C");
+        return ok(reply); 
     }
+
+    // X - Exsanguination (FIX: Passt Befund an, wenn Blutung kontrolliert ist)
+    if (low.includes('blutungscheck') || low.includes('x unauffällig')) {
+        reply.accepted = true; 
+        touchStep("X");
+        
+        // Prüfe, ob eine Blutung im Fall hinterlegt ist
+        const initialBleeding = H.bleeding_info && H.bleeding_info !== "Keine kritische Blutung sichtbar.";
+
+        if (initialBleeding && state.measurements.bleeding_controlled) {
+            // Wenn Blutung da war, aber Massnahme ergriffen wurde
+            reply.finding = `✅ Kritische Blutung ist dank eingeleiteter Massnahme kontrolliert. ${H.bleeding_info}`;
+            reply.evaluation = "X: Kritische Blutung ist unter Kontrolle.";
+        } else {
+            // Normaler/Initialer Befund
+            reply.finding = H.bleeding_info || "Keine kritische Blutung sichtbar.";
+            reply.evaluation = "X: Blutungscheck durchgeführt.";
+        }
+        return ok(reply);
+    }
+
     // A - Airway
     if (/mund/.test(low) || /rachen/.test(low)) {
         reply.accepted = true; reply.finding = H.mouth || "Mundraum frei."; reply.evaluation = "A: Mundraum inspiziert."; touchStep("A"); return ok(reply);
@@ -173,6 +198,23 @@ exports.handler = async (event) => {
         return ok(reply);
     }
     
+    // Bodycheck (FIX: Gibt Text-Befund aus)
+    if (low.includes('bodycheck') && !low.includes('(bild)')) {
+        reply.accepted = true;
+        touchStep("E");
+        reply.evaluation = "Bodycheck (Ganzkörperuntersuchung) durchgeführt.";
+
+        const injuries = Array.isArray(H.injuries) ? H.injuries : [];
+        
+        if (injuries.length > 0) {
+            const injuryList = injuries.join(', ');
+            reply.finding = `⚠️ Folgende Verletzungen festgestellt: ${injuryList}.`;
+        } else {
+            reply.finding = `Keine weiteren sichtbaren Verletzungen oder Auffälligkeiten.`;
+        }
+        return ok(reply);
+    }
+
     // --- 3. INFORMATIONSANFRAGEN & SPEZIELLE MAßNAHMEN ---
     
     // NRS Info
