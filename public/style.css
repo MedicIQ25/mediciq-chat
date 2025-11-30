@@ -196,37 +196,24 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 .monitor-glow-blue {
   filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.6));
 }
-/* --- FINALE REPARATUR VITALWERTE & DISPLAY --- */
-
-/* 1. Container: Boxen deutlich breiter machen, damit nichts abgeschnitten wird */
+/* Container: Boxen müssen breit genug sein */
 .vitals {
-    /* minmax 145px zwingt den Browser, Platz zu schaffen */
-    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)) !important;
-    gap: 8px !important;
+    /* minmax 135px sorgt dafür, dass die Boxen nicht zu schmal werden */
+    grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)) !important;
 }
 
-/* 2. Die Box selbst: Flexibel halten */
-.vital-box {
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    align-items: center !important;
-    min-height: 90px !important; /* Etwas höher */
-    padding: 5px !important;
-    overflow: visible !important; /* WICHTIG: Erlaubt Text über den Rand hinaus (falls nötig) */
-}
-
-/* 3. Der Blutdruck-Wert (ID #vRR) */
+/* Der Blutdruck-Wert (RR) */
 #vRR {
-    font-size: 1.3rem !important; /* Kleiner als die anderen Werte */
-    line-height: 1 !important;
-    white-space: nowrap !important; /* Kein Zeilenumbruch */
-    text-align: center !important;
-    width: 100% !important;
-    display: block !important;
+    /* Deutlich kleiner und enger, damit /85 nicht umbricht */
+    font-size: 1.25rem !important; 
+    letter-spacing: -1px !important;
+    white-space: nowrap !important;
+    display: inline-block;
+    width: 100%;
+    overflow: visible !important;
 }
 
-/* 4. Andere Werte */
+/* Andere Werte */
 .vital-val {
     font-size: 1.5rem;
 }
