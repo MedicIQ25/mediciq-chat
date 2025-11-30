@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Realism Edition: Better EKG, Smart Audio)
+// medicIQ – App Logic (Silent Medic / Talking Patient Edition)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -139,14 +139,14 @@ async function startCase() {
     renderProgress([]);
     showHint('Beginne mit XABCDE.');
 
-    // START DISPLAY & AUDIO
+    // START DISPLAY (Text only)
     addMsg(`<strong>Fallstart:</strong> ${caseState.story}`);
 
-    // LOGIK: NUR den Dialog sprechen. Keine Story-Vorlesung mehr.
+    // START AUDIO (Nur Dialog!)
+    // FIX: Kein "else speak(story)" mehr. Wenn kein Dialog da ist, bleibt es still.
     if (caseState.intro_dialogue) {
         setTimeout(() => speak(caseState.intro_dialogue), 500);
     } 
-    // Falls kein Dialog da ist, bleibt es still (Realismus: Du kommst an und musst erst schauen)
 
     // Monitor starten, falls Sound an ist
     if(soundEnabled) startMonitorLoop();
@@ -184,7 +184,7 @@ async function stepCase(txt) {
       Object.assign(visibleVitals, d.updated_vitals);
       renderVitals(); 
       
-      // FIX: Monitor-Sound SOFORT aktualisieren, nicht warten
+      // FIX: Monitor-Sound SOFORT triggern, wenn Vitals da sind
       if(soundEnabled) {
           if(monitorTimeout) clearTimeout(monitorTimeout);
           scheduleBeep();
@@ -209,16 +209,9 @@ async function stepCase(txt) {
           ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
         `);
         
-        // LOGIK: Sprachausgabe stumm schalten für normale Befunde
-        // Wir wollen nur Patientendialog. Da wir aktuell keine getrennten Dialoge für den Verlauf haben,
-        // lassen wir die KI hier schweigen. Das wirkt professioneller.
-        // Falls du willst, dass sie doch spricht, nimm den Kommentar raus:
-        /*
-        const isDoku = txt.toLowerCase().includes('doku');
-        if(d.finding && !isSystemTick && !isDoku) {
-            speak(d.finding);
-        }
-        */
+        // LOGIK: ABSOLUTE STILLE BEI BEFUNDEN
+        // Der Block, der d.finding vorliest, wurde komplett entfernt.
+        // Nur wenn ein *neuer* Dialog im Backend generiert würde (was wir aktuell noch nicht haben), würde er hier sprechen.
     }
 
     caseState = d.case_state || caseState;
@@ -231,16 +224,13 @@ async function stepCase(txt) {
       caseState = null;
       updateUI(false); 
       stopTimer();
-      stopMonitorLoop(); // Monitor aus bei Ende
+      stopMonitorLoop(); 
       document.getElementById('caseStatus').textContent = 'Fall beendet.';
     }
   } catch(e) {
     addMsg(`Fehler: ${e.message}`);
   }
 }
-
-// ... (renderPanel, renderVitals, Timer Functions bleiben gleich wie vorher) ...
-// Ich füge sie hier der Vollständigkeit halber ein:
 
 function renderPanel(k) {
   const panel = document.getElementById('panel');
@@ -398,7 +388,7 @@ function closeModal(id) {
   el.style.display = 'none';
 }
 
-// --- EKG MONITOR SOUND LOGIC ---
+// --- EKG MONITOR SOUND LOGIC (FIXED) ---
 function startMonitorLoop() {
     if(!soundEnabled || !window.AudioContext) return;
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -414,17 +404,31 @@ function stopMonitorLoop() {
 function scheduleBeep() {
     if(!soundEnabled || !caseState) return;
     
-    // Check if Monitor connected (Puls is visible)
-    if(!visibleVitals.Puls) {
+    // FIX: Checke, ob Puls ODER SpO2 sichtbar ist.
+    // Ein SpO2 Clip liefert immer auch einen Pleth-Puls.
+    const hasPuls = !!visibleVitals.Puls;
+    const hasSpO2 = !!visibleVitals.SpO2;
+
+    if(!hasPuls && !hasSpO2) {
+        // Monitor noch "aus"
         monitorTimeout = setTimeout(scheduleBeep, 1000);
         return;
     }
 
-    let hrVal = parseFloat(String(visibleVitals.Puls).match(/\d+/)?.[0] || 60);
+    // Wenn Puls nicht sichtbar, aber SpO2 da ist, nehmen wir den "echten" Puls aus dem Hintergrund
+    // um den Rhythmus zu simulieren.
+    let hrVal = 60;
+    if(hasPuls) {
+         hrVal = parseFloat(String(visibleVitals.Puls).match(/\d+/)?.[0] || 60);
+    } else if(hasSpO2) {
+         // Fallback: Puls aus State holen, auch wenn nicht angezeigt
+         hrVal = parseFloat(caseState.vitals?.Puls || 60);
+    }
+    
     if(hrVal <= 0) hrVal = 60;
 
     let spo2Val = 99;
-    if(visibleVitals.SpO2) {
+    if(hasSpO2) {
         spo2Val = parseFloat(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
     }
 
@@ -513,53 +517,34 @@ function openEKG() {
     const txt  = $id('ekgText');
     line.classList.add('ekg-anim');
     
-    // REALE EKG KURVEN (SVG Path Data)
-    // Wir nutzen 'd' Attribute (path) statt 'points' (polyline) für Kurven
-    let pathData = "";
-    
-    // Helper für Sinus-Kurve (wiederholend)
-    const pWave = "c 2 -5, 5 -5, 8 0 ";   // Kleine Welle
-    const segment = "l 5 0 ";            // Gerade
-    const qrs = "l 2 5 l 3 -45 l 3 55 l 2 -15 "; // Zacke hoch/runter
-    const tWave = "c 5 -10, 10 -10, 15 0 "; // Breite Welle
-    const base = "l 10 0 "; // Pause
-    
-    // Bauen wir den Pfadstring zusammen
-    // M = MoveTo, l = lineTo relative, c = curveTo relative
+    // Kurven mit 'bezier' statt zackiger Linien
+    let d = "M 0 75 ";
+    const pWave = "c 2 -5, 5 -5, 8 0 ";   
+    const segment = "l 5 0 ";            
+    const qrs = "l 2 5 l 3 -45 l 3 55 l 2 -15 "; 
+    const tWave = "c 5 -10, 10 -10, 15 0 "; 
+    const base = "l 10 0 "; 
     
     if(type === "sinus") {
-        // Ein Loop besteht aus ca 60px breite
-        let d = "M 0 75 ";
         for(let i=0; i<8; i++) {
              d += base + pWave + segment + qrs + segment + tWave + base;
         }
-        // Damit es ein path ist, müssen wir das Element ändern
-        // Da wir im HTML ein <polyline> haben, müssen wir es per JS zu <path> ändern
-        // ODER wir nutzen eine sehr dichte Polyline für "Fake-Kurven". 
-        // BESSER: Wir tauschen im HTML <polyline> gegen <path> aus.
-        // Quick Fix via JS:
         const svg = document.getElementById('ekgSvg');
         svg.innerHTML = `<path id="ekgLine" d="${d}" fill="none" stroke="#00ff00" stroke-width="2" class="ekg-anim" />`;
-        
         txt.textContent = "Monitorbild (Ableitung II) - Sinus";
         txt.style.color = "#0f766e";
         
     } else if (type === "vt") {
-        // Breite Zacken
-        let d = "M 0 75 ";
         for(let i=0; i<15; i++) {
             d += "l 10 -40 l 10 80 l 5 -40 "; 
         }
         const svg = document.getElementById('ekgSvg');
         svg.innerHTML = `<path id="ekgLine" d="${d}" fill="none" stroke="#ef4444" stroke-width="2" class="ekg-anim" />`;
-        
         txt.textContent = "Monitorbild - VT (Puls prüfen!)";
         txt.style.color = "#ef4444";
     } else {
-        // Asystolie
         const svg = document.getElementById('ekgSvg');
         svg.innerHTML = `<path id="ekgLine" d="M 0 75 L 400 75" fill="none" stroke="#ef4444" stroke-width="2" class="ekg-anim" />`;
-        
         txt.textContent = "Monitorbild - Asystolie";
         txt.style.color = "#ef4444";
     }
@@ -569,7 +554,7 @@ function openEKG() {
     stepCase('12-Kanal-EKG');
 }
 
-// ... Restliche Funktionen (openOxygen, openNA, openAFCounter...) bleiben gleich ...
+// ... Restliche Funktionen (openOxygen, openNA, openAFCounter...)
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
