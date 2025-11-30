@@ -202,18 +202,49 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
     grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)) !important;
 }
 
-/* Der Blutdruck-Wert (RR) */
-#vRR {
-    /* Deutlich kleiner und enger, damit /85 nicht umbricht */
-    font-size: 1.25rem !important; 
-    letter-spacing: -1px !important;
-    white-space: nowrap !important;
-    display: inline-block;
+/* --- FINALE REPARATUR: LAYOUT & ALIGNMENT --- */
+
+/* 1. Container: Zurück zu schmaleren Boxen für "Eine Zeile"-Look */
+.vitals {
+    /* 105px reicht meistens, damit alle 7 Boxen nebeneinander passen */
+    grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)) !important;
+    gap: 4px !important;
     width: 100%;
-    overflow: visible !important;
 }
 
-/* Andere Werte */
+/* 2. Die Box selbst: Flexbox für perfekte Zentrierung */
+.vital-box {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important; /* Vertikal mittig */
+    align-items: center !important;     /* Horizontal mittig */
+    text-align: center !important;      /* Textausrichtung */
+    min-height: 85px !important;
+    padding: 2px !important;
+    overflow: hidden !important;        /* Nichts darf rauslaufen */
+}
+
+/* 3. Der Blutdruck-Wert (RR): Dynamisch anpassen */
+#vRR {
+    font-size: 1.25rem !important;      /* Klein genug für "138/86" */
+    letter-spacing: -0.5px !important;
+    white-space: nowrap !important;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 4. Andere Werte: Standardgröße */
 .vital-val {
-    font-size: 1.5rem;
+    font-size: 1.5rem !important;
+    line-height: 1.2 !important;
+}
+
+/* 5. Labels (NIBP, SPO2...): Klein und zentriert */
+.vital-label {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 4px;
+    font-size: 0.75rem !important;
 }
