@@ -195,8 +195,19 @@ async function stepCase(txt) {
           ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
         `);
         
-        if(d.finding && !isSystemTick) speak(d.finding);
-    }
+        // --- NEUER CODE START ---
+        // Prüfen, ob es sich nur um eine Dokumentation handelt (z.B. "SAMPLER doku")
+        const isDoku = txt.toLowerCase().includes('doku') || txt.toLowerCase().includes('dokumentiert');
+
+        // Nur sprechen, wenn:
+        // 1. Ein Befund da ist (d.finding)
+        // 2. Es kein automatischer Zeit-Check ist (!isSystemTick)
+        // 3. Es KEINE reine Dokumentation ist (!isDoku)
+        if(d.finding && !isSystemTick && !isDoku) {
+            speak(d.finding);
+        }
+        }
+        
 
     caseState = d.case_state || caseState;
     document.getElementById('caseScore').textContent = `Score: ${caseState.score||0}`;
