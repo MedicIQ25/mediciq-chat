@@ -141,7 +141,7 @@
 </div>
 <div id="modalBEFAST" class="modal" style="display:none;">
   <div class="modal-head">BE-FAST Check</div>
-  <div class="modal-body befast-grid"><div id="befastInfo" class="small muted"></div><label><input type="checkbox" id="b_balance" /> B – Balance</label><label><input type="checkbox" id="e_eyes" /> E – Eyes</label><label><input type="checkbox" id="f_face" /> F – Face</label><label><input type="checkbox" id="a_arm"  /> A – Arm</label><label><input type="checkbox" id="s_speech" /> S – Speech</label><label>Last known well: <input type="time" id="t_time" /></label></div>
+  <div class="modal-body form-grid criteria-modal-body"><div id="befastInfo" class="small muted"></div><label><input type="checkbox" id="b_balance" /> B – Balance</label><label><input type="checkbox" id="e_eyes" /> E – Eyes</label><label><input type="checkbox" id="f_face" /> F – Face</label><label><input type="checkbox" id="a_arm"  /> A – Arm</label><label><input type="checkbox" id="s_speech" /> S – Speech</label><label>Last known well: <input type="time" id="t_time" /></label></div>
   <div class="modal-actions"><button id="befastFetch" class="btn secondary">Infos abrufen</button><button id="befastOk" class="btn">Dokumentieren</button><button id="befastCancel" class="btn secondary">Abbrechen</button></div>
 </div>
 <div id="modalSampler" class="modal" style="display:none;">
@@ -151,7 +151,7 @@
 </div>
 <div id="modal4S" class="modal" style="display:none;">
   <div class="modal-head">4S-Schema</div>
-  <div class="modal-body form-grid"><div id="s4Info" class="small muted"></div><label><input type="checkbox" id="s1" /> Sicherheit</label><label><input type="checkbox" id="s2" /> Szene</label><label><input type="checkbox" id="s3" /> Sichtung</label><label><input type="checkbox" id="s4" /> Support</label></div>
+  <div class="modal-body form-grid criteria-modal-body"><div id="s4Info" class="small muted"></div><label><input type="checkbox" id="s1" /> Sicherheit</label><label><input type="checkbox" id="s2" /> Szene</label><label><input type="checkbox" id="s3" /> Sichtung</label><label><input type="checkbox" id="s4" /> Support</label></div>
   <div class="modal-actions"><button id="s4Fetch" class="btn secondary">Infos abrufen</button><button id="s4Ok" class="btn">Dokumentieren</button><button id="s4Cancel" class="btn secondary">Abbrechen</button></div>
 </div>
 
@@ -175,13 +175,13 @@
       <div id="polyInfo" class="small muted"></div>
       <p style="font-weight:bold;">Kriterien für die direkte Zuweisung in ein Traumazentrum:</p>
       
-      <label><input type="checkbox" id="p1" /> 1. **Physiologie:** GCS $\le$ 13, oder systolischer RR $\le$ 90 mmHg, oder Atemfrequenz $\le$ 10 / $\ge$ 29 / erzwungene Beatmung.</label>
+      <label><input type="checkbox" id="p1" /> 1. **Physiologie:** GCS &le; 13, oder systolischer RR &le; 90 mmHg, oder Atemfrequenz &le; 10 / &ge; 29 / erzwungene Beatmung.</label>
       
       <label><input type="checkbox" id="p2" /> 2. **Anatomie:** Zwei oder mehr proximale Knochenfrakturen, Lähmung, instabiles Becken, penetrierendes Trauma (Kopf, Rumpf).</label>
       
-      <label><input type="checkbox" id="p3" /> 3. **Mechanismus:** Sturz aus $\ge$ 3m, Ejektion, Todesfall im selben Fahrzeug, Fußgänger/Radfahrer von Fahrzeug erfasst.</label>
+      <label><input type="checkbox" id="p3" /> 3. **Mechanismus:** Sturz aus &ge; 3m, Ejektion, Todesfall im selben Fahrzeug, Fußgänger/Radfahrer von Fahrzeug erfasst.</label>
       
-      <label><input type="checkbox" id="p4" /> 4. **Spezielle Patienten:** Alter $\ge$ 65, Antikoagulation, End-stage-Disease, Schwangerschaft.</label>
+      <label><input type="checkbox" id="p4" /> 4. **Spezielle Patienten:** Alter &ge; 65, Antikoagulation, End-stage-Disease, Schwangerschaft.</label>
   </div>
   <div class="modal-actions"><button id="polyFetch" class="btn secondary">Kriterien prüfen</button><button id="polyOk" class="btn">Dokumentieren</button><button id="polyCancel" class="btn secondary">Abbrechen</button></div>
 </div>
