@@ -27,7 +27,9 @@ const ACTIONS = {
       { label: 'AF messen (zählen)', token: 'AF messen', instant: true }, 
       { label: 'SpO₂ messen', token: 'SpO2 messen', instant: true }, 
       { label: 'Lunge auskultieren', token: 'Lunge auskultieren', instant: true }, 
-      { label: 'Sauerstoff geben', special: 'O2' } 
+      { label: 'Sauerstoff geben', special: 'O2' },
+      // NEU: Chest Seal für Thorax-Trauma
+      { label: 'Chest Seal (Ventilverband)', token: 'Chest Seal kleben' } 
   ],
   C: [ 
       { label: 'RR messen', token: 'RR messen', instant: true }, 
@@ -49,7 +51,10 @@ const ACTIONS = {
       { label: 'Immobilisation / Schienung', special: 'IMMO' }, 
       { label: 'Wärmeerhalt', token: 'Wärmeerhalt' }, 
       { label: 'Temp messen', token: 'Temperatur messen', instant: true }, 
-      { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' } 
+      { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' },
+      // NEU: Wichtige Trauma-Maßnahmen
+      { label: 'Wunde versorgen / kühlen', token: 'Wundversorgung' },
+      { label: 'Augen spülen / abdecken', token: 'Augenversorgung' }
   ]
 };
 

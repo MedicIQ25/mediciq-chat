@@ -200,7 +200,52 @@ exports.handler = async (event) => {
         else reply.finding = `Keine weiteren Verletzungen sichtbar.`;
         return ok(reply);
     }
+// --- NEUE TRAUMA-MAßNAHMEN (Chest Seal, Wunde, Augen) ---
+    
+    // Chest Seal (B)
+    if (low.includes('chest seal')) {
+        reply.accepted = true; 
+        touchStep("B");
+        if ((H.diagnosis_keys||[]).join(' ').toLowerCase().includes('pneumothorax') || (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('offen')) {
+            reply.evaluation = "✅ Chest Seal erfolgreich geklebt. Dyspnoe bessert sich leicht.";
+            // SpO2 verbessern
+             const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0] || 80);
+             updVitals({ SpO2: Math.min(94, curSpO2 + 5) });
+        } else {
+            reply.evaluation = "Chest Seal geklebt (prophylaktisch).";
+        }
+        return ok(reply);
+    }
 
+    // Wundversorgung / Kühlen (E)
+    if (low.includes('wundversorgung')) {
+        reply.accepted = true; 
+        touchStep("E");
+        let msg = "Wunde steril abgedeckt / versorgt.";
+        
+        // Spezielle Reaktionen je nach Fall
+        const dx = (H.diagnosis_keys||[]).join(' ').toLowerCase();
+        if (dx.includes('verbrennung') || dx.includes('verätzung')) msg = "✅ Betroffene Stellen werden intensiv gekühlt/gespült.";
+        if (dx.includes('eviszeration')) msg = "✅ Darmschlingen feucht & steril abgedeckt.";
+        if (dx.includes('amputation')) msg = "✅ Amputat gesichert und gekühlt.";
+        
+        reply.evaluation = msg;
+        return ok(reply);
+    }
+
+    // Augenversorgung (E)
+    if (low.includes('augenversorgung')) {
+        reply.accepted = true; 
+        touchStep("E");
+        let msg = "Augen geschützt.";
+        const dx = (H.diagnosis_keys||[]).join(' ').toLowerCase();
+        
+        if (dx.includes('säure') || dx.includes('verätzung')) msg = "✅ Augen werden ausgiebig gespült.";
+        if (dx.includes('auge') || dx.includes('perforation')) msg = "✅ Beide Augen steril abgedeckt (Ruhigstellung).";
+        
+        reply.evaluation = msg;
+        return ok(reply);
+    }
     // --- 3. INFOS & MAßNAHMEN ---
     
     if (/schmerz info/.test(low)) {
