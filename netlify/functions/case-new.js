@@ -1984,7 +1984,7 @@ exports.handler = async (event) => {
 
 trauma: [
         // ---------------------------------------------------------
-        // FALL 1: UNTERARMFRAKTUR (Der Klassiker)
+        // FALL 1: UNTERARMFRAKTUR
         // ---------------------------------------------------------
         () => ({
           id: "rs_trauma_arm",
@@ -2013,31 +2013,28 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Fraktur", "Radius", "Unterarm", "Bruch"],
-            // X
             bleeding_info: "Schürfwunden am Arm, keine kritische Blutung.",
-            // A
             mouth: "Frei, keine Zahnverletzungen.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Rosig, warm. Schwellung am Arm.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor, prompt.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie (Schmerz).",
             pain: { nrs: 9, ort: "Rechter Unterarm", charakter: "Stechend" },
+            
+            // HIER WAR DER FEHLER: Die Map für das Bild hat gefehlt!
+            injury_map: ["arm_r"], // Färbt den rechten Arm rot
             injuries: ["Geschlossene distale Radiusfraktur rechts", "Schürfwunden"],
             
-            // SPECIFICS
             nexus_criteria: { summary: "Keine HWS-Indikation (Patientin wach, kein HWS-Schmerz, keine Defizite), aber ablenkende Verletzung (Arm) beachten!" },
             polytrauma_criteria: { vitals: "Stabil", anatomical: "Isolierte Extremität", mechanism: "Niedrigenergie", special: "-" }
           }
         }),
 
         // ---------------------------------------------------------
-        // FALL 2: AMPUTATIONSVERLETZUNG (X-Problem!)
+        // FALL 2: AMPUTATIONSVERLETZUNG
         // ---------------------------------------------------------
         () => ({
           id: "rs_ampu_01",
@@ -2045,7 +2042,7 @@ trauma: [
           story: "Einsatzstichwort: 'Arbeitsunfall Kreissäge'. Ort: Tischlerei. Ein Schreiner (45) liegt am Boden. Neben ihm eine riesige Blutlache. Er hält sich den linken Oberschenkelstumpf.",
           intro_dialogue: "Hilfe! Es hört nicht auf! Ich verblute! *Schreit*",
           target_outcome: "PRIO 1: Tourniquet (C-ABCDE -> X-ABCDE!), Druckverband reicht nicht! Schocklage, Volumen, NA, Amputatversorgung.",
-          vitals: { RR: "80/40", SpO2: 92, AF: 28, Puls: 140, BZ: 110, Temp: 36.0, GCS: 14 }, // Hämorrhagischer Schock
+          vitals: { RR: "80/40", SpO2: 92, AF: 28, Puls: 140, BZ: 110, Temp: 36.0, GCS: 14 },
           scene_4s: {
             sicherheit: "Maschine aus? Strom weg?",
             szene: "Viel Blut am Boden, Patient blass. Amputat liegt unter der Bank.",
@@ -2066,21 +2063,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Amputation", "Blutung", "Schock", "Hämorrhagisch"],
-            // X - HIER MUSST DU HANDELN
             bleeding_info: "Massive, spritzende Blutung aus dem linken Oberschenkelstumpf (A. femoralis). Lebensgefahr!",
-            // A
             mouth: "Frei, blass.",
-            // B
             lung: "Frei, Tachypnoe (Schock).",
-            // C
             skin: "Marmoriet, kalt, schweißig. Rekap > 3 sek.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unruhig durch Schock.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie (Frequenz 140).",
             pain: { nrs: 10, ort: "Bein links", charakter: "Vernichtend" },
+            
+            // KORREKTUR:
+            injury_map: ["leg_l"], // Linkes Bein rot
             injuries: ["Oberschenkelamputation links"],
             
             nexus_criteria: { summary: "Kein HWS-Fokus, Prio liegt auf X!" },
@@ -2089,7 +2084,7 @@ trauma: [
         }),
 
         // ---------------------------------------------------------
-        // FALL 3: SCHENKELHALSFRAKTUR (Der Routinefall)
+        // FALL 3: SCHENKELHALSFRAKTUR
         // ---------------------------------------------------------
         () => ({
           id: "rs_shf_01",
@@ -2118,21 +2113,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Schenkelhals", "SHF", "Hüftfraktur", "Oberschenkel"],
-            // X
             bleeding_info: "Keine außen, aber Blutverlust nach innen möglich (bis 1-2L!).",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Blass (Schmerz/Alter). Rechtes Bein ist verkürzt und außenrotiert (Typisch für SHF).",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinusrhythmus.",
             pain: { nrs: 7, ort: "Hüfte rechts", charakter: "Tief sitzend" },
+            
+            // KORREKTUR:
+            injury_map: ["leg_r"], // Rechtes Bein rot
             injuries: ["V.a. Schenkelhalsfraktur rechts"],
 
             nexus_criteria: { summary: "Unauffällig, aber Schmerzen lenken ab." },
@@ -2141,7 +2134,7 @@ trauma: [
         }),
 
         // ---------------------------------------------------------
-        // FALL 4: SPANNUNGSPNEUMOTHORAX (Messerstich)
+        // FALL 4: SPANNUNGSPNEUMOTHORAX
         // ---------------------------------------------------------
         () => ({
           id: "rs_stich_01",
@@ -2149,7 +2142,7 @@ trauma: [
           story: "Einsatzstichwort: 'Schlägerei / Stichverletzung'. Ort: Vor einer Disco. Ein Mann (25) sitzt japsend an einer Hauswand. Er hält sich die rechte Brustseite. Blut am Hemd.",
           intro_dialogue: "Luft... ich krieg... keine... Luft! *keuch*",
           target_outcome: "Wunde verschließen (Chest Seal?), O2, Entlastungspunktion (durch NA) vorbereiten, Schocklage.",
-          vitals: { RR: "90/60", SpO2: 85, AF: 34, Puls: 130, BZ: 100, Temp: 36.8, GCS: 14 }, // Obstruktiver Schock
+          vitals: { RR: "90/60", SpO2: 85, AF: 34, Puls: 130, BZ: 100, Temp: 36.8, GCS: 14 },
           scene_4s: {
             sicherheit: "Täter noch vor Ort? Messer? Polizei ist Prio 1!",
             szene: "Patient panisch, ringt nach Luft.",
@@ -2170,21 +2163,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Pneumothorax", "Spannungspneu", "Stich", "Thorax"],
-            // X
             bleeding_info: "Stichwunde Thorax rechts (ca. 2cm), blutet mäßig, schäumt evtl. leicht.",
-            // A
             mouth: "Frei.",
-            // B - BEFUND
             lung: "Rechts kein Atemgeräusch! Halsvenen gestaut! Trachea weicht nach links ab (Spätzeichen).",
-            // C
             skin: "Zyanotisch, schweißig.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor, weit (Stress/Hypoxie).",
             befast: "Unruhig, hypoxisch.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie (Niedervoltage rechts?).",
             pain: { nrs: 9, ort: "Brust rechts", charakter: "Stechend" },
+            
+            // KORREKTUR:
+            injury_map: ["torso"], // Rumpf rot
             injuries: ["Stichwunde Thorax rechts"],
 
             nexus_criteria: { summary: "Nicht beurteilbar (GCS/Schock), HWS-Schutz empfohlen bis Ausschluss." },
@@ -2193,7 +2184,7 @@ trauma: [
         }),
 
         // ---------------------------------------------------------
-        // FALL 5: POLYTRAUMA (Sturz aus Höhe)
+        // FALL 5: POLYTRAUMA (Das aus deinem Screenshot)
         // ---------------------------------------------------------
         () => ({
           id: "rs_poly_sturz",
@@ -2201,7 +2192,7 @@ trauma: [
           story: "Einsatzstichwort: 'Sturz aus Höhe > 3m'. Ort: Baustelle. Ein Dachdecker ist vom Gerüst gefallen. Er liegt auf Schotter, bewegt sich nicht.",
           intro_dialogue: "*Stöhnt nur*... *reagiert kaum auf Ansprache*",
           target_outcome: "Vollimmobilisation (HWS/Spineboard), Load & Go, Voranmeldung Schockraum, O2, Wärmeerhalt.",
-          vitals: { RR: "100/60", SpO2: 90, AF: 24, Puls: 115, BZ: 110, Temp: 36.2, GCS: 9 }, // SHT + Schock
+          vitals: { RR: "100/60", SpO2: 90, AF: 24, Puls: 115, BZ: 110, Temp: 36.2, GCS: 9 },
           scene_4s: {
             sicherheit: "Fällt noch was runter? Helm tragen!",
             szene: "Patient liegt verdreht.",
@@ -2222,28 +2213,26 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Polytrauma", "SHT", "Beckenfraktur", "Sturz"],
-            // X
             bleeding_info: "Keine spritzende Blutung, aber große Schürfwunden.",
-            // A
             mouth: "Blutig (Zähne ausgeschlagen?).",
-            // B
             lung: "Links abgeschwächt (Hämatothorax?).",
-            // C
             skin: "Blass, kalt. Becken instabil (Kompressionsschmerz -> Nicht federn! Schlinge anlegen!).",
             abdomen: "Hart (Abwehrspannung -> Innere Blutung?).",
-            // D
             pupils: "Anisokorie (Rechts weiter -> SHT).",
             befast: "GCS 9, keine gezielte Bewegung.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 10, ort: "Ganzkörper", charakter: "Diffus" },
+            
+            // KORREKTUR: Jetzt färben sich Kopf und Rumpf rot!
+            injury_map: ["head", "torso"], 
             injuries: ["SHT", "Beckenfraktur", "Serienrippenfraktur links"],
 
             nexus_criteria: { summary: "POSITIV: Vigilanzminderung, Ablenkende Verletzungen. HWS-Immobilisation zwingend!" },
             polytrauma_criteria: { vitals: "GCS < 13 (Positiv)", anatomical: "Instabiles Becken (Positiv)", mechanism: "Sturz > 3m (Positiv)", special: "-" }
           }
         }),
-        // ---------------------------------------------------------
+    // ---------------------------------------------------------
         // FALL 6: VERBRENNUNG (Grillunfall)
         // ---------------------------------------------------------
         () => ({
@@ -2273,21 +2262,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Verbrennung", "Brandwunde", "Grillunfall", "Combustio"],
-            // X
             bleeding_info: "Keine Blutung, aber nässende Brandwunden.",
-            // A - KRITISCH
             mouth: "Ruß im Mund/Nasenbereich? -> Hier: Ja, Rußspuren an der Nase (Inhalationstrauma möglich!).",
-            // B
             lung: "Frei, kein Stridor (noch nicht).",
-            // C
             skin: "Rötung (Grad 1) und Blasen (Grad 2a/b) an beiden Armen und Thorax. Gesicht rot.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 10, ort: "Oberkörper", charakter: "Brennend" },
+            
+            // NEU: Färbt Oberkörper, beide Arme und Kopf rot
+            injury_map: ["torso", "arm_r", "arm_l", "head"],
             injuries: ["Verbrennung 2. Grades (ca. 18% KOF)", "V.a. Inhalationstrauma"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -2325,21 +2312,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Commotio", "Gehirnerschütterung", "SHT"],
-            // X
             bleeding_info: "Platzwunde an der Stirn (blutet stark, typisch Kopfschwarte).",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Blass.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor, prompt. (Wichtig zum Ausschluss schweres SHT).",
             befast: "Retrograde Amnesie (Filmriss vor dem Unfall). Sonst motorisch fit.",
             ekg_pattern: "sinus",
             ekg12: "Sinusrhythmus.",
             pain: { nrs: 4, ort: "Kopf", charakter: "Dumpf" },
+            
+            // NEU: Kopf rot
+            injury_map: ["head"],
             injuries: ["Platzwunde Stirn", "Commotio Cerebri"],
 
             nexus_criteria: { summary: "Vigilanz leicht gemindert (GCS 14)? -> HWS Immobilisation empfohlen bis Klinik." },
@@ -2353,7 +2338,7 @@ trauma: [
         () => ({
           id: "rs_offen_tib_01",
           specialty: "trauma",
-          story: "Einsatzstichwort: 'Offener Bruch'. Ort: Sportplatz. Ein Spieler (25) wurde gefoult. Der Unterschenkel steht im 90° Winkel ab, Knochen sichtbar.",
+          story: "Einsatzstichwort: 'Offener Bruch'. Ort: Sportplatz. Ein Spieler (25) wurde gefoult. Der linke Unterschenkel steht im 90° Winkel ab, Knochen sichtbar.",
           intro_dialogue: "Schaut euch das nicht an! *Weint*... Mein Bein! Macht, dass es aufhört!",
           target_outcome: "Sterile Abdeckung, DMS checken, Schienung in vorgefundener Lage (oder grob Längszug durch NA), Analgesie!",
           vitals: { RR: "140/90", SpO2: 98, AF: 22, Puls: 115, BZ: 100, Temp: 36.8, GCS: 15 },
@@ -2377,21 +2362,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Fraktur", "Offen", "Unterschenkel", "Tibia"],
-            // X
             bleeding_info: "Sickerblutung aus der Frakturstelle (venös), kein arterieller Jet.",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
-            skin: "Schweißig. Fuß pulse tastbar? (DMS!).",
+            skin: "Schweißig. Fußpulse tastbar? (DMS!).",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 10, ort: "Unterschenkel links", charakter: "Vernichtend" },
+            
+            // NEU: Linkes Bein rot
+            injury_map: ["leg_l"],
             injuries: ["Offene Unterschenkelfraktur II. Grades"],
 
             nexus_criteria: { summary: "Ablenkende Verletzung massiv vorhanden!" },
@@ -2429,21 +2412,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Abdominaltrauma", "Milzruptur", "Leberruptur", "Blutung"],
-            // X
             bleeding_info: "Keine außen.",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Prellmarke Thorax durch Gurt?",
-            // C - WICHTIG
             skin: "Blass, kalt, schweißig. Prellmarke am Bauch (Lenkradabdruck?).",
             abdomen: "Abwehrspannung (bretthart). Druckschmerz.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 7, ort: "Bauch", charakter: "Dumpf" },
+            
+            // NEU: Rumpf rot
+            injury_map: ["torso"],
             injuries: ["Stumpfes Bauchtrauma", "V.a. Milzruptur"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -2460,7 +2441,7 @@ trauma: [
           story: "Einsatzstichwort: 'Motorrad vs. PKW'. Ort: Kreuzung. Der Motorradfahrer (30) liegt 10m vom Krad entfernt. Er ist wach, sagt aber, er spüre seine Beine nicht.",
           intro_dialogue: "Warum bewegt sich mein Bein nicht? Ich will aufstehen... aber es geht nicht! Spüren Sie das?",
           target_outcome: "Vollimmobilisation (Spineboard/Vakuum), Helmabnahme (zu zweit, Zug!), Neurogener Schock erkennen (Warm + Hypoton).",
-          vitals: { RR: "80/40", SpO2: 96, AF: 18, Puls: 56, BZ: 100, Temp: 36.5, GCS: 15 }, // Neurogener Schock (Puls niedrig trotz niedrigem RR!)
+          vitals: { RR: "80/40", SpO2: 96, AF: 18, Puls: 56, BZ: 100, Temp: 36.5, GCS: 15 }, // Neurogener Schock
           scene_4s: {
             sicherheit: "Verkehr sichern.",
             szene: "Patient liegt rückenlings. Helm noch auf.",
@@ -2481,21 +2462,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Querschnitt", "Wirbelsäule", "HWS", "Lähmung"],
-            // X
             bleeding_info: "Keine großen Blutungen.",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C - NEUROGENER SCHOCK
             skin: "Oberhalb der Verletzung blass/kalt, unterhalb der Verletzung (Beine) warm/rosig (Vasodilatation). Puls langsam (Vagus überwiegt).",
             abdomen: "Weich.",
-            // D - KEY FEATURE
             pupils: "Isokor.",
             befast: "Arme bewegen sich. Beine komplett schlaff. Sensibilität ab Bauchnabel aufgehoben.",
             ekg_pattern: "sinus",
             ekg12: "Sinusbradykardie.",
             pain: { nrs: 8, ort: "Rücken (Bruchstelle)", charakter: "Dumpf" },
+            
+            // NEU: Rumpf rot
+            injury_map: ["torso"],
             injuries: ["V.a. Fraktur BWS/LWS", "Querschnittslähmung"],
 
             nexus_criteria: { summary: "POSITIV: Neurologische Ausfälle (Lähmung). HWS-Schutz zwingend." },
@@ -2532,21 +2511,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Auge", "Perforation", "Bulbus", "Fremdkörper"],
-            // X
             bleeding_info: "Keine starke Blutung, Tränenfluss blutig tingiert.",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Schweißig.",
             abdomen: "Weich.",
-            // D - WICHTIG
             pupils: "Rechts: Metallsplitter steckt in der Iris/Hornhaut. Pupille entrundet (verzogen). Links: Unauffällig.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 9, ort: "Auge rechts", charakter: "Stechend" },
+            
+            // NEU: Kopf rot
+            injury_map: ["head"],
             injuries: ["Perforierende Bulbusverletzung rechts"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -2584,21 +2561,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Rippenserienfraktur", "Instabil", "Thorax", "Flail"],
-            // X
             bleeding_info: "Keine äußere Blutung.",
-            // A
             mouth: "Leicht blutiger Auswurf (Lungenkontusion).",
-            // B - KEY FINDING
             lung: "Links abgeschwächt. Paradoxe Atmung: Ein Teil der Brustwand zieht sich bei Einatmung nach innen! Hautemphysem tastbar (Knisten).",
-            // C
-            skin: "Zyanotisch.",
+            skin: "Zyanotisch, schweißig.",
             abdomen: "Weich (aber Milz checken bei linksseitigem Trauma!).",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 9, ort: "Thorax links", charakter: "Stechend" },
+            
+            // NEU: Rumpf rot
+            injury_map: ["torso"],
             injuries: ["Instabiler Thorax", "Lungenkontusion"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -2636,21 +2611,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Schädelbasisbruch", "SBB", "SHT", "Brillenhaematom"],
-            // X
             bleeding_info: "Platzwunde Hinterkopf.",
-            // A
             mouth: "Frei. Aber: Klare Flüssigkeit tropft aus der Nase (Liquor!).",
-            // B
             lung: "Frei.",
-            // C
             skin: "Blass. 'Brillenhaematom' (Bluterguss um beide Augen) entwickelt sich. 'Battle-Sign' (blauer Fleck hinterm Ohr) noch nicht sichtbar.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor, prompt.",
             befast: "Verlangsamt, Retrograde Amnesie.",
             ekg_pattern: "sinus",
             ekg12: "Sinusrhythmus.",
             pain: { nrs: 5, ort: "Kopf", charakter: "Dumpf" },
+            
+            // NEU: Kopf rot
+            injury_map: ["head"],
             injuries: ["V.a. Schädelbasisbruch", "Platzwunde"],
 
             nexus_criteria: { summary: "Vigilanz gemindert? HWS-Schmerz? -> Immobilisation indiziert." },
@@ -2688,21 +2661,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Femur", "Oberschenkel", "Fraktur"],
-            // X
             bleeding_info: "Keine äußere Blutung, aber massives inneres Hämatom (Beinumfang rechts >> links).",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Blass, kaltschweißig. Fußpulse rechts schwächer tastbar (Druck durch Hämatom?).",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 9, ort: "Oberschenkel rechts", charakter: "Berstend" },
+            
+            // NEU: Rechtes Bein rot
+            injury_map: ["leg_r"],
             injuries: ["Femurschaftfraktur rechts"],
 
             nexus_criteria: { summary: "Ablenkende Verletzung!" },
@@ -2740,21 +2711,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Strangulation", "Erhängen", "Suizid", "HWS"],
-            // X
             bleeding_info: "Keine.",
-            // A - KRITISCH
             mouth: "Zungenspitze blau? Petechien (Punktblutungen) in den Augen/Mundschleimhaut. Stridor hörbar (Kehlkopfschwellung!).",
-            // B
             lung: "Frei.",
-            // C
             skin: "Stauungszeichen Kopf (rot/blau), Körper blass.",
             abdomen: "Weich. Evtl. Urinabgang.",
-            // D
             pupils: "Isokor.",
             befast: "Somnolent, motorisch aber intakt (keine Querschnittszeichen bisher).",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 7, ort: "Hals", charakter: "Brennend" },
+            
+            // NEU: Kopf rot (Hals)
+            injury_map: ["head"],
             injuries: ["Strangmarke", "V.a. Larynxtrauma", "V.a. HWS-Fraktur"],
 
             nexus_criteria: { summary: "Mechanismus Erhängen = Hohes Risiko HWS. Immobilisation!" },
@@ -2791,21 +2760,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Explosion", "Handtrauma", "Amputation", "Knalltrauma"],
-            // X
             bleeding_info: "Starke Blutung aus Fingerstümpfen D2/D3. Zerfetzte Weichteile.",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Schmauchspuren im Gesicht und an der Hand. Blass.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig, aber Patient hört schlecht (Knalltrauma).",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 9, ort: "Rechte Hand", charakter: "Pochend" },
+            
+            // NEU: Rechter Arm (Hand)
+            injury_map: ["arm_r"],
             injuries: ["Teilamputation Zeige-/Mittelfinger", "Verbrennungen", "Knalltrauma"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -2843,21 +2810,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Strom", "Elektrisiert", "Arrhythmie", "Verbrennung"],
-            // X
             bleeding_info: "Keine.",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C - BEFUND
             skin: "Strommarke (kleine weiße Verkohlung) am Zeigefinger rechts (Eintritt). Austrittswunde linker Fuß? (Suchen!).",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "ves", // Vereinzelte Extrasystolen
             ekg12: "Sinusrhythmus mit gehäuften ventriculären Extrasystolen (VES). Gefahr von Kammerflimmern beachten!",
             pain: { nrs: 3, ort: "Hand", charakter: "Kribbelnd" },
+            
+            // NEU: Eintritt (Arm rechts) und Austritt (Bein links)
+            injury_map: ["arm_r", "leg_l"],
             injuries: ["Strommarke Finger rechts", "V.a. kardiale Beteiligung"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -2871,7 +2836,7 @@ trauma: [
         () => ({
           id: "rs_pfaehlung_01",
           specialty: "trauma",
-          story: "Einsatzstichwort: 'Person in Zaun'. Ort: Vorgarten. Ein Maler ist von der Leiter gefallen und mit dem Oberschenkel auf einer Metallspitze des Zauns gelandet.",
+          story: "Einsatzstichwort: 'Person in Zaun'. Ort: Vorgarten. Ein Maler ist von der Leiter gefallen und mit dem linken Oberschenkel auf einer Metallspitze des Zauns gelandet.",
           intro_dialogue: "Holt mich hier runter! Zieht es raus! Es tut so weh!",
           target_outcome: "Fremdkörper NICHT entfernen! (Tamponiert Blutung), Stabilisieren (Polstern), Feuerwehr zur technischen Rettung (Zaun absägen), Analgesie.",
           vitals: { RR: "110/70", SpO2: 96, AF: 22, Puls: 110, BZ: 100, Temp: 36.5, GCS: 15 },
@@ -2895,21 +2860,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Pfählung", "Fremdkörper", "Trauma", "Zaun"],
-            // X
             bleeding_info: "Leichte Sickerblutung um den Spieß. Gefahr der massiven Blutung erst beim Entfernen!",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Blass, schweißig.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 8, ort: "Oberschenkel", charakter: "Stechend" },
+            
+            // NEU: Linkes Bein rot
+            injury_map: ["leg_l"],
             injuries: ["Pfählungsverletzung Oberschenkel links"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -2923,7 +2886,7 @@ trauma: [
         () => ({
           id: "rs_biss_01",
           specialty: "trauma",
-          story: "Einsatzstichwort: 'Tierbiss'. Ort: Park. Eine Joggerin (28) wurde von einem Schäferhund angegriffen. Sie hat Bisswunden am Unterarm und an der Wade.",
+          story: "Einsatzstichwort: 'Tierbiss'. Ort: Park. Eine Joggerin (28) wurde von einem Schäferhund angegriffen. Sie hat Bisswunden am rechten Unterarm und an der rechten Wade.",
           intro_dialogue: "Der hat einfach zugebissen! Überall Blut... und ich glaube, da ist was abgerissen!",
           target_outcome: "Wundversorgung, DMS (Nerven/Sehnen betroffen?), Impfstatus checken, Polizei (Hundesicherung?), Analgesie.",
           vitals: { RR: "130/80", SpO2: 98, AF: 20, Puls: 105, BZ: 95, Temp: 37.0, GCS: 15 },
@@ -2947,21 +2910,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Biss", "Hundebiss", "Wunde"],
-            // X
             bleeding_info: "Tiefe Fleischwunden Unterarm (venös blutend) und Wade. Zerfetzte Ränder.",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Blass.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Fingerbeweglichkeit eingeschränkt (Sehne durchtrennt?). Sensibilität an der Hand gestört (Nerv verletzt?).",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 6, ort: "Arm/Bein", charakter: "Brennend" },
+            
+            // NEU: Rechter Arm und rechtes Bein
+            injury_map: ["arm_r", "leg_r"],
             injuries: ["Multiple Bisswunden", "V.a. Sehnenverletzung Arm"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -2999,21 +2960,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Eviszeration", "Offenes Abdomen", "Schnitt", "Bauch"],
-            // X
             bleeding_info: "Mäßige Blutung aus der Bauchdecke, aber Darm liegt frei vor (Infektionsgefahr/Austrocknung).",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Blass, kaltschweißig (Vagale Reaktion + Schreck).",
             abdomen: "Offene Wunde ca. 10cm, Dünndarmschlingen prolabiert.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 8, ort: "Bauch", charakter: "Schneidend" },
+            
+            // NEU: Rumpf rot
+            injury_map: ["torso"],
             injuries: ["Offenes Bauchtrauma mit Eviszeration"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -3050,21 +3009,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Perthes", "Druckstauung", "Asphyxie", "Quetschung"],
-            // X
             bleeding_info: "Keine äußere Blutung.",
-            // A
             mouth: "Zunge geschwollen, blau. Petechien (Punktblutungen) an der Schleimhaut.",
-            // B
             lung: "Beidseits belüftet, aber rasselnd (Lungenkontusion?).",
-            // C - TYPISCH PERTHES
             skin: "Kopf/Hals dunkelblau-violett verfärbt, punktförmige Einblutungen. Ab Hals abwärts blass.",
             abdomen: "Weich.",
-            // D
             pupils: "Einblutungen im Weißen des Auges (Hyposphagma).",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 8, ort: "Brustkorb", charakter: "Dumpf" },
+            
+            // NEU: Kopf (blau) und Rumpf (gequetscht)
+            injury_map: ["head", "torso"],
             injuries: ["Traumatische Asphyxie", "Thoraxkontusion"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -3102,21 +3059,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Pneumothorax", "Offen", "Schuss", "Sucking"],
-            // X
             bleeding_info: "Schusswunde Thorax links, ca. 2cm. Blubbert und zieht Luft (Sucking Chest Wound).",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Links abgeschwächt. Wunde 'atmet' mit.",
-            // C
             skin: "Blass, schweißig.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 9, ort: "Brust links", charakter: "Stechend" },
+            
+            // NEU: Rumpf rot
+            injury_map: ["torso"],
             injuries: ["Offener Pneumothorax links"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -3154,21 +3109,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Luxation", "Patella", "Knie", "Verrenkung"],
-            // X
             bleeding_info: "Keine.",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Rosig. Kniegelenk deformiert, Patella liegt lateral (außen).",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 8, ort: "Knie rechts", charakter: "Verschoben" },
+            
+            // NEU: Rechtes Bein rot
+            injury_map: ["leg_r"],
             injuries: ["Patellaluxation rechts"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -3182,7 +3135,7 @@ trauma: [
         () => ({
           id: "rs_acid_01",
           specialty: "trauma",
-          story: "Einsatzstichwort: 'Chemieunfall'. Ort: Reinigungslager. Eine Putzkraft (55) hat beim Umfüllen Rohrreiniger (Schwefelsäure) über den Arm und ins Gesicht bekommen.",
+          story: "Einsatzstichwort: 'Chemieunfall'. Ort: Reinigungslager. Eine Putzkraft (55) hat beim Umfüllen Rohrreiniger (Schwefelsäure) über den rechten Arm und ins Gesicht bekommen.",
           intro_dialogue: "Es brennt! Meine Haut schmilzt! Wasser! Schnell!",
           target_outcome: "Eigenschutz (Handschuhe!), Spülen, Spülen, Spülen (mind. 20 min)! Kontaminierte Kleidung weg. Auge betroffen? -> Augendusche.",
           vitals: { RR: "160/95", SpO2: 98, AF: 22, Puls: 115, BZ: 100, Temp: 36.8, GCS: 15 },
@@ -3206,21 +3159,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Verätzung", "Säure", "Chemie", "Lauge"],
-            // X
             bleeding_info: "Keine Blutung, aber Haut weißlich verfärbt/nekrotisch (Koagulationsnekrose).",
-            // A
             mouth: "Frei (Glück gehabt, nichts geschluckt).",
-            // B
             lung: "Frei.",
-            // C
             skin: "Rechter Arm und Wange: Verätzung Grad 2-3.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor. Auge zum Glück verschont (Lidschlussreflex).",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 9, ort: "Arm/Gesicht", charakter: "Ätzend" },
+            
+            // NEU: Arm und Kopf rot
+            injury_map: ["arm_r", "head"],
             injuries: ["Säureverätzung Arm/Gesicht"],
 
             nexus_criteria: { summary: "Unauffällig." },
@@ -3258,21 +3209,19 @@ trauma: [
           },
           hidden: {
             diagnosis_keys: ["Skalpierung", "Degloving", "Kopfschwarte", "Blutung"],
-            // X - PRIO 1
             bleeding_info: "Massive Blutung aus der Kopfschwarte (sehr gut durchblutet). Druckverband schwierig, manueller Druck nötig.",
-            // A
             mouth: "Frei.",
-            // B
             lung: "Frei.",
-            // C
             skin: "Blass, tachykard.",
             abdomen: "Weich.",
-            // D
             pupils: "Isokor.",
             befast: "Unauffällig.",
             ekg_pattern: "sinus",
             ekg12: "Sinustachykardie.",
             pain: { nrs: 10, ort: "Kopf", charakter: "Reißend" },
+            
+            // NEU: Kopf rot
+            injury_map: ["head"],
             injuries: ["Skalpierungsverletzung (Degloving)"],
 
             nexus_criteria: { summary: "Unauffällig." },
