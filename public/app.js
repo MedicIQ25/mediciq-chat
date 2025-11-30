@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Professional Voice & Dialogue Edition)
+// medicIQ – App Logic (Pro-Audio Edition: TTS + EKG Monitor)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -26,6 +26,10 @@ let isDarkMode = false;
 let selectedSpec = 'internistisch';
 const visibleVitals = {};
 
+// AUDIO CONTEXT VARS
+let audioCtx = null;
+let monitorTimeout = null;
+
 // Wait for DOM
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Init UI
@@ -36,6 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
     bindEvent('btnSound', 'click', (e) => {
         soundEnabled = !soundEnabled;
         e.target.textContent = soundEnabled ? "🔊 An" : "🔇 Aus";
+        
+        // Monitor Sound umschalten
+        if(soundEnabled) startMonitorLoop();
+        else stopMonitorLoop();
     });
 
     bindEvent('btnDark', 'click', () => {
@@ -136,11 +144,13 @@ async function startCase() {
 
     // LOGIK: Wenn Dialog vorhanden, sprich den Dialog. Sonst die Story.
     if (caseState.intro_dialogue) {
-        // Kurze Pause, dann spricht der Patient
         setTimeout(() => speak(caseState.intro_dialogue), 500);
     } else {
         speak(caseState.story);
     }
+
+    // Monitor starten, falls Sound an ist
+    if(soundEnabled) startMonitorLoop();
 
   } catch(e) {
     // FALLBACK LOCAL
@@ -174,6 +184,8 @@ async function stepCase(txt) {
     if(d.updated_vitals) {
       Object.assign(visibleVitals, d.updated_vitals);
       renderVitals(); 
+      // Sound Parameter sofort aktualisieren (Puls/SpO2 Änderung)
+      // Der Loop greift automatisch auf die neuen 'visibleVitals' zu
     }
     
     const isSystemTick = txt.includes('System-Check');
@@ -211,6 +223,7 @@ async function stepCase(txt) {
       caseState = null;
       updateUI(false); 
       stopTimer();
+      stopMonitorLoop(); // Monitor aus bei Ende
       document.getElementById('caseStatus').textContent = 'Fall beendet.';
     }
   } catch(e) {
@@ -294,7 +307,7 @@ function stopTimer() {
 }
 
 function updateUI(running) {
-  const specRow = document.getElementById('specRow'); // Achtung: ID im HTML beachten!
+  const specRow = document.getElementById('specRow');
   const startBtn = document.getElementById('startCase');
   const finishBtn = document.getElementById('finishCase');
   const roleSel = document.getElementById('roleSel');
@@ -379,6 +392,101 @@ function closeModal(id) {
   el.style.display = 'none';
 }
 
+// --- EKG MONITOR SOUND LOGIC (Web Audio API) ---
+function startMonitorLoop() {
+    if(!soundEnabled || !window.AudioContext) return;
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Vermeidung von doppelten Loops
+    if(monitorTimeout) clearTimeout(monitorTimeout);
+    
+    scheduleBeep();
+}
+
+function stopMonitorLoop() {
+    if(monitorTimeout) clearTimeout(monitorTimeout);
+    monitorTimeout = null;
+    // AudioContext suspendieren um Ressourcen zu sparen? Eher laufen lassen.
+}
+
+function scheduleBeep() {
+    if(!soundEnabled || !caseState) return;
+
+    // Werte holen (nur wenn sie sichtbar sind!)
+    let hrVal = 0;
+    let spo2Val = 0;
+
+    // Wenn Puls gemessen wurde, nutzen wir ihn. Sonst Standard 60.
+    if(visibleVitals.Puls) {
+         hrVal = parseFloat(String(visibleVitals.Puls).match(/\d+/)?.[0] || 60);
+    } else {
+        // Kein Puls sichtbar -> kein Piepen (Monitor noch nicht angeschlossen)
+        // ODER: Wir geben ein leises Standard-Piepen?
+        // Besser: Kein Piepen. Erst wenn Puls gemessen/Monitor dran.
+        // Um das zu simulieren checken wir 'monitor_on'. 
+        // Vereinfachung: Wenn Puls sichtbar ist, piept es.
+        hrVal = 0; 
+    }
+
+    if(hrVal <= 0) {
+        // Monitor nicht dran -> Check in 1 Sekunde wieder
+        monitorTimeout = setTimeout(scheduleBeep, 1000);
+        return;
+    }
+
+    if(visibleVitals.SpO2) {
+        spo2Val = parseFloat(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
+    } else {
+        spo2Val = 99; // Annahme
+    }
+
+    playBeep(spo2Val);
+
+    // Timing für den nächsten Beat
+    // 60 BPM = 1 Beat pro 1000ms. 120 BPM = 1 Beat pro 500ms.
+    // Berechnung: 60000 / BPM
+    const interval = 60000 / Math.max(30, Math.min(220, hrVal));
+    monitorTimeout = setTimeout(scheduleBeep, interval);
+}
+
+function playBeep(spo2) {
+    if(!audioCtx) return;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    // Frequenz berechnen (Corpuls Style)
+    // 100% = ca. 800Hz. 70% = ca. 400Hz.
+    // Formel: Base - (Drop * Factor)
+    // Einfache Logik: Je niedriger SpO2, desto tiefer der Ton
+    let freq = 850; 
+    if(spo2 < 100) {
+        const diff = 100 - spo2;
+        // Pro % weniger Sättigung 15Hz tiefer
+        freq = 850 - (diff * 20); 
+    }
+    // Limit nach unten (sonst brummt es nur)
+    if(freq < 150) freq = 150;
+
+    osc.frequency.value = freq;
+    osc.type = 'triangle'; // Klingt piepsiger/medizinischer als 'sine'
+
+    // Lautstärke
+    gain.gain.value = 0.05; // Leise, damit Sprache hörbar bleibt
+
+    // Kurz abspielen (0.1 Sekunden)
+    const now = audioCtx.currentTime;
+    osc.start(now);
+    osc.stop(now + 0.12);
+
+    // Um "Klicken" am Ende zu vermeiden, Gain ausfaden
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+}
+
 // --- OPENAI TTS LOGIC (High-End) ---
 let currentAudio = null;
 
@@ -396,7 +504,7 @@ async function speak(text) {
         .replace(/l\/min/g, 'Liter')
         .replace(/°C/g, 'Grad');
 
-   // LOGIK: Stimme wählen basierend auf Patient
+    // LOGIK: Stimme wählen basierend auf Patient
     // "fable" klingt im Deutschen oft natürlicher/europäischer als "onyx"
     let selectedVoice = "fable"; 
 
@@ -406,11 +514,11 @@ async function speak(text) {
 
         // Kind
         if (specialty === 'paediatrisch' || storyLower.includes('kind') || storyLower.includes('säugling') || storyLower.includes('junge') || storyLower.includes('mädchen')) {
-            selectedVoice = "alloy"; // Alloy ist am neutralsten für Kinder
+            selectedVoice = "alloy"; 
         }
         // Frau
         else if (storyLower.includes('frau') || storyLower.includes('patientin') || storyLower.includes('sie ')) {
-            selectedVoice = "nova"; // Nova ist die beste Frauenstimme
+            selectedVoice = "nova"; 
         }
     }
 
