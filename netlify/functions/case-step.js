@@ -16,8 +16,8 @@ exports.handler = async (event) => {
     state.steps_done = Array.isArray(state.steps_done) ? state.steps_done : [];
     state.history    = Array.isArray(state.history) ? state.history : [];
     state.score      = state.score || 0;
-    // Hinzugefügt: o2_given Flag zur Verfolgung der O2-Gabe
-    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false, handover_done: false, o2_given: false };
+    // Hinzugefügt: o2_given und immo_done Flags zur Verfolgung der Maßnahmen
+    state.measurements = state.measurements || { vitals: {}, schemas: {}, pain: {}, diagnosis: null, iv_access: false, handover_done: false, o2_given: false, immo_done: false };
     
     // History
     if (ua && !low.includes('debriefing')) {
@@ -97,8 +97,7 @@ exports.handler = async (event) => {
       const isDxCorrect = correctKeys.some(key => userDx.includes(key.toLowerCase()));
 
       const histStr = state.history.map(h => h && h.action ? h.action.toLowerCase() : "").join(" ");
-      const hasImmo = histStr.includes("immobilisation");
-      const hasO2 = state.measurements.o2_given; // Verwende das neue Flag
+      const hasO2 = state.measurements.o2_given; 
       const hasHandover = state.measurements.handover_done;
 
       let status = missingSteps.length ? "⚠️ Struktur lückenhaft" : "✅ Bestanden";
@@ -143,17 +142,40 @@ exports.handler = async (event) => {
     if (/pupillen/.test(low)) {
         reply.accepted = true; reply.finding = H.pupils || "Isokor, mittelweit, prompt."; reply.evaluation = "D: Pupillenkontrolle."; touchStep("D"); return ok(reply);
     }
-    // E - Exposure / pDMS
+    // E - Exposure / pDMS (FIX: Unterscheidung vor/nach Schienung)
     if (/pdms/.test(low)) {
-        reply.accepted = true; reply.evaluation = "pDMS geprüft:";
-        let finding = "DMS an allen Extremitäten intakt.";
-        if (state.specialty === 'trauma') { finding = `DMS eingeschränkt an betroffener Stelle, Durchblutung erhalten.`; }
-        reply.finding = finding; touchStep("C"); return ok(reply);
+        reply.accepted = true;
+        let finding;
+        let evaluation;
+        
+        const isTrauma = state.specialty === 'trauma';
+        const immoDone = state.measurements.immo_done; // Prüfe, ob geschient wurde
+
+        if (isTrauma) {
+            if (!immoDone) {
+                // Prüfung vor Schienung (Anfangsbefund)
+                finding = `DMS eingeschränkt an betroffener Extremität (Initialbefund).`;
+                evaluation = "pDMS Initialbefund dokumentiert (C/E).";
+            } else {
+                // Prüfung nach Schienung
+                finding = `DMS ist nach Anlage der Schiene an der betroffenen Extremität erhalten.`;
+                evaluation = "pDMS-Kontrolle nach Immobilisation dokumentiert.";
+            }
+        } else {
+            // Normaler Fall
+            finding = "DMS an allen Extremitäten intakt (Motorik/Sensibilität unauffällig).";
+            evaluation = "pDMS geprüft.";
+        }
+        
+        reply.finding = finding; 
+        reply.evaluation = evaluation;
+        touchStep("C"); 
+        return ok(reply);
     }
     
-    // --- 3. INFORMATIONSANFRAGEN (FIX: HINZUFÜGEN) ---
+    // --- 3. INFORMATIONSANFRAGEN & SPEZIELLE MAßNAHMEN ---
     
-    // NRS Info (Abruf der Schmerz-Infos)
+    // NRS Info
     if (low.includes('schmerz info')) {
         reply.accepted = true; 
         const pain = H.pain || {};
@@ -161,14 +183,14 @@ exports.handler = async (event) => {
         return ok(reply);
     }
 
-    // BEFAST Info (Abruf der neurologischen Infos)
+    // BEFAST Info
     if (low.includes('befast info')) {
         reply.accepted = true; 
         reply.finding = `<b>BE-FAST-Details:</b><br>${H.befast || "Keine spezifischen neurologischen Symptome hinterlegt."}`;
         return ok(reply);
     }
 
-    // 4S Info (Abruf der Szenen-Infos)
+    // 4S Info
     if (low.includes('4s info')) {
         reply.accepted = true; 
         const s = state.scene_4s || {};
@@ -193,20 +215,46 @@ exports.handler = async (event) => {
         }
         return ok(reply);
     }
+
+    // Oberkörper Hochlagerung (FIX: Auswirkung auf SpO2)
+    if (low.includes('oberkörper hoch lagern')) {
+        reply.accepted = true; 
+        reply.evaluation="Oberkörper hochgelagert. Dies unterstützt die Atemmechanik.";
+        touchStep("E");
+
+        const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0] || 90);
+        
+        // Leichte Verbesserung der Sättigung, wenn der Wert unter 96% liegt
+        if (curSpO2 < 96) {
+            const newSpO2 = Math.min(98, curSpO2 + 2); 
+            updVitals({ SpO2: newSpO2 });
+            reply.finding = `✅ SpO₂ verbessert sich leicht auf ${newSpO2}%.`;
+        }
+        return ok(reply);
+    }
+
+    // Immobilisation (FIX: Setzt Flag für DMS-Kontrolle)
+    if (low.includes('immobilisation:')) {
+        state.measurements.immo_done = true; // Neues Flag
+        reply.accepted = true;
+        reply.evaluation = "Immobilisation durchgeführt.";
+        touchStep("E");
+        reply.finding = "Hinweis: Kontrolle DMS/Motorik/Sensibilität nach Schienung ist zwingend erforderlich!";
+        return ok(reply);
+    }
     
     // --- 4. VITALWERTE & SCHEMATA (DOKUMENTATION) ---
     
-    // SAMPLER DOKU (FIX: Protokolliert vertikal)
+    // SAMPLER DOKU
     if (/sampler doku/.test(low)) { 
         reply.accepted=true; 
         const s = state.anamnesis?.SAMPLER || {};
         reply.evaluation="SAMPLER dokumentiert:"; 
-        // Vertikale Darstellung im Protokoll
         reply.finding = `S: ${text(s.S)}<br>A: ${text(s.A)}<br>M: ${text(s.M)}<br>P: ${text(s.P)}<br>L: ${text(s.L)}<br>E: ${text(s.E)}<br>R: ${text(s.R)}`; 
         return ok(reply); 
     }
     
-    // 4S DOKU (FIX: Protokolliert vertikal)
+    // 4S DOKU
     if (/4s doku/.test(low)) { 
         reply.accepted = true; 
         const s = state.scene_4s || {};
