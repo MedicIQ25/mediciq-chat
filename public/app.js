@@ -1,11 +1,11 @@
 // ===============================================================
-// medicIQ – App Logic (Dynamic Pleth & High-End Monitor)
+// medicIQ – App Logic (Medical Grade SVG Fix)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
 const API_CASE_STEP = '/.netlify/functions/case-step';
 
-// ACTIONS: "instant: true" sorgt für sofortige Ausführung ohne Queue
+// ACTIONS
 const ACTIONS = {
   X: [ 
       { label: 'Nach krit. Blutungen suchen', token: 'Blutungscheck', instant: true }, 
@@ -245,25 +245,18 @@ async function stepCase(txt) {
   }
 }
 
-// --- DYNAMIC MONITOR LOGIC (Visuals adapt to Patient) ---
+// --- DYNAMIC MONITOR LOGIC (Gapless, High-Res, No-Overlap) ---
 function openEKG() {
     if(!caseState) return;
     const type = caseState.hidden?.ekg_pattern || "sinus";
     
-    // --- NEU: Wir holen uns den echten SpO2 Wert ---
-    let spo2Value = 98; // Default gesund
+    let spo2Value = 98; 
     if(visibleVitals.SpO2) {
-        // Nur Zahlen aus String "94%" filtern
         spo2Value = parseInt(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
     } else if(caseState.vitals?.SpO2) {
-        // Fallback falls noch nicht gemessen, aber wir wollen Simulation zeigen (oder flatline)
-        // Besser: Wenn nicht gemessen, zeigen wir "Null-Linie" beim Pleth?
-        // Für Simulation zeigen wir den tatsächlichen Wert des Patienten "grau" oder als Vorschau.
-        // Hier: Wir nutzen den echten Wert, um die Kurve zu formen.
         spo2Value = parseInt(caseState.vitals.SpO2);
     }
 
-    // Grid
     const gridPattern = `
       <defs>
         <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -279,17 +272,17 @@ function openEKG() {
 
     const viewWidth = 400;
     
-    // EKG oben
-    let ekgPath = generateLoopPath(type, 60, viewWidth, 100);
+    // FIX: EKG noch etwas höher schieben (50px), um Platz zu schaffen
+    let ekgPath = generateLoopPath(type, 50, viewWidth, 100);
     
-    // Pleth unten -> Wir übergeben den SpO2 Wert als "Qualitätsfaktor"
-    let plethPath = generateLoopPath('pleth', 130, viewWidth, spo2Value);
+    // FIX: Pleth deutlich tiefer setzen (150px)
+    let plethPath = generateLoopPath('pleth', 150, viewWidth, spo2Value);
 
     const modalBody = document.querySelector('#modalEKG .modal-body');
 
     modalBody.innerHTML = `
-      <div class="ekg-screen" style="width:100%; height:180px;">
-        <svg width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="none">
+      <div class="ekg-screen" style="width:100%; height:200px;">
+        <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
             ${gridPattern}
             
             <g class="infinite-scroll">
@@ -304,10 +297,10 @@ function openEKG() {
             </g>
 
             <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="12" font-weight="bold">II</text>
-            <text x="5" y="110" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
+            <text x="5" y="120" fill="#3b82f6" font-family="monospace" font-size="12" font-weight="bold">Pleth</text>
             
-            <text x="360" y="25" fill="#00ff00" font-family="monospace" font-size="14" font-weight="bold">${visibleVitals.Puls || '--'}</text>
-            <text x="360" y="115" fill="#3b82f6" font-family="monospace" font-size="14" font-weight="bold">${visibleVitals.SpO2 || '--'}</text>
+            <text x="350" y="30" fill="#00ff00" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.Puls || '--'}</text>
+            <text x="350" y="130" fill="#3b82f6" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.SpO2 || '--'}</text>
         </svg>
       </div>
       <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
@@ -330,66 +323,66 @@ function openEKG() {
     if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
 }
 
-// Helper: Generiert Kurven (Mit SpO2 Anpassung)
+// Helper: Generiert die Kurven (Hybrid: Kurven für P/T, Linien für QRS)
 function generateLoopPath(type, yBase, totalWidth, qualityValue) {
     let d = `M 0 ${yBase} `;
     let currentX = 0;
-    let mode = 'line'; 
+    let mode = 'curve'; // Default mode
     let beatWidth = 0;
     let commands = []; 
 
     if (type === 'sinus') {
-        mode = 'line';
-        beatWidth = 50; 
+        mode = 'curve'; // Wir nutzen c-Kurven
+        // Ein Beat ist ca 70px breit für ~70bpm Darstellung
+        beatWidth = 70; 
+        
+        // --- PROFI EKG DEFINITION (Hybrid) ---
+        // c dx1 dy1, dx2 dy2, dx dy (relative Bezier)
+        // l dx dy (relative Line)
+        
         commands = [
-           [5,0], [3,-5], [3,5], [4,0], // P
-           [2,0], [1,5], [2,-55], [2,60], [2,-10], // QRS
-           [3,0], [5,-10], [5,10], // T
-           [13,0] // Pause
+            // P-Welle (Weich, rund)
+            "c 3 -5, 7 -5, 10 0",
+            
+            // PR-Strecke (Kurz, isoelektrisch)
+            "l 5 0",
+            
+            // QRS (SCHARF & SCHMAL) - Hier nutzen wir 'l' Befehle direkt im String
+            // Q (klein runter), R (steil hoch), S (steil runter), J-Point (zurück zur Basis)
+            // Relativ zur P-Welle
+            "l 2 3 l 3 -55 l 3 60 l 2 -8", 
+            
+            // ST-Strecke
+            "l 5 0",
+            
+            // T-Welle (Breiter, weicher)
+            "c 5 -15, 12 -15, 18 0",
+            
+            // Pause bis zum nächsten Schlag
+            "l 22 0"
         ];
+
     } else if (type === 'vt') {
         mode = 'line';
-        beatWidth = 30;
-        commands = [[10,-40], [10,80], [10,-40]];
+        beatWidth = 40;
+        commands = [[15,-45], [15,90], [10,-45]];
     } else if (type === 'pleth') {
         mode = 'curve';
         beatWidth = 50;
         
-        // --- DYNAMISCHE AMPLITUDE ---
-        // Wenn SpO2 > 94: Volle Höhe (Skalierung 1.0)
-        // Wenn SpO2 < 85: Flache Linie (Skalierung 0.2)
+        // Dynamische Amplitude für Pleth
         let scale = 1.0;
         if(qualityValue < 80) scale = 0.1;
         else if(qualityValue < 88) scale = 0.3;
         else if(qualityValue < 94) scale = 0.6;
         
-        // Dikrote Welle verschwindet bei schlechter Versorgung
         const hasNotch = qualityValue > 90;
-
-        // Definition der Bezier Punkte (Relativ)
-        // Wir skalieren die Y-Werte (zweiter Wert in jedem Paar)
-        
         const riseY = -25 * scale;
-        const fallY = 5 * scale; // Basis overshoot
         
-        // 1. Anstieg
         let cmd1 = `c 5 ${riseY}, 10 ${riseY}, 12 -5`; 
-        
-        // 2. Welle & Notch
-        let cmd2 = "";
-        if(hasNotch) {
-             // Deutlicher Notch
-             cmd2 = `c 2 8, 5 0, 8 5`;
-        } else {
-             // Flacher Abfall ohne Notch (Schock/Zentralisation)
-             cmd2 = `c 2 2, 5 4, 8 6`;
-        }
-
-        // 3. Auslauf
+        let cmd2 = hasNotch ? `c 2 8, 5 0, 8 5` : `c 2 2, 5 4, 8 6`;
         let cmd3 = `c 5 5, 10 0, 30 0`;
-        
         commands = [cmd1, cmd2, cmd3];
-
     } else {
         return `M 0 ${yBase} L ${totalWidth} ${yBase}`;
     }
@@ -401,9 +394,11 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue) {
                 d += `L ${currentX} ${yBase + pt[1]} `;
             });
         } else {
+            // Curve mode (Strings)
             commands.forEach(cmd => {
                 d += cmd + " ";
             });
+            // Manuelles Tracking von X, da SVG Commands keine Info zurückgeben
             currentX += beatWidth;
         }
     }
