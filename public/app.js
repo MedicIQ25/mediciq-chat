@@ -742,52 +742,60 @@ function openHandover() {
     openModal('modalHandover');
 }
 async function openDebrief() {
-  // 1. Sicherheits-Check
+  // 1. Nichts löschen! Erst mal nur prüfen.
   if (!caseState) {
-      addMsg("⚠️ Fehler: Kein aktiver Fall gefunden.");
+      addMsg("⚠️ Fehler: Kein Fall aktiv.");
       return;
   }
 
-  // 2. Klonen und Sichern des Zustands
-  const finalState = JSON.parse(JSON.stringify(caseState));
-
-  // 3. SOFORTIGES Aufräumen (verhindert Race Conditions)
-  caseState = null; // System deaktivieren
+  // 2. Zeit anhalten (damit keine Minuspunkte gesammelt werden)
   stopTimer();
   stopMonitorLoop();
-  updateUI(false);
   
+  // Status ändern, damit der User sieht "Aha, es passiert was"
   const statusEl = document.getElementById('caseStatus');
-  if(statusEl) statusEl.textContent = 'Fall beendet.';
-
-  // 4. Ladeanzeige
-  addMsg("⏳ <em>Analysiere Fall und erstelle Debriefing...</em>");
+  if(statusEl) statusEl.textContent = 'Erstelle Analyse...';
+  
+  addMsg("⏳ <em>Sende Daten an Auswertung...</em>");
 
   try {
-    // 5. Anfrage mit dem GESICHERTEN (kopierten) State
+    // 3. Anfrage senden (mit dem noch existierenden caseState!)
     const r = await fetch(API_CASE_STEP, {
         method: 'POST',
-        body: JSON.stringify({ case_state: finalState, user_action: 'Debriefing' })
+        body: JSON.stringify({ 
+            case_state: caseState, 
+            user_action: 'Debriefing' 
+        })
     });
 
     if (!r.ok) throw new Error("Server Fehler: " + r.status);
 
     const d = await r.json();
     
-    // 6. Anzeige
+    // 4. Jetzt erst aufräumen
+    caseState = null; 
+    updateUI(false);
+    if(statusEl) statusEl.textContent = 'Fall beendet.';
+
+    // 5. Ergebnis anzeigen
     if (d.debrief) {
         addMsg(`
-            <div style="background:#ecfdf5; border:1px solid #10b981; padding:15px; border-radius:8px; margin-top:10px; color:#064e3b; font-size: 0.95rem;">
-                <strong>🎓 DEBRIEFING</strong><br>
+            <div style="background:#f0fdf4; border:2px solid #16a34a; padding:20px; border-radius:12px; margin-top:15px; color:#14532d; font-size: 1rem; line-height: 1.6;">
+                <h3 style="margin-top:0; color:#166534;">🎓 Fall-Auswertung</h3>
                 ${d.debrief}
             </div>
         `);
+        // Optional: Kurzes Audio-Feedback
+        speak("Hier ist deine Auswertung.");
     } else {
-        addMsg("⚠️ Server hat keine Auswertung gesendet.");
+        addMsg("⚠️ Auswertung leer. (Server hat geantwortet, aber ohne Text)");
     }
     
   } catch(e) {
     console.error(e);
-    addMsg(`❌ Fehler beim Laden des Debriefings: ${e.message}`);
+    addMsg(`❌ Fehler beim Debriefing: ${e.message}`);
+    // Falls Fehler: Trotzdem aufräumen, damit man neu starten kann
+    caseState = null;
+    updateUI(false);
   }
 }
