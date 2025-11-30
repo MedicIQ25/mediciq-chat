@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (Perfect Position & Silent Mode)
+// medicIQ – App Logic (Realism: No SpO2 = Flatline)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -171,7 +171,6 @@ async function startCase() {
 
     addMsg(`<strong>Fallstart:</strong> ${caseState.story}`);
 
-    // LOGIK: NUR hier darf gesprochen werden (Patienten-Dialog)
     if (caseState.intro_dialogue) {
         setTimeout(() => speak(caseState.intro_dialogue), 500);
     } 
@@ -226,8 +225,6 @@ async function stepCase(txt) {
           ${d.finding ? `<div style="color:#b91c1c; margin-top:4px;">${d.finding.replace(/\n/g,'<br>')}</div>` : ''}
           ${d.next_hint ? `<div class="small muted" style="margin-top:6px;">💡 ${d.next_hint}</div>` : ''}
         `);
-        
-        // HIER WURDE GELÖSCHT: Keine speak() Funktion mehr im regulären Ablauf!
     }
 
     caseState = d.case_state || caseState;
@@ -248,13 +245,16 @@ async function stepCase(txt) {
   }
 }
 
-// --- DYNAMIC MONITOR LOGIC (Position fix) ---
+// --- DYNAMIC MONITOR LOGIC (Conditional Pleth) ---
 function openEKG() {
     if(!caseState) return;
     const type = caseState.hidden?.ekg_pattern || "sinus";
     
+    // Check, ob SpO2 überhaupt gemessen wurde
+    const hasSpO2 = !!visibleVitals.SpO2;
     let spo2Value = 98; 
-    if(visibleVitals.SpO2) {
+
+    if(hasSpO2) {
         spo2Value = parseInt(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
     } else if(caseState.vitals?.SpO2) {
         spo2Value = parseInt(caseState.vitals.SpO2);
@@ -275,11 +275,19 @@ function openEKG() {
 
     const viewWidth = 400;
     
-    // FIX 1: EKG Basislinie auf 75px verschoben (vorher 50, war zu hoch)
+    // EKG oben (75px Basis)
     let ekgPath = generateLoopPath(type, 75, viewWidth, 100);
     
-    // FIX 2: Pleth Basislinie auf 160px verschoben (vorher 150)
-    let plethPath = generateLoopPath('pleth', 160, viewWidth, spo2Value);
+    // Pleth unten (160px Basis)
+    let plethPath = "";
+    
+    if (hasSpO2) {
+        // Kurve berechnen, wenn Wert da ist
+        plethPath = generateLoopPath('pleth', 160, viewWidth, spo2Value);
+    } else {
+        // Flache Linie, wenn NICHT gemessen (Nulllinie)
+        plethPath = `M 0 160 L ${viewWidth} 160`;
+    }
 
     const modalBody = document.querySelector('#modalEKG .modal-body');
 
@@ -341,7 +349,7 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue) {
         commands = [
             "c 3 -5, 7 -5, 10 0", // P
             "l 5 0", // PR
-            "l 2 3 l 3 -55 l 3 60 l 2 -8", // QRS (schlank)
+            "l 2 3 l 3 -55 l 3 60 l 2 -8", // QRS
             "l 5 0", // ST
             "c 5 -15, 12 -15, 18 0", // T
             "l 22 0" // Pause
@@ -652,7 +660,7 @@ async function speak(text) {
     }
 }
 
-// --- Feature Modals (FIXED: NO SPEAK CALLS) ---
+// ... Feature Modals (FIXED: NO SPEAK CALLS) ...
 function openOxygen() {
   if(!caseState) return;
   const s = $id('o2Flow'), v = $id('o2FlowVal');
@@ -676,7 +684,7 @@ function openNRS() {
   $id('nrsFetch').onclick = async () => {
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'Schmerz Info'})});
     const d = await res.json();
-    $id('nrsInfo').textContent = d.finding; // NO SPEAK
+    $id('nrsInfo').textContent = d.finding; 
   };
   $id('nrsOk').onclick=()=>{ stepCase(`NRS ${r.value}`); closeModal('modalNRS'); };
   $id('nrsCancel').onclick=()=>closeModal('modalNRS');
@@ -686,7 +694,7 @@ function openBEFAST() {
   $id('befastFetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'BEFAST Info'})});
     const d = await res.json();
-    $id('befastInfo').textContent = d.finding; // NO SPEAK
+    $id('befastInfo').textContent = d.finding; 
   };
   $id('befastOk').onclick=()=>{ stepCase('BEFAST dokumentiert'); closeModal('modalBEFAST'); };
   $id('befastCancel').onclick=()=>closeModal('modalBEFAST');
@@ -712,7 +720,7 @@ function openFourS() {
   $id('s4Fetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
     const d = await res.json();
-    $id('s4Info').textContent = d.finding; // NO SPEAK
+    $id('s4Info').textContent = d.finding; 
   };
   $id('s4Ok').onclick=()=>{ stepCase('4S dokumentiert'); closeModal('modal4S'); };
   $id('s4Cancel').onclick=()=>closeModal('modal4S');
@@ -779,6 +787,5 @@ async function openDebrief() {
     const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
     const d = await r.json();
     addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
-    // KEIN SPEAK MEHR
   } catch(e){}
 }
