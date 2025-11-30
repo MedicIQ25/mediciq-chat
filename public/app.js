@@ -1,5 +1,5 @@
 // ===============================================================
-// medicIQ – App Logic (12-Lead EKG Support & Pathology)
+// medicIQ – App Logic (Stable Vector EKG Generator)
 // ===============================================================
 
 const API_CASE_NEW  = '/.netlify/functions/case-new';
@@ -69,7 +69,7 @@ let audioCtx = null;
 let monitorTimeout = null;
 
 // EKG State
-let currentLead = 'II'; // Standard-Ableitung
+let currentLead = 'II'; 
 
 // Wait for DOM
 document.addEventListener('DOMContentLoaded', () => {
@@ -255,7 +255,6 @@ function openEKG() {
 
     const modalBody = document.querySelector('#modalEKG .modal-body');
     
-    // UI mit Dropdown für Ableitungen
     modalBody.innerHTML = `
       <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
         <label style="font-weight:bold;">Ableitung:</label>
@@ -284,7 +283,6 @@ function openEKG() {
 
     openModal('modalEKG');
     
-    // Event Listener für Dropdown
     const sel = document.getElementById('leadSelect');
     sel.onchange = () => {
         currentLead = sel.value;
@@ -294,15 +292,13 @@ function openEKG() {
     const closeBtn = document.getElementById('ekgClose');
     if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
 
-    // Erster Render
     updateEKGView();
 }
 
 function updateEKGView() {
     const type = caseState.hidden?.ekg_pattern || "sinus";
-    const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase(); // z.B. "hinterwand"
+    const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase(); 
     
-    // SpO2 Logic
     const hasSpO2 = !!visibleVitals.SpO2;
     let spo2Value = 98; 
     if(hasSpO2) spo2Value = parseInt(String(visibleVitals.SpO2).match(/\d+/)?.[0] || 98);
@@ -311,7 +307,6 @@ function updateEKGView() {
     const svg = document.getElementById('monitorSvg');
     if(!svg) return;
 
-    // Grid Definition
     const defs = `
       <defs>
         <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -325,8 +320,7 @@ function updateEKGView() {
       <rect width="100%" height="100%" fill="url(#grid-bold)" />
     `;
 
-    // Paths berechnen
-    // Übergeben wir auch die pathology und currentLead an den Generator
+    // Path Generation (Safe & Stable)
     let ekgPath = generateLoopPath(type, 75, 400, 100, currentLead, pathology);
     let plethPath = hasSpO2 ? generateLoopPath('pleth', 160, 400, spo2Value) : `M 0 160 L 400 160`;
 
@@ -348,7 +342,6 @@ function updateEKGView() {
         <text x="350" y="140" fill="#3b82f6" font-family="monospace" font-size="16" font-weight="bold">${visibleVitals.SpO2 || '--'}</text>
     `;
 
-    // Diagnose-Text anpassen
     const txt = document.getElementById('ekgText');
     if(type === "sinus") {
         txt.textContent = "Sinusrhythmus";
@@ -362,130 +355,147 @@ function updateEKGView() {
     }
 }
 
-// Helper: Generiert die Kurven (Mit Pathologie & Ableitung)
+// --- CORE EKG GENERATOR (GLITCH-FREE) ---
 function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pathology = '') {
     let d = `M 0 ${yBase} `;
     let currentX = 0;
     let mode = 'curve';
-    let beatWidth = 0;
-    let commands = []; 
+    let beatWidth = 70; // Standard
 
-    // --- FAKTOREN FÜR ABLEITUNGEN ---
-    let polarity = 1.0; // 1 = Positiv, -1 = Negativ (aVR)
-    let amplitude = 1.0; // Höhe
+    // --- CONFIGURATION DER VEKTOREN ---
+    // Wir definieren die Amplituden für P, Q, R, S, T
+    // Standard (II): P+, Q klein, R groß, S klein, T+
+    let amp = { p: -5, q: 3, r: -50, s: 15, t: -12 };
     
-    if (lead === 'aVR') {
-        polarity = -1.0; 
-    } else if (lead === 'V1' || lead === 'aVL') {
-        // Oft kleiner oder biphasisch
-        amplitude = 0.8;
-    }
-
-    // --- PATHOLOGIE ERKENNUNG (STEMI HINTERWAND) ---
-    // Betroffene Ableitungen: II, III, aVF (Hebung)
-    // Reziprok: I, aVL (Senkung)
-    const isInferiorWall = pathology.includes('hinterwand') || pathology.includes('inferior');
-    
-    let stElevation = 0; // 0 = Isoelektrisch
-    
-    if (type === 'sinus' && isInferiorWall) {
-        if (['II', 'III', 'aVF'].includes(lead)) {
-            stElevation = -15; // Hebung nach oben (SVG Y ist invertiert, also minus)
-        } else if (['I', 'aVL'].includes(lead)) {
-            stElevation = 10; // Senkung nach unten
+    // Lead-Specific Adjustments (Medizinisch angelehnt)
+    if(type === 'sinus') {
+        if (lead === 'aVR') {
+            // Invertiert alles
+            amp = { p: 5, q: -3, r: 10, s: -40, t: 8 }; // Tiefes S entspricht Hauptvektor
+        } else if (lead === 'V1') {
+            // Kleines r, tiefes S, T oft flach/inv
+            amp = { p: -3, q: 0, r: -15, s: 40, t: 5 }; 
+        } else if (lead === 'V6' || lead === 'I') {
+            // Septales q, hohes R
+            amp = { p: -5, q: 3, r: -45, s: 5, t: -12 };
+        } else if (lead === 'aVL') {
+            // Kleiner
+            amp = { p: -3, q: 2, r: -30, s: 10, t: -8 };
+        } else if (lead === 'III' || lead === 'aVF') {
+            // Variabel, oft R > S
+            amp = { p: -4, q: 5, r: -40, s: 10, t: -10 };
         }
     }
 
-    if (type === 'sinus') {
-        mode = 'curve';
-        beatWidth = 70; 
-        
-        // BASIS-KURVE (Lead II)
-        // Wir modifizieren die Y-Werte basierend auf Polarity & ST-Strecke
-        
-        // P-Welle
-        let pY = -5 * polarity * amplitude;
-        let qrsTop = -55 * polarity * amplitude;
-        let qrsBot = 60 * polarity * amplitude;
-        let tY = -15 * polarity * amplitude;
-        
-        // ST-Segment Y-Shift
-        // ST-Hebung zieht den J-Punkt (Ende S) und Start T hoch
-        // Bei Hebung: S-Zacke geht nicht ganz zur Basis zurück
-        
-        // QRS Ende (J-Point)
-        let jPointY = -8 + stElevation; 
-        // Wir müssen sicherstellen, dass die Linie dort landet.
-        
-        // Bei Invertierung (aVR) müssen wir aufpassen:
-        // P negativ, QRS hauptvektor negativ (tiefes S/QS), T negativ
-        
-        if(lead === 'aVR') {
-             // Spezialform aVR: P negativ, QRS ist meist rS oder QS (tief)
-             commands = [
-                "c 3 5, 7 5, 10 0", // P (negativ)
-                "l 5 0", // PR
-                "l 2 -5 l 3 60 l 3 -55 l 2 5", // QRS (klein hoch, tief runter)
-                "l 5 0", // ST
-                "c 5 10, 12 10, 18 0", // T (negativ)
-                "l 22 0" 
-             ];
-        } else {
-            // Standard (mit ST-Shift)
-            commands = [
-                `c 3 ${pY}, 7 ${pY}, 10 0`, // P
-                "l 5 0", // PR
-                // QRS:
-                `l 2 3 l 3 ${qrsTop} l 3 ${qrsBot} l 2 ${-8 + stElevation}`, // Ende bei J-Point (Shifted!)
-                
-                // ST-Strecke (Horizontal auf neuer Höhe)
-                "l 5 0", 
-                
-                // T-Welle (Startet auf ST-Höhe, endet auf 0)
-                // c dx1 dy1, dx2 dy2, dx dy (relativ!)
-                // Wir starten bei stElevation. Ende muss 0 sein (Basis).
-                // Die Y-Differenz zum Ende ist: -stElevation
-                `c 5 ${tY}, 12 ${tY}, 18 ${-stElevation}`, 
-                
-                "l 22 0" // Pause
-            ];
-        }
+    // --- PATHOLOGIE (STEMI) ---
+    const isInferior = pathology.includes('hinterwand') || pathology.includes('inferior');
+    let stShift = 0; // 0 = Isoelektrisch
 
-    } else if (type === 'vt') {
-        mode = 'line';
-        beatWidth = 40;
-        commands = [[15,-45], [15,90], [10,-45]];
-    } else if (type === 'pleth') {
-        mode = 'curve';
-        beatWidth = 50;
-        let scale = 1.0;
-        if(qualityValue < 80) scale = 0.1;
-        else if(qualityValue < 88) scale = 0.3;
-        else if(qualityValue < 94) scale = 0.6;
-        const hasNotch = qualityValue > 90;
-        const riseY = -25 * scale;
-        let cmd1 = `c 5 ${riseY}, 10 ${riseY}, 12 -5`; 
-        let cmd2 = hasNotch ? `c 2 8, 5 0, 8 5` : `c 2 2, 5 4, 8 6`;
-        let cmd3 = `c 5 5, 10 0, 30 0`;
-        commands = [cmd1, cmd2, cmd3];
-    } else {
-        return `M 0 ${yBase} L ${totalWidth} ${yBase}`;
+    if (type === 'sinus' && isInferior) {
+        if (['II', 'III', 'aVF'].includes(lead)) stShift = -12; // Hebung
+        else if (['I', 'aVL'].includes(lead)) stShift = 8; // Senkung (reziprok)
     }
 
+    // Generator Loop
     while(currentX < totalWidth) {
-        if(mode === 'line') {
-            commands.forEach(pt => {
-                currentX += pt[0];
-                d += `L ${currentX} ${yBase + pt[1]} `;
-            });
-        } else {
-            commands.forEach(cmd => {
-                d += cmd + " ";
-            });
+        
+        if (type === 'sinus') {
+            beatWidth = 70;
+            
+            // MATH MAGIC: Wir berechnen die relativen Bewegungen so, dass sie IMMER auf 0 enden.
+            // SVG Koordinaten: Y-Negativ ist Oben!
+            
+            // P-Welle (Kurve)
+            // Start bei 0. Ende bei 0. Höhe amp.p
+            const p = `c 3 ${amp.p}, 7 ${amp.p}, 10 0`;
+            
+            // PR-Strecke (Linie)
+            const pr = `l 5 0`;
+            
+            // QRS (Linien)
+            // Q: runter (pos Y)
+            // R: steil hoch (neg Y)
+            // S: steil runter (pos Y)
+            // J-Point (Rückkehr): Muss zur Basis zurück oder zur ST-Hebung (stShift)
+            
+            // Wir müssen sicherstellen, dass die Summe der Y-Bewegungen = stShift ist (nicht 0, wegen Hebung)
+            // Q (+), R (-), S (+)
+            // Beispiel: Q=+3, R=-50, S=+15.  Summe = -32.  Wir wollen aber zu 0 (oder stShift).
+            // Also muss der letzte Strich (J-Point Return) den Rest ausgleichen.
+            
+            // Wir zeichnen Q, R, S fest:
+            // Q: geht zu y = amp.q
+            // R: geht zu y = amp.r (von der Basis aus gesehen!) -> Delta = amp.r - amp.q
+            // S: geht zu y = amp.s -> Delta = amp.s - amp.r
+            // J: geht zu y = stShift -> Delta = stShift - amp.s
+            
+            // Da SVG 'l' relativ ist, berechnen wir die Deltas:
+            const dyQ = amp.q;
+            const dyR = amp.r - amp.q;
+            const dyS = amp.s - amp.r;
+            const dyJ = stShift - amp.s; // Rückkehr zur ST-Höhe
+            
+            const qrs = `l 2 ${dyQ} l 3 ${dyR} l 3 ${dyS} l 2 ${dyJ}`;
+            
+            // ST-Strecke (Horizontal auf stShift Höhe)
+            const st = `l 5 0`;
+            
+            // T-Welle
+            // Startet auf stShift. Muss zu 0 zurückkehren.
+            // Wir nutzen eine Kurve.
+            // Control Points relativ zur Startposition (stShift).
+            // Ende relativ: Wir müssen um -stShift runter, um auf 0 zu kommen.
+            // Amplitude draufrechnen.
+            const tPeak = amp.t; // relative Spitze
+            const tEnd = -stShift; // Zurück zur Basis
+            
+            const t = `c 5 ${tPeak}, 12 ${tPeak}, 18 ${tEnd}`;
+            
+            // Pause
+            const iso = `l 22 0`;
+            
+            d += p + pr + qrs + st + t + iso + " ";
             currentX += beatWidth;
+
+        } else if (type === 'vt') {
+            beatWidth = 40;
+            // VT ist Breitkomplex
+            d += `l 15 -45 l 15 90 l 10 -45 `;
+            currentX += beatWidth;
+
+        } else if (type === 'pleth') {
+            mode = 'curve';
+            beatWidth = 50;
+            
+            let scale = 1.0;
+            if(qualityValue < 80) scale = 0.1;
+            else if(qualityValue < 88) scale = 0.3;
+            else if(qualityValue < 94) scale = 0.6;
+            
+            const hasNotch = qualityValue > 90;
+            const riseY = -25 * scale;
+            
+            // Hier nutzen wir einfache relative Kurven, die in sich geschlossen sind (dy Summe = 0)
+            // Anstieg: -25. Fall1: +8. Fall2: +17. Summe = 0.
+            let c1 = `c 5 ${riseY}, 10 ${riseY}, 12 -5`; 
+            // Fall bis Notch: wir müssen von y=-5 (relativ start) ein stück runter
+            let c2 = hasNotch ? `c 2 8, 5 0, 8 5` : `c 2 2, 5 4, 8 5`; 
+            // Rest zurück zur Basis: Wenn wir bei y=0 starteten:
+            // c1 endete bei -5.
+            // c2 (notch) endete bei -5 + 5 = 0.
+            // c3 flacht aus.
+            let c3 = `c 5 0, 10 0, 30 0`;
+            
+            d += c1 + " " + c2 + " " + c3 + " ";
+            currentX += beatWidth;
+        } else {
+            // Asystolie
+            d += `L ${totalWidth} ${yBase}`;
+            currentX = totalWidth;
         }
     }
     
+    // Finish line
     d += `L ${totalWidth} ${yBase}`;
     return d;
 }
@@ -880,6 +890,5 @@ async function openDebrief() {
     const r = await fetch(API_CASE_STEP, {method:'POST',body:JSON.stringify({case_state:caseState, user_action:'Debriefing'})});
     const d = await r.json();
     addMsg(`<strong>Debriefing</strong><br>${d.debrief.replace(/\n/g,'<br>')}`);
-    // KEIN SPEAK MEHR
   } catch(e){}
 }
