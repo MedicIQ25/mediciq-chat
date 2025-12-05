@@ -400,6 +400,14 @@ exports.handler = async (event) => {
         reply.accepted=true; reply.evaluation="Temp gemessen."; touchStep("E"); 
         return ok(reply); 
     }
+// FIX: BZ messen (BZ sichtbar machen)
+    if (/bz messen/.test(low)) { state.measurements.vitals.BZ=true; updVitals({ BZ: state.vitals.BZ }); reply.accepted=true; reply.evaluation="Blutzucker gemessen."; touchStep("D"); return ok(reply); }
+    
+    // FIX: AF messen (AF sichtbar machen)
+    if (/af messen/.test(low)) { state.measurements.vitals.AF=true; updVitals({ AF: state.vitals.AF }); reply.accepted=true; reply.evaluation="Atemfrequenz gezählt."; touchStep("B"); return ok(reply); }
+    
+    // FIX: GCS messen (GCS sichtbar machen)
+    if (/gcs erheben/.test(low)) { state.measurements.vitals.GCS=true; updVitals({ GCS: state.vitals.GCS }); reply.accepted=true; reply.evaluation="GCS erhoben."; touchStep("D"); return ok(reply); }
 
     reply.accepted = true; reply.evaluation = "OK.";
     return ok(reply);
