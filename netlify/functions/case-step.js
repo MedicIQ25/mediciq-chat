@@ -1,6 +1,8 @@
 /**
  * Netlify Function: case-step
- * (Fix: SAMPLER Complete & 4S Details visible)
+ * (ZUSAMMENFÜHRUNG ALLER FIXES & ERWEITERUNGEN)
+ * - Behebt GCS/AF/BZ Anzeige/Protokoll-Fehler.
+ * - Fügt Lagerungs- und Infusions-Logik hinzu.
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -17,13 +19,12 @@ exports.handler = async (event) => {
     state.history    = Array.isArray(state.history) ? state.history : [];
     state.score      = state.score || 0;
     
-    // Sicherstellen, dass measurements existiert
+    // Sicherstellen, dass measurements existiert und alle Flags initialisiert sind
     state.measurements = state.measurements || {};
     state.measurements.vitals = state.measurements.vitals || {};
     state.measurements.schemas = state.measurements.schemas || {};
     state.measurements.pain = state.measurements.pain || {};
     
-    // Flags initialisieren
     if (state.measurements.iv_access === undefined) state.measurements.iv_access = false;
     if (state.measurements.handover_done === undefined) state.measurements.handover_done = false;
     if (state.measurements.o2_given === undefined) state.measurements.o2_given = false;
@@ -38,24 +39,29 @@ exports.handler = async (event) => {
 
     const reply = { accepted: false, updated_vitals: {}, done: false, case_state: state };
     const H = state.hidden || {};
-    const baseVitals = H.vitals_baseline || { SpO2: 96, RR: "120/80", AF: 14, Puls: 80 };
+    // Basiswerte definiert, damit BZ/GCS/Temp einen Fallback-Wert für Berechnungen haben
+    const baseVitals = H.vitals_baseline || { SpO2: 96, RR: "120/80", AF: 14, Puls: 80, BZ: 100, GCS: 15, Temp: 36.5 }; 
 
-    // --- HELPER ---
+    // --- HELPER (FIX: Speichert reinen Wert in state.vitals und registriert Messung) ---
     const updVitals = (obj) => {
       for (const k in obj) {
-        state.vitals[k] = obj[k];
+        
+        // 1. Hole den reinen alten Wert (ohne Pfeile, nur für Vergleich)
+        const oldValPure = parseFloat(String(state.vitals[k] || baseVitals[k]).match(/\d+/)?.[0] || 0);
+        
+        // 2. Speichere den REINEN, neuen Wert/String im State
+        state.vitals[k] = obj[k]; 
+        
+        // 3. Wenn der Wert gemessen wird, berechne das Update für das Frontend (mit Pfeil)
         if (state.measurements.vitals[k]) {
             if (k === 'RR') { 
-                reply.updated_vitals[k] = obj[k]; 
+                reply.updated_vitals[k] = obj[k]; // RR wird als String belassen
             } else {
-                const currentValStr = String(state.vitals[k] || baseVitals[k]).match(/\d+/)?.[0] || 0;
-                const oldVal = parseFloat(currentValStr);
                 const newVal = parseFloat(String(obj[k]).match(/\d+/)?.[0] || 0);
-
                 let arrow = "";
-                if (newVal > oldVal) arrow = " ⬆";
-                if (newVal < oldVal) arrow = " ⬇";
-                reply.updated_vitals[k] = newVal + arrow;
+                if (newVal > oldValPure) arrow = " ⬆";
+                if (newVal < oldValPure) arrow = " ⬇";
+                reply.updated_vitals[k] = newVal + arrow; // Pfeil nur im Reply
             }
         }
       }
@@ -200,7 +206,7 @@ exports.handler = async (event) => {
         else reply.finding = `Keine weiteren Verletzungen sichtbar.`;
         return ok(reply);
     }
-// --- NEUE TRAUMA-MAßNAHMEN (Chest Seal, Wunde, Augen) ---
+// --- TRAUMA-MAßNAHMEN (Chest Seal, Wunde, Augen) ---
     
     // Chest Seal (B)
     if (low.includes('chest seal')) {
@@ -293,7 +299,7 @@ exports.handler = async (event) => {
         reply.accepted = true; reply.finding = `<b>BE-FAST:</b><br>${H.befast || "Keine Auffälligkeiten."}`; return ok(reply);
     }
     
-    // ** FIX 4S INFO **
+    // 4S INFO
     if (/4s info/.test(low)) {
         reply.accepted = true; 
         const s = state.scene_4s || {};
@@ -341,22 +347,20 @@ exports.handler = async (event) => {
     
     // --- 4. DOKUMENTATION (FIXED) ---
     
-    // ** FIX SAMPLER DOKU **
+    // SAMPLER DOKU
     if (/sampler doku/.test(low)) { 
         reply.accepted=true; 
         const s = state.anamnesis?.SAMPLER || {};
         reply.evaluation="SAMPLER dokumentiert:"; 
-        // Hier fehlten P, L, E und R -> Jetzt hinzugefügt!
         reply.finding = `S: ${text(s.S)}<br>A: ${text(s.A)}<br>M: ${text(s.M)}<br>P: ${text(s.P)}<br>L: ${text(s.L)}<br>E: ${text(s.E)}<br>R: ${text(s.R)}`; 
         return ok(reply); 
     }
     
-    // ** FIX 4S DOKU **
+    // 4S DOKU
     if (/4s doku/.test(low)) { 
         reply.accepted = true; 
         const s = state.scene_4s || {};
         reply.evaluation = "4S dokumentiert.";
-        // Hier fehlte die Ausgabe -> Jetzt hinzugefügt!
         reply.finding = `Sicherheit: ${text(s.sicherheit)}<br>Szene: ${text(s.szene)}<br>Sichtung: ${text(s.sichtung_personen)}<br>Support: ${text(s.support_empfehlung)}`;
         return ok(reply); 
     }
@@ -368,7 +372,67 @@ exports.handler = async (event) => {
     if (/zugang/.test(low)) { state.measurements.iv_access = true; reply.accepted=true; reply.evaluation="Zugang gelegt."; touchStep("C"); return ok(reply); }
     if (/notarzt/.test(low)) { reply.accepted=true; reply.evaluation="NA nachgefordert."; touchStep("C"); return ok(reply); }
     
-    // VITALWERTE MESSEN
+    // Volumengabe (FIX: RR-Anstieg simulieren)
+    if (/volumen/.test(low)) { 
+        reply.accepted=true; 
+        reply.evaluation="Infusion läuft. Wirkung wird geprüft."; 
+        touchStep("C");
+        
+        const curRRStr = String(state.vitals.RR || baseVitals.RR);
+        const curRRsys = parseFloat(curRRStr.split('/')[0] || 120);
+
+        // Erhöht den systolischen RR, wenn er < 110 ist
+        if (curRRsys < 110) {
+            const newRRsys = Math.min(130, curRRsys + 10);
+            const newRRdia = Math.min(90, parseFloat(curRRStr.split('/')[1] || 80) + 5);
+            const newRR = `${newRRsys}/${newRRdia}`;
+
+            updVitals({ RR: newRR });
+            reply.finding = `✅ Kreislauf stabilisiert sich: RR steigt auf ${newRR} mmHg.`;
+        }
+        return ok(reply);
+    }
+    
+    // Stabile Seitenlage (NEU: Sicherer Atemweg)
+    if (low.includes('stabile seitenlage')) {
+        reply.accepted = true; 
+        // GCS-Wert muss in jedem Fall gemessen werden, um ihn anzuzeigen.
+        state.measurements.vitals.GCS = true; 
+        
+        // Wenn GCS < 15, ist die SSL sinnvoll
+        const curGCS = parseFloat(String(state.vitals.GCS || baseVitals.GCS).match(/\d+/)?.[0] || 15);
+        
+        if (curGCS < 15) {
+            reply.evaluation = "Stabile Seitenlage durchgeführt. Atemwege gesichert.";
+            reply.finding = "Patient in stabiler Seitenlage. Kein Aspirationsrisiko.";
+        } else {
+            reply.evaluation = "Stabile Seitenlage unnötig. Patient ist wach und orientiert.";
+        }
+        touchStep("A");
+        return ok(reply);
+    }
+    
+    // Schocklagerung (NEU: Temporärer RR-Anstieg)
+    if (low.includes('schocklagerung')) {
+        reply.accepted = true; 
+        reply.evaluation = "Schocklagerung durchgeführt. Autotransfusionseffekt wird geprüft.";
+        touchStep("C");
+
+        const curRRStr = String(state.vitals.RR || baseVitals.RR);
+        const curRRsys = parseFloat(curRRStr.split('/')[0] || 120);
+
+        // Erhöht den systolischen RR um 5-8 mmHg, wenn er < 100 ist
+        if (curRRsys < 100) {
+            const newRRsys = Math.min(120, curRRsys + 7);
+            const newRRdia = Math.min(80, parseFloat(curRRStr.split('/')[1] || 80) + 3);
+            const newRR = `${newRRsys}/${newRRdia}`;
+
+            updVitals({ RR: newRR });
+            reply.finding = `✅ RR steigt temporär auf ${newRR} mmHg durch die Lagerung.`;
+        }
+        return ok(reply);
+    }
+    // VITALWERTE MESSEN (FIX: Messung registrieren)
     if (/spo2/.test(low)) { 
         state.measurements.vitals.SpO2=true; 
         state.measurements.vitals.Puls=true; 
@@ -400,14 +464,29 @@ exports.handler = async (event) => {
         reply.accepted=true; reply.evaluation="Temp gemessen."; touchStep("E"); 
         return ok(reply); 
     }
-// FIX: BZ messen (BZ sichtbar machen)
-    if (/bz messen/.test(low)) { state.measurements.vitals.BZ=true; updVitals({ BZ: state.vitals.BZ }); reply.accepted=true; reply.evaluation="Blutzucker gemessen."; touchStep("D"); return ok(reply); }
+    // FIX: BZ messen (BZ sichtbar machen)
+    if (/bz messen/.test(low)) { 
+        state.measurements.vitals.BZ=true; 
+        updVitals({ BZ: state.vitals.BZ }); 
+        reply.accepted=true; reply.evaluation="Blutzucker gemessen."; touchStep("D"); 
+        return ok(reply); 
+    }
     
     // FIX: AF messen (AF sichtbar machen)
-    if (/af messen/.test(low)) { state.measurements.vitals.AF=true; updVitals({ AF: state.vitals.AF }); reply.accepted=true; reply.evaluation="Atemfrequenz gezählt."; touchStep("B"); return ok(reply); }
+    if (/af messen/.test(low)) { 
+        state.measurements.vitals.AF=true; 
+        updVitals({ AF: state.vitals.AF }); 
+        reply.accepted=true; reply.evaluation="Atemfrequenz gezählt."; touchStep("B"); 
+        return ok(reply); 
+    }
     
     // FIX: GCS messen (GCS sichtbar machen)
-    if (/gcs erheben/.test(low)) { state.measurements.vitals.GCS=true; updVitals({ GCS: state.vitals.GCS }); reply.accepted=true; reply.evaluation="GCS erhoben."; touchStep("D"); return ok(reply); }
+    if (/gcs erheben/.test(low)) { 
+        state.measurements.vitals.GCS=true; 
+        updVitals({ GCS: state.vitals.GCS }); 
+        reply.accepted=true; reply.evaluation="GCS erhoben."; touchStep("D"); 
+        return ok(reply); 
+    }
 
     reply.accepted = true; reply.evaluation = "OK.";
     return ok(reply);
@@ -415,4 +494,5 @@ exports.handler = async (event) => {
   } catch (err) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
+  
 };

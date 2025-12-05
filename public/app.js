@@ -57,7 +57,9 @@ const ACTIONS = {
       { label: 'Oberkörper hoch', token: 'Oberkörper hoch lagern' },
       // NEU: Wichtige Trauma-Maßnahmen
       { label: 'Wunde versorgen / kühlen', token: 'Wundversorgung' },
-      { label: 'Augen spülen / abdecken', token: 'Augenversorgung' }
+      { label: 'Augen spülen / abdecken', token: 'Augenversorgung' },
+      { label: 'Stabile Seitenlage', token: 'Stabile Seitenlage' }, 
+      { label: 'Beine hoch (Schock)', token: 'Schocklagerung' }
   ]
 };
 
