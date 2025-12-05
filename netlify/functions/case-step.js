@@ -3,7 +3,7 @@
  * (ZUSAMMENFÜHRUNG ALLER FIXES & ERWEITERUNGEN)
  * - Behebt GCS/AF/BZ Anzeige/Protokoll-Fehler.
  * - Fügt Lagerungs- und Infusions-Logik hinzu.
- * - NEU: Umfassendes Tracking von UNSICHEREN/FALSCHEN Maßnahmen.
+ * - NEU: Tracking und Feedback für unsichere/fehlende Maßnahmen (HWS/Schock).
  */
 exports.handler = async (event) => {
   const headers = { "content-type": "application/json", "access-control-allow-origin": "*" };
@@ -44,12 +44,6 @@ exports.handler = async (event) => {
     const H = state.hidden || {};
     // Basiswerte definiert, damit BZ/GCS/Temp einen Fallback-Wert für Berechnungen haben
     const baseVitals = H.vitals_baseline || { SpO2: 96, RR: "120/80", AF: 14, Puls: 80, BZ: 100, GCS: 15, Temp: 36.5 }; 
-    
-    // Aktuelle Vitalwerte für die Logik
-    const curGCS = parseFloat(String(state.vitals.GCS || baseVitals.GCS).match(/\d+/)?.[0] || 15);
-    const curPuls = parseFloat(String(state.vitals.Puls || baseVitals.Puls).match(/\d+/)?.[0] || 80);
-    const curRRsys = parseFloat(String(state.vitals.RR || baseVitals.RR).split('/')[0] || 120);
-
 
     // --- HELPER (FIX: Speichert reinen Wert in state.vitals) ---
     const updVitals = (obj) => {
@@ -83,29 +77,32 @@ exports.handler = async (event) => {
             state.score += 1; 
         } 
     };
-    
-    // NEU: Funktion zur Fehlerregistrierung
-    const registerUnsafe = (msg) => {
-        if (!state.measurements.unsafe_actions.includes(msg)) {
-            state.measurements.unsafe_actions.push(msg);
-        }
-        reply.unsafe = true;
-        reply.finding = `⛔ **KRITISCHER FEHLER:** ${msg}`;
-    };
-    
     function ok(body) { return { statusCode: 200, headers, body: JSON.stringify(body) }; }
 
-    // --- 0. SYSTEM CHECK ---
+    // --- 0. SYSTEM CHECK (FIX: Verbesserte Verschlechterung & NEU: HWS-Check) ---
     if (ua.includes("System-Check")) {
-        // ... (Bestehende SpO2-Logik) ...
+        const hasO2 = state.measurements.o2_given; 
+        const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0]);
+        reply.accepted = true; 
+        
+        if (curSpO2 < 93 && !hasO2) {
+            const newSpO2 = Math.max(70, curSpO2 - 2);
+            updVitals({ SpO2: newSpO2 });
+            if (state.measurements.vitals?.SpO2) reply.finding = `⚠️ SpO₂ fällt auf ${newSpO2}% (dringender Handlungsbedarf!)`;
+        } else if (hasO2 && curSpO2 < 88) {
+            const newSpO2 = Math.max(84, curSpO2 - 1); 
+            updVitals({ SpO2: newSpO2 });
+            if (state.measurements.vitals?.SpO2) reply.finding = `⚠️ SpO₂ bleibt kritisch bei ${newSpO2}% trotz O₂-Gabe. Notarzt zwingend erforderlich!`;
+        }
         
         // NEU: Fehlerprüfung HWS-Immobilisation bei Trauma
         const isTraumaCase = state.specialty === 'trauma';
-        const immoNeeded = H.nexus_criteria?.c1 || H.nexus_criteria?.c5; 
+        const immoNeeded = H.nexus_criteria?.c1 || H.nexus_criteria?.c5; // Z.B. Schmerz ODER ablenkende Verletzung
         const hasImmo = state.measurements.immo_done;
         const errorMsgHWS = "❌ HWS-Immobilisation fehlte anfangs bei kritischer Indikation.";
         
         if (isTraumaCase && immoNeeded && !hasImmo && !state.measurements.unsafe_actions.includes(errorMsgHWS)) {
+            // Patient hat kritische Indikation, aber keine HWS-Immobilisation wurde durchgeführt
             state.measurements.unsafe_actions.push(errorMsgHWS);
             reply.finding = (reply.finding || '') + `\n⚠️ **ACHTUNG:** Trotz Trauma-Indikation wurde HWS-Immobilisation nicht durchgeführt/dokumentiert.`;
         }
@@ -115,7 +112,6 @@ exports.handler = async (event) => {
 
     // --- DEBRIEFING (FIX: Farb-Feedback bei Unsafe Actions) ---
     if (/debrief|fall beenden/.test(low)) {
-    // ... (Debriefing Logik, wie zuletzt korrigiert) ...
         reply.done = true;
         
         const stepsAll = ["X","A","B","C","D","E"];
@@ -144,7 +140,9 @@ exports.handler = async (event) => {
             colorClass = { bg: '#fef2f2', border: '#ef4444', text: '#991b1b' }; 
             status = "❌ Kritische Mängel in Struktur und/oder Maßnahmen";
         }
-        
+        // GELB: Mängel/Fehler, aber die Struktur ist okay oder der Fehler ist nicht kritisch
+        // (Wird oben durch die Initialisierung abgedeckt)
+
         if (missingSteps.length > 0) summary += `<br>❌ <b>Fehlende Phasen:</b> ${missingSteps.join(', ')}`;
         else summary += `<br>✅ <b>X-ABCDE:</b> Vollständig abgearbeitet.`;
 
@@ -171,15 +169,10 @@ exports.handler = async (event) => {
         return ok(reply);
     }
     
-    // --- 2. MEDIZINISCHE AKTIONEN (mit Sicherheits-Checks) ---
+    // --- 2. MEDIZINISCHE AKTIONEN ---
     
-    // Massnahmen zur Blutstillung
+    // Massnahmen zur Blutstillung (FIX: Setzt das Flag bleeding_controlled)
     if (/druckverband|tourniquet|beckenschlinge|hämostyptikum/.test(low)) {
-        // KI-Check: Blutstillung bei internistischem oder neurologischem Notfall (Zeitverschwendung)
-        if (state.specialty !== 'trauma' && curPuls < 120 && curRRsys > 100) {
-             registerUnsafe(`Unnötige Blutstillungsmaßnahme (${ua}) bei stabilem internistischem Patienten.`);
-        }
-        
         state.measurements.bleeding_controlled = true;
         reply.accepted = true; 
         reply.evaluation = `${ua} erfolgreich angelegt.`; 
@@ -187,9 +180,8 @@ exports.handler = async (event) => {
         return ok(reply); 
     }
 
-    // X - Exsanguination
+    // X - Exsanguination (FIX: Passt Befund an, wenn Blutung kontrolliert ist)
     if (/blutungscheck|x unauffällig/.test(low)) {
-    // ... (Logik wie zuvor)
         reply.accepted = true; 
         touchStep("X");
         const initialBleeding = H.bleeding_info && !H.bleeding_info.includes("Keine");
@@ -203,51 +195,20 @@ exports.handler = async (event) => {
         return ok(reply);
     }
 
-    // A - Airway: Mundraumkontrolle
+    // A - Airway
     if (/mund|rachen/.test(low)) {
-        reply.accepted = true; reply.finding = H.mouth || "Mundraum frei."; reply.evaluation = "A: Mundraum inspiziert."; touchStep("A"); 
-        return ok(reply);
+        reply.accepted = true; reply.finding = H.mouth || "Mundraum frei."; reply.evaluation = "A: Mundraum inspiziert."; touchStep("A"); return ok(reply);
     }
-    // A - Airway: Absaugen
-    if (low.includes('absaugen')) {
-        // KI-Check: Absaugen bei fehlender Indikation (GCS 15 oder kein Sekret)
-        if (curGCS === 15) {
-            registerUnsafe(`Unnötiges/invasives Absaugen bei wachem Patienten (GCS 15).`);
-        }
-        reply.accepted = true; reply.evaluation = "A: Atemweg auf Sekret untersucht und ggf. abgesaugt."; touchStep("A"); 
-        return ok(reply);
-    }
-    // A - Airway: Guedel/Wendel
-    if (low.includes('guedel') || low.includes('wendel')) {
-        // KI-Check: Guedel bei Bewusstsein / GCS > 8 (Würgereflex)
-        if (low.includes('guedel') && curGCS > 8) {
-             registerUnsafe(`Guedel-Tubus bei GCS ${curGCS} kontraindiziert (Würgereflex!).`);
-        }
-        reply.accepted = true; reply.evaluation = `A: ${ua} versucht.`; touchStep("A"); 
-        return ok(reply);
-    }
-
-
-    // B - Breathing: Lunge auskultieren
+    // B - Breathing
     if (/lunge|auskultieren|abhören/.test(low)) {
-        // KI-Check: Lunge auskultieren in der X-Phase (Zeitverschwendung bei Blutung)
-        if (low.includes('lunge') && state.steps_done.length === 0) {
-            registerUnsafe("Prioritätsfehler: Erst kritische Blutung (X) checken, dann Atmung (B).");
-        }
-        reply.accepted = true; reply.finding = H.lung || "Vesikuläratmen bds., o.B."; reply.evaluation = "B: Auskultation durchgeführt."; touchStep("B"); 
-        return ok(reply);
+        reply.accepted = true; reply.finding = H.lung || "Vesikuläratmen bds., o.B."; reply.evaluation = "B: Auskultation durchgeführt."; touchStep("B"); return ok(reply);
     }
-
-
-    // D - Disability: Pupillen
+    // D - Disability
     if (/pupillen/.test(low)) {
-        reply.accepted = true; reply.finding = H.pupils || "Isokor, mittelweit, prompt."; reply.evaluation = "D: Pupillenkontrolle."; touchStep("D"); 
-        return ok(reply);
+        reply.accepted = true; reply.finding = H.pupils || "Isokor, mittelweit, prompt."; reply.evaluation = "D: Pupillenkontrolle."; touchStep("D"); return ok(reply);
     }
-
     // E - Exposure / pDMS
     if (/pdms/.test(low)) {
-    // ... (Logik wie zuvor)
         reply.accepted = true;
         touchStep("C"); 
         const isTrauma = state.specialty === 'trauma';
@@ -268,7 +229,6 @@ exports.handler = async (event) => {
     
     // Bodycheck
     if (low.includes('bodycheck') && !low.includes('(bild)')) {
-    // ... (Logik wie zuvor)
         reply.accepted = true;
         touchStep("E");
         reply.evaluation = "Bodycheck durchgeführt.";
@@ -277,17 +237,148 @@ exports.handler = async (event) => {
         else reply.finding = `Keine weiteren Verletzungen sichtbar.`;
         return ok(reply);
     }
+// --- TRAUMA-MAßNAHMEN (Chest Seal, Wunde, Augen) ---
     
-    // --- LAGERUNG & VITALPARAMETER ---
-    
-    // Stabile Seitenlage
-    if (low.includes('stabile seitenlage')) {
-        // KI-Check: SSL bei Trauma/HWS-Indikation
-        if (state.specialty === 'trauma') {
-            registerUnsafe("Stabile Seitenlage bei Trauma (V.a. HWS/Wirbelsäulenverletzung) kontraindiziert.");
-        }
+    // Chest Seal (B)
+    if (low.includes('chest seal')) {
         reply.accepted = true; 
+        touchStep("B");
+        if ((H.diagnosis_keys||[]).join(' ').toLowerCase().includes('pneumothorax') || (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('offen')) {
+            reply.evaluation = "✅ Chest Seal erfolgreich geklebt. Dyspnoe bessert sich leicht.";
+            // SpO2 verbessern
+             const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0] || 80);
+             updVitals({ SpO2: Math.min(94, curSpO2 + 5) });
+        } else {
+            reply.evaluation = "Chest Seal geklebt (prophylaktisch).";
+        }
+        return ok(reply);
+    }
+
+    // Wundversorgung / Kühlen (E) - UPDATE
+    if (low.includes('wundversorgung')) {
+        reply.accepted = true; 
+        touchStep("E");
+        let msg = "Wunde steril abgedeckt / versorgt.";
+        
+        const dx = (H.diagnosis_keys||[]).join(' ').toLowerCase();
+        if (dx.includes('verbrennung') || dx.includes('verätzung')) msg = "✅ Betroffene Stellen werden intensiv gekühlt/gespült.";
+        if (dx.includes('eviszeration')) msg = "✅ Darmschlingen feucht & steril abgedeckt.";
+        if (dx.includes('amputation')) msg = "✅ Amputat gesichert und gekühlt.";
+        // NEU: Fieber senken
+        if (dx.includes('fieber') || dx.includes('hyperthermie') || dx.includes('hitzschlag')) msg = "✅ Physikalische Kühlung eingeleitet (Wadenwickel / Umgebung kühlen).";
+        
+        reply.evaluation = msg;
+        return ok(reply);
+    }
+
+    // Augenversorgung (E)
+    if (low.includes('augenversorgung')) {
+        reply.accepted = true; 
+        touchStep("E");
+        let msg = "Augen geschützt.";
+        const dx = (H.diagnosis_keys||[]).join(' ').toLowerCase();
+        
+        if (dx.includes('säure') || dx.includes('verätzung')) msg = "✅ Augen werden ausgiebig gespült.";
+        if (dx.includes('auge') || dx.includes('perforation')) msg = "✅ Beide Augen steril abgedeckt (Ruhigstellung).";
+        
+        reply.evaluation = msg;
+        return ok(reply);
+    }
+    // --- PÄDIATRIE & REANIMATION ---
+
+    // CPR (Reanimation)
+    if (low.includes('cpr starten')) {
+        reply.accepted = true; 
+        touchStep("C");
+        // Prüfen, ob Reanimation nötig ist (Puls fehlt oder Diagnose Reanimation)
+        const isRea = (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('reanimation') || (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('asystolie');
+        
+        if (isRea) {
+            reply.evaluation = "✅ Reanimation (30:2 / 15:2) sofort eingeleitet. Thoraxkompressionen laufen.";
+            reply.finding = "Wichtig: Hochwertige Kompressionen minimieren Pausen!";
+        } else {
+            reply.evaluation = "⚠️ Patient hat Kreislauf! CPR abgebrochen. (Puls tastbar).";
+        }
+        return ok(reply);
+    }
+
+    // Fremdkörper-Manöver (Heimlich / Rückenschläge)
+    if (low.includes('fremdkörpermanöver')) {
+        reply.accepted = true; 
+        touchStep("A");
+        const isBolus = (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('aspiration') || (H.diagnosis_keys||[]).join(' ').toLowerCase().includes('bolus');
+        
+        if (isBolus) {
+            reply.evaluation = "✅ Manöver durchgeführt (Rückenschläge/Heimlich).";
+            reply.finding = "Fremdkörper hat sich evtl. gelöst oder Lage verändert. Atmung prüfen!";
+            // Kleiner Bonus: Sättigung steigt leicht, wenn es klappt
+            updVitals({ SpO2: 90 });
+        } else {
+            reply.evaluation = "Manöver durchgeführt (ohne Effekt/Indikation).";
+        }
+        return ok(reply);
+    }
+    // --- 3. INFOS & MAßNAHMEN ---
+    
+    if (/schmerz info/.test(low)) {
+        reply.accepted = true; 
+        const pain = H.pain || {};
+        reply.finding = `<b>Schmerzinformation:</b><br>Ort: ${text(pain.ort)}<br>Charakter: ${text(pain.charakter)}`;
+        return ok(reply);
+    }
+    if (/befast info/.test(low)) {
+        reply.accepted = true; reply.finding = `<b>BE-FAST:</b><br>${H.befast || "Keine Auffälligkeiten."}`; return ok(reply);
+    }
+    
+    // 4S INFO
+    if (/4s info/.test(low)) {
+        reply.accepted = true; 
+        const s = state.scene_4s || {};
+        reply.finding = `<b>4S:</b><br>Sicherheit: ${text(s.sicherheit)}<br>Szene: ${text(s.szene)}<br>Sichtung: ${text(s.sichtung_personen)}<br>Support: ${text(s.support_empfehlung)}`;
+        return ok(reply);
+    }
+    if (/nexus info/.test(low)) {
+        reply.accepted = true; reply.finding = `<b>NEXUS:</b><br>${(H.nexus_criteria || {}).summary || "Keine Info."}`; return ok(reply);
+    }
+    if (/polytrauma info/.test(low)) {
+        reply.accepted = true; 
+        const poly = H.polytrauma_criteria || {};
+        reply.finding = `<b>Polytrauma-Faktoren:</b><br>Vit: ${text(poly.vitals)}<br>Ana: ${text(poly.anatomical)}<br>Mech: ${text(poly.mechanism)}`;
+        return ok(reply);
+    }
+
+    // Maßnahmen
+    if (/o2-gabe/.test(low)) {
+        state.measurements.o2_given = true; 
+        reply.accepted = true; reply.evaluation = `Sauerstoffgabe erfolgt: ${ua}`; touchStep("B");
+        const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0] || 85);
+        if (curSpO2 < 95) {
+            const newSpO2 = Math.min(98, curSpO2 + 5); 
+            updVitals({ SpO2: newSpO2 });
+            reply.finding = `✅ SpO₂ steigt auf ${newSpO2}%`;
+        }
+        return ok(reply);
+    }
+    if (/oberkörper hoch/.test(low)) {
+        reply.accepted = true; reply.evaluation="Oberkörper hochgelagert."; touchStep("E");
+        const curSpO2 = parseFloat(String(state.vitals.SpO2 || baseVitals.SpO2).match(/\d+/)?.[0] || 90);
+        if (curSpO2 < 96) {
+            const newSpO2 = Math.min(98, curSpO2 + 2); 
+            updVitals({ SpO2: newSpO2 });
+            reply.finding = `✅ SpO₂ verbessert sich auf ${newSpO2}%.`;
+        }
+        return ok(reply);
+    }
+    
+    // Stabile Seitenlage (NEU: Sicherer Atemweg)
+    if (low.includes('stabile seitenlage')) {
+        reply.accepted = true; 
+        // GCS-Wert muss in jedem Fall gemessen werden, um ihn anzuzeigen.
         state.measurements.vitals.GCS = true; 
+        
+        // Wenn GCS < 15, ist die SSL sinnvoll
+        const curGCS = parseFloat(String(state.vitals.GCS || baseVitals.GCS).match(/\d+/)?.[0] || 15);
+        
         if (curGCS < 15) {
             reply.evaluation = "Stabile Seitenlage durchgeführt. Atemwege gesichert.";
             reply.finding = "Patient in stabiler Seitenlage. Kein Aspirationsrisiko.";
@@ -300,36 +391,37 @@ exports.handler = async (event) => {
     
     // Schocklagerung (NEU: Temporärer RR-Anstieg & Kontraindikation)
     if (low.includes('schocklagerung')) {
+        reply.accepted = true; 
+        reply.evaluation = "Schocklagerung durchgeführt. Autotransfusionseffekt wird geprüft.";
+        touchStep("C");
+
+        const curRRStr = String(state.vitals.RR || baseVitals.RR);
+        const curRRsys = parseFloat(curRRStr.split('/')[0] || 120);
+        
         const isContraindicated = state.specialty === 'trauma' && 
                                  (H.polytrauma_criteria?.anatomical?.includes('instabiles Becken') || H.polytrauma_criteria?.mechanism?.includes('Sturz aus'));
         
         if (isContraindicated) {
-            registerUnsafe(`Kontraindizierte Schocklagerung bei V.a. Becken-/WS-Verletzung.`);
+            reply.unsafe = true;
+            reply.finding = `⛔ **KRITISCHER FEHLER:** Schocklagerung bei Trauma (Verdacht auf Becken-/Wirbelsäulenverletzung) kontraindiziert! Der Zustand verschlechtert sich.`;
+            state.measurements.unsafe_actions.push("❌ Kontraindizierte Schocklagerung bei V.a. Becken-/WS-Verletzung");
             
             // Simuliere Verschlechterung (RR-Abfall)
-            const curRRStr = String(state.vitals.RR || baseVitals.RR);
-            const curRRsys = parseFloat(curRRStr.split('/')[0] || 120);
             const newRRsys = Math.max(80, curRRsys - 10);
             const newRRdia = Math.max(50, parseFloat(curRRStr.split('/')[1] || 80) - 5);
             updVitals({ RR: `${newRRsys}/${newRRdia}` });
             
         } else if (curRRsys < 100) {
             // Normaler, positiver Effekt, wenn keine Kontraindikation vorliegt
-            const curRRStr = String(state.vitals.RR || baseVitals.RR);
             const newRRsys = Math.min(120, curRRsys + 7);
             const newRRdia = Math.min(80, parseFloat(curRRStr.split('/')[1] || 80) + 3);
             updVitals({ RR: `${newRRsys}/${newRRdia}` });
             reply.finding = `✅ RR steigt temporär auf ${newRRsys}/${newRRdia} mmHg durch die Lagerung.`;
         }
-        reply.accepted = true; 
-        reply.evaluation = "Schocklagerung durchgeführt. Autotransfusionseffekt wird geprüft.";
-        touchStep("C");
         return ok(reply);
     }
-
-    // Immobilisation (FIX: Setzt Flag für DMS-Kontrolle)
-    if (low.includes('immobilisation:')) {
-    // ... (Logik wie zuvor)
+    
+    if (/immobilisation:/.test(low)) {
         state.measurements.immo_done = true; 
         reply.accepted = true; reply.evaluation = "Immobilisation durchgeführt."; touchStep("E");
         
@@ -347,13 +439,35 @@ exports.handler = async (event) => {
         return ok(reply);
     }
     
+    // --- 4. DOKUMENTATION (FIXED) ---
+    
+    // SAMPLER DOKU
+    if (/sampler doku/.test(low)) { 
+        reply.accepted=true; 
+        const s = state.anamnesis?.SAMPLER || {};
+        reply.evaluation="SAMPLER dokumentiert:"; 
+        reply.finding = `S: ${text(s.S)}<br>A: ${text(s.A)}<br>M: ${text(s.M)}<br>P: ${text(s.P)}<br>L: ${text(s.L)}<br>E: ${text(s.E)}<br>R: ${text(s.R)}`; 
+        return ok(reply); 
+    }
+    
+    // 4S DOKU
+    if (/4s doku/.test(low)) { 
+        reply.accepted = true; 
+        const s = state.scene_4s || {};
+        reply.evaluation = "4S dokumentiert.";
+        reply.finding = `Sicherheit: ${text(s.sicherheit)}<br>Szene: ${text(s.szene)}<br>Sichtung: ${text(s.sichtung_personen)}<br>Support: ${text(s.support_empfehlung)}`;
+        return ok(reply); 
+    }
+
+    if (/übergabe/.test(low)) { state.measurements.handover_done = true; reply.accepted = true; reply.evaluation="Übergabe erfolgt."; return ok(reply); }
+    if (/verdachtsdiagnose/.test(low)) { state.measurements.diagnosis = ua.split(":")[1]; reply.accepted = true; reply.evaluation="Verdacht notiert."; return ok(reply); }
+
+    // Fallbacks
+    if (/zugang/.test(low)) { state.measurements.iv_access = true; reply.accepted=true; reply.evaluation="Zugang gelegt."; touchStep("C"); return ok(reply); }
+    if (/notarzt/.test(low)) { reply.accepted=true; reply.evaluation="NA nachgefordert."; touchStep("C"); return ok(reply); }
+    
     // Volumengabe (FIX: RR-Anstieg simulieren)
     if (/volumen/.test(low)) { 
-        // KI-Check: Volumen bei HI/Lungenödem (Asthma)
-        if ((H.diagnosis_keys || []).join(' ').toLowerCase().includes('lungenödem') || (H.diagnosis_keys || []).join(' ').toLowerCase().includes('herzinsuffizienz')) {
-            registerUnsafe("Volumengabe bei kardiogenem Problem/Lungenödem kontraindiziert.");
-        }
-        
         reply.accepted=true; 
         reply.evaluation="Infusion läuft. Wirkung wird geprüft."; 
         touchStep("C");
@@ -373,66 +487,61 @@ exports.handler = async (event) => {
         return ok(reply);
     }
     
-    // --- WEITERE SPEZIALAKTIONEN ---
-    
-    // Augenversorgung (E)
-    if (low.includes('augenversorgung')) {
-        // KI-Check: Trauma Fall ohne Augenverletzung, aber internistischer Notfall
-        if (state.specialty !== 'trauma' && !(H.diagnosis_keys || []).join(' ').toLowerCase().includes('verätzung')) {
-            registerUnsafe("Unnötige Augenversorgung bei internistischem/neurologischem Problem.");
-        }
-        
-        // ... (Logik wie zuvor)
-        reply.accepted = true; 
-        touchStep("E");
-        let msg = "Augen geschützt.";
-        const dx = (H.diagnosis_keys||[]).join(' ').toLowerCase();
-        
-        if (dx.includes('säure') || dx.includes('verätzung')) msg = "✅ Augen werden ausgiebig gespült.";
-        if (dx.includes('auge') || dx.includes('perforation')) msg = "✅ Beide Augen steril abgedeckt (Ruhigstellung).";
-        
-        reply.evaluation = msg;
-        return ok(reply);
+    // VITALWERTE MESSEN (FIX: Messung registrieren)
+    if (/spo2/.test(low)) { 
+        state.measurements.vitals.SpO2=true; 
+        state.measurements.vitals.Puls=true; 
+        updVitals({ SpO2: state.vitals.SpO2, Puls: state.vitals.Puls }); 
+        reply.accepted=true; reply.evaluation="Sensor angelegt."; touchStep("B"); 
+        return ok(reply); 
     }
-    
-    // EKG/12-Kanal
-    if (/ekg/.test(low) && !state.steps_done.includes('X')) {
-        registerUnsafe("Prioritätsfehler: EKG in der X-Phase (Ausblutung) ist Zeitverschwendung.");
+    if (/ekg/.test(low)) { 
+        state.measurements.vitals.Puls=true; 
+        updVitals({ Puls: state.vitals.Puls }); 
+        reply.accepted=true; reply.finding=H.ekg12||"Sinus"; reply.evaluation="EKG geschrieben."; touchStep("C"); 
+        return ok(reply); 
     }
-
-
-    // --- DOKUMENTATION & FALLBACKS ---
-    
-    // SAMPLER DOKU
-    if (/sampler doku/.test(low)) { 
-        reply.accepted=true; 
-        const s = state.anamnesis?.SAMPLER || {};
-        reply.evaluation="SAMPLER dokumentiert:"; 
-        reply.finding = `S: ${text(s.S)}<br>A: ${text(s.A)}<br>M: ${text(s.M)}<br>P: ${text(s.P)}<br>L: ${text(s.L)}<br>E: ${text(s.E)}<br>R: ${text(s.R)}`; 
+    if (/rr/.test(low)) { 
+        state.measurements.vitals.RR=true; 
+        updVitals({ RR: state.vitals.RR }); 
+        reply.accepted=true; reply.evaluation="RR gemessen."; touchStep("C"); 
+        return ok(reply); 
+    }
+    if (/puls/.test(low)) { 
+        state.measurements.vitals.Puls=true; 
+        updVitals({ Puls: state.vitals.Puls }); 
+        reply.accepted=true; reply.evaluation="Puls getastet."; touchStep("C"); 
+        return ok(reply); 
+    }
+    if (/temp/.test(low)) { 
+        state.measurements.vitals.Temp=true; 
+        updVitals({Temp: state.vitals.Temp}); 
+        reply.accepted=true; reply.evaluation="Temp gemessen."; touchStep("E"); 
+        return ok(reply); 
+    }
+    // FIX: BZ messen (BZ sichtbar machen)
+    if (/bz messen/.test(low)) { 
+        state.measurements.vitals.BZ=true; 
+        updVitals({ BZ: state.vitals.BZ }); 
+        reply.accepted=true; reply.evaluation="Blutzucker gemessen."; touchStep("D"); 
         return ok(reply); 
     }
     
-    // 4S DOKU
-    if (/4s doku/.test(low)) { 
-        reply.accepted = true; 
-        const s = state.scene_4s || {};
-        reply.evaluation = "4S dokumentiert.";
-        reply.finding = `Sicherheit: ${text(s.sicherheit)}<br>Szene: ${text(s.szene)}<br>Sichtung: ${text(s.sichtung_personen)}<br>Support: ${text(s.support_empfehlung)}`;
+    // FIX: AF messen (AF sichtbar machen)
+    if (/af messen/.test(low)) { 
+        state.measurements.vitals.AF=true; 
+        updVitals({ AF: state.vitals.AF }); 
+        reply.accepted=true; reply.evaluation="Atemfrequenz gezählt."; touchStep("B"); 
         return ok(reply); 
     }
     
-    // CPR & Fremdkörpermanöver (Bleiben erhalten)
-    if (/cpr starten/.test(low) || /fremdkörpermanöver/.test(low) || /wundversorgung/.test(low) || /chest seal/.test(low)) {
-        // Diese Logiken wurden als vollständige Blöcke übernommen, keine Änderung nötig
-        return ok(reply);
+    // FIX: GCS messen (GCS sichtbar machen)
+    if (/gcs erheben/.test(low)) { 
+        state.measurements.vitals.GCS=true; 
+        updVitals({ GCS: state.vitals.GCS }); 
+        reply.accepted=true; reply.evaluation="GCS erhoben."; touchStep("D"); 
+        return ok(reply); 
     }
-    
-    // Dokumentation und Standard-Messungen (Bleiben erhalten)
-    if (/übergabe/.test(low) || /verdachtsdiagnose/.test(low) || /zugang/.test(low) || /notarzt/.test(low) || /temp messen/.test(low) || /rr messen/.test(low) || /puls messen/.test(low) || /bz messen/.test(low) || /af messen/.test(low) || /gcs erheben/.test(low) || /spo2 messen/.test(low)) {
-        // Standard-Messungen und ORGA (Bleiben erhalten, da die Fehlerlogik oben greift)
-        return ok(reply);
-    }
-    
 
     reply.accepted = true; reply.evaluation = "OK.";
     return ok(reply);
