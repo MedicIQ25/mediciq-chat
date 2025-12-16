@@ -306,3 +306,30 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
     text-align: center;
     font-size: 1.2rem;
 }
+/* style.css (Am Ende hinzufügen) */
+
+/* NEU: Styling für die Dropdown-Struktur */
+.action-dropdown-container {
+    padding: 5px;
+}
+
+.action-dropdown {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--muted);
+    background: var(--card);
+    color: var(--text);
+    font-size: 1rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+/* Passt das Grid-Layout so an, dass die Dropdowns ordentlich nebeneinander liegen */
+#actionPanel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Breitere Basis als das alte Grid */
+    gap: 10px;
+    margin-bottom: 5px;
+    padding: 10px 0;
+    /* Hintergrundfarbe entfernen, da der Bereich jetzt offen ist */
+}

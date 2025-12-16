@@ -81,7 +81,7 @@ let currentLead = 'II';
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
-    renderPanel('X');
+    renderDropdowns();
     updateUI(false); 
     
     bindEvent('btnSound', 'click', (e) => {
@@ -139,11 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-        t.classList.add('active');
-        renderPanel(t.dataset.tab);
-    }));
+   
 });
 
 function bindEvent(id, event, func) {
@@ -567,26 +563,83 @@ async function openDebrief() {
 }
 
 // --- UI HELPERS & MODALS ---
-function renderPanel(k) {
-  const panel = document.getElementById('panel');
-  if(!panel) return;
-  panel.innerHTML = '';
-  (ACTIONS[k]||[]).forEach(a => {
-    const b = document.createElement('button');
-    b.className = 'action-card';
-    b.textContent = a.label;
-    b.onclick = () => {
-      if(a.special === 'O2') openOxygen();
-      else if(a.special === 'NA') openNA();
-      else if(a.special === 'IMMO') openImmo();
-      else if(a.special === 'BODYMAP') openBodyMap();
-      else if(a.special === 'EKG') openEKG();
-      else if(a.instant) { stepCase(a.token); }
-      else { queue.push(a); renderQueue(); }
-    };
-    panel.appendChild(b);
-  });
+// --- UI HELPERS & MODALS (FIX: renderPanel durch renderDropdowns ersetzt) ---
+
+function renderDropdowns() {
+    const phases = ['X', 'A', 'B', 'C', 'D', 'E'];
+    const panel = document.getElementById('actionPanel');
+    if (!panel) return;
+    panel.innerHTML = '';
+    
+    phases.forEach(k => {
+        const actions = ACTIONS[k] || [];
+        if (actions.length === 0) return;
+
+        // 1. Erstelle das Dropdown-Element (Select-Box)
+        const select = document.createElement('select');
+        select.className = 'action-dropdown';
+        select.setAttribute('data-phase', k);
+
+        // 2. Erstelle die Standard-Option (Label)
+        const defaultOption = document.createElement('option');
+        defaultOption.textContent = `${k} – ${
+            k === 'X' ? 'Exsanguination' : 
+            k === 'A' ? 'Airway' : 
+            k === 'B' ? 'Breathing' : 
+            k === 'C' ? 'Circulation' : 
+            k === 'D' ? 'Disability' : 
+            'Exposure'
+        }`;
+        defaultOption.value = '';
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        select.appendChild(defaultOption);
+
+        // 3. Füge die Aktionen als Optionen hinzu
+        actions.forEach(a => {
+            const option = document.createElement('option');
+            option.textContent = a.label;
+            option.value = a.token || a.special;
+            option.setAttribute('data-instant', a.instant ? 'true' : 'false');
+            option.setAttribute('data-special', a.special || '');
+            select.appendChild(option);
+        });
+
+        // 4. Erstelle den Container und hänge das Dropdown an
+        const container = document.createElement('div');
+        container.className = 'action-dropdown-container';
+        container.appendChild(select);
+        panel.appendChild(container);
+
+        // 5. Füge den Event Listener hinzu
+        select.addEventListener('change', (e) => {
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            const token = selectedOption.value;
+            const isInstant = selectedOption.dataset.instant === 'true';
+            const specialAction = selectedOption.dataset.special;
+            
+            // Setze den Select wieder auf den Standardwert
+            e.target.value = '';
+
+            if (specialAction) {
+                // Spezialbehandlung (Modals)
+                if(specialAction === 'O2') openOxygen();
+                else if(specialAction === 'NA') openNA();
+                else if(specialAction === 'IMMO') openImmo();
+                else if(specialAction === 'BODYMAP') openBodyMap();
+                else if(specialAction === 'EKG') openEKG();
+            } else if (isInstant) {
+                // Sofortige Aktion (z.B. Messung)
+                stepCase(token);
+            } else {
+                // Geplante Aktion (Warteschlange)
+                queue.push({ label: selectedOption.textContent, token: token }); 
+                renderQueue();
+            }
+        });
+    });
 }
+// ... (Restliche UI-Funktionen folgen hier)
 
 function renderVitals() {
   const map = { RR: 'vRR', SpO2: 'vSpO2', AF: 'vAF', Puls: 'vPuls', BZ: 'vBZ', Temp: 'vTemp', GCS: 'vGCS' };
