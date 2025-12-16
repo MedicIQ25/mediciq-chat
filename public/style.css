@@ -92,7 +92,7 @@ body.dark-mode .timer-badge { background: #f1f5f9; color: #0f172a; }
 @keyframes blinkRed { 0% { background: #111; } 50% { background: #7f1d1d; } 100% { background: #111; } }
 .vital-box.critical { animation: blinkRed 1s infinite; border-color: #ef4444; }
 
-/* PROGRESS & CHIPS */
+/* PROGRESS & CHIPS (ZWEIZEILIGE DARSTELLUNG) */
 .progress { 
     display: flex; 
     flex-wrap: wrap; /* NEU: ERLAUBT ZWEI ZEILEN */
