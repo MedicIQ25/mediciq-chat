@@ -92,20 +92,22 @@ body.dark-mode .timer-badge { background: #f1f5f9; color: #0f172a; }
 @keyframes blinkRed { 0% { background: #111; } 50% { background: #7f1d1d; } 100% { background: #111; } }
 .vital-box.critical { animation: blinkRed 1s infinite; border-color: #ef4444; }
 
-/* PROGRESS & CHIPS (ZWEIZEILIGE DARSTELLUNG) */
+/* PROGRESS & CHIPS (ZWEIZEILIGE DARSTELLUNG MIT ZENTRIERUNG) */
 .progress { 
     display: flex; 
-    flex-wrap: wrap; /* WICHTIG: ERLAUBT ZWEI ZEILEN */
+    flex-wrap: wrap; 
+    /* NEU: Zentriert die Chips, wenn sie umgebrochen werden (insbesondere die zweite Reihe) */
+    justify-content: center; 
     gap: 6px; 
     margin-bottom: 15px; 
     overflow-x: auto; 
     padding-bottom: 4px; 
 }
-/* 4S-Schema nimmt die gesamte Breite ein */
+/* 4S-Schema nimmt die gesamte Breite ein und erzwingt den Umbruch */
 .progress .chip[data-tool="FOUR_S"] {
     width: 100%; 
     margin-bottom: 6px; 
-    /* Stellt sicher, dass es in der ersten Zeile allein steht */
+    order: -1; /* Zwingt 4S an den Anfang, falls Flexbox-Reihenfolge durch JS beeinflusst wird */
 }
 
 .chip { 
@@ -118,7 +120,6 @@ body.dark-mode .timer-badge { background: #f1f5f9; color: #0f172a; }
     cursor: pointer;
     min-width: 60px; 
     text-align: center;
-    /* XABCDE Chips werden sich jetzt normal auf der zweiten Zeile verteilen */
 }
 .chip.done { background: #d1fae5; border-color: #10b981; color: #047857; }
 body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #34d399; }
