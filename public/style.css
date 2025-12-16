@@ -93,12 +93,32 @@ body.dark-mode .timer-badge { background: #f1f5f9; color: #0f172a; }
 .vital-box.critical { animation: blinkRed 1s infinite; border-color: #ef4444; }
 
 /* PROGRESS & CHIPS */
-.progress { display: flex; gap: 6px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 4px; }
+.progress { 
+    display: flex; 
+    flex-wrap: wrap; /* NEU: ERLAUBT ZWEI ZEILEN */
+    gap: 6px; 
+    margin-bottom: 15px; 
+    overflow-x: auto; 
+    padding-bottom: 4px; 
+}
+/* 4S-Schema nimmt die gesamte Breite ein */
+.progress .chip[data-tool="FOUR_S"] {
+    width: 100%; 
+    margin-bottom: 6px; 
+    /* Überschreibt die Flexbox-Breitenberechnung für dieses eine Element */
+}
+
 .chip { 
-    background: var(--bg); border: 1px solid var(--muted); padding: 8px 12px; border-radius: 99px; 
-    font-size: 0.85rem; color: var(--muted); white-space: nowrap; cursor: pointer;
-    min-width: 60px; /* Bessere Touch-Zielgröße */
+    flex-shrink: 0; 
+    font-size: 0.85rem; 
+    padding: 8px 12px; 
+    border-radius: 99px; 
+    color: var(--muted); 
+    white-space: nowrap; 
+    cursor: pointer;
+    min-width: 60px; 
     text-align: center;
+    /* XABCDE Chips werden sich jetzt normal auf der zweiten Zeile verteilen */
 }
 .chip.done { background: #d1fae5; border-color: #10b981; color: #047857; }
 body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #34d399; }
@@ -400,26 +420,15 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
     #vRR { font-size: 1.1rem !important; }
 
     /* PROGRESS/SCHEMATA: Bessere Touch-Ziele und Scrollen */
-.progress {
-   display: flex;
-   gap: 4px;
-   margin-bottom: 15px;
-   overflow-x: auto; /* Wichtig: Scrollbar bei Überlauf */
-   padding-bottom: 8px;
-}
-/* NEU: Alle Chips auf kleinere, gleichmäßige Größe zwingen */
-.chip {
-   flex-shrink: 0; /* Verhindert, dass die Chips zusammengedrückt werden */
-   font-size: 0.75rem;
-   padding: 6px 6px;
-   min-width: 45px; /* Minimalbreite für Touch-Ziel */
-   text-align: center;
-}
-/* NEU: Dem 4S-Schema-Button mehr Platz geben, aber nicht zu viel */
-.chip.schema-btn[data-tool="FOUR_S"] {
-   min-width: 80px;
-   font-size: 0.8rem; /* Etwas größer als die Buchstaben */
-}
+    .progress { 
+        gap: 4px; 
+        padding-bottom: 8px; /* Mehr Platz für den Scroll-Balken */
+    }
+    .chip { 
+        font-size: 0.8rem; 
+        padding: 6px 8px; 
+        min-width: 50px;
+    }
     
     .schemata-row {
         gap: 6px;
