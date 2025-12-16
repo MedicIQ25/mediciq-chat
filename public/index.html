@@ -85,6 +85,10 @@
     <div class="schemata-row">
       <button class="schema-btn" data-tool="SAMPLER">SAMPLER</button>
       <button class="schema-btn" data-tool="BEFAST">BE-FAST</button>
+      
+      <button class="schema-btn" data-tool="NEXUS">NEXUS-Kriterien</button>
+      <button class="schema-btn" data-tool="POLYTRAUMA">Polytrauma-Kriterien</button>
+      
       <button class="schema-btn" data-tool="NRS">Schmerzskala (NRS)</button>
       
       <button class="schema-btn primary" data-tool="DIAGNOSIS">Verdachtsdiagnose</button>
@@ -200,15 +204,4 @@
   <div class="modal-body" style="text-align:center;"><svg width="200" height="350" viewBox="0 0 200 400" style="margin:auto; display:block; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.1));"><style>.body-part { stroke: #475569; stroke-width: 2; transition: fill 0.3s; cursor: pointer; }.body-part:hover { opacity: 0.8; }</style><path id="body_head" class="body-part" fill="#f1f5f9" d="M100,20 C85,20 75,35 75,55 C75,80 125,80 125,55 C125,35 115,20 100,20 Z" /><path id="body_torso" class="body-part" fill="#f1f5f9" d="M85,85 L115,85 L125,180 L75,180 Z" /><path id="body_arm_r" class="body-part" fill="#f1f5f9" d="M75,90 L45,100 L35,170 L55,175 L75,100 Z" /><path id="body_arm_l" class="body-part" fill="#f1f5f9" d="M125,90 L155,100 L165,170 L145,175 L125,100 Z" /><path id="body_leg_r" class="body-part" fill="#f1f5f9" d="M80,185 L70,280 L65,360 L90,360 L95,185 Z" /><path id="body_leg_l" class="body-part" fill="#f1f5f9" d="M120,185 L130,280 L135,360 L110,360 L105,185 Z" /></svg><div id="bodyMapText" style="margin-top:15px; font-weight:bold; color:#b91c1c; font-size:1.1rem;"></div></div>
   <div class="modal-actions"><button id="bodyMapClose" class="btn secondary">Schließen</button></div>
 </div>
-<div id="modalEKG" class="modal" style="display:none;">
-  <div class="modal-head">EKG Monitor (3-Kanal / 12-Kanal)</div>
-  <div class="modal-body" style="text-align:center;"><svg id="ekgSvg" width="400" height="150" viewBox="0 0 400 150" style="background:#000; border:2px solid #333; margin:auto;"><polyline id="ekgLine" points="" fill="none" stroke="#00ff00" stroke-width="2" /></svg><div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e;"></div></div>
-  <div class="modal-actions"><button id="ekgClose" class="btn secondary">Schließen</button></div>
-</div>
-<div id="modalHandover" class="modal" style="display:none;">
-  <div class="modal-head">Übergabe (SINNHAFT)</div>
-  <div class="modal-body form-grid"><div class="small muted" style="color:#ef4444; font-weight:bold;">S - Start (Ruhe! Alle bereit?)</div><label>I - Identifikation <input id="s_ident" placeholder="Name, Alter, (Gewicht)..." /></label><label>N - Notfallereignis <input id="s_event" placeholder="Was? Wie? Wann? Wo?" /></label><label>N - Notfallpriorität <input id="s_prio" placeholder="xABCDE, Vitalparameter..." /></label><label>H - Handlungen <input id="s_action" placeholder="Durchgeführte Maßnahmen, Wirkung..." /></label><label>A - Anamnese <input id="s_anam" placeholder="SAMPLER, Besonderheiten..." /></label><div class="small muted" style="margin-top:5px; color:#3b82f6;">F - Fazit (Wiederholung) | T - Teamfragen</div></div>
-  <div class="modal-actions"><button id="handoverOk" class="btn">Fall abschließen</button><button id="handoverCancel" class="btn secondary">Abbrechen</button></div>
-</div>
-</body>
-</html>
+<div id="modal
