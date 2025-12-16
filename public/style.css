@@ -95,7 +95,7 @@ body.dark-mode .timer-badge { background: #f1f5f9; color: #0f172a; }
 /* PROGRESS & CHIPS (ZWEIZEILIGE DARSTELLUNG) */
 .progress { 
     display: flex; 
-    flex-wrap: wrap; /* NEU: ERLAUBT ZWEI ZEILEN */
+    flex-wrap: wrap; /* WICHTIG: ERLAUBT ZWEI ZEILEN */
     gap: 6px; 
     margin-bottom: 15px; 
     overflow-x: auto; 
@@ -105,7 +105,7 @@ body.dark-mode .timer-badge { background: #f1f5f9; color: #0f172a; }
 .progress .chip[data-tool="FOUR_S"] {
     width: 100%; 
     margin-bottom: 6px; 
-    /* Überschreibt die Flexbox-Breitenberechnung für dieses eine Element */
+    /* Stellt sicher, dass es in der ersten Zeile allein steht */
 }
 
 .chip { 
