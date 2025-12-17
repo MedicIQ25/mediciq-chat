@@ -291,31 +291,36 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
 }
 
 /* NEU: Spezielles Styling für Kriterien-Modals (NEXUS, Polytrauma, 4S, BEFAST) */
+/* Verbesserte Optik für Checkbox-Listen in Modalen */
 .criteria-modal-body {
-    /* Deaktiviert das Form-Grid-Layout, um Flexbox zu verwenden */
-    display: block !important;
+    display: flex !important;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 0;
 }
 
 .criteria-modal-body label {
     display: flex;
-    align-items: flex-start; /* Stellt sicher, dass Text oben ausgerichtet ist */
-    gap: 12px; /* Abstand zwischen Checkbox und Text */
-    margin-bottom: 12px;
-    padding: 5px 0;
-    border-bottom: 1px solid var(--muted);
+    align-items: center; /* Vertikal zentriert Checkbox und Text */
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid var(--muted);
+    cursor: pointer;
+    transition: background 0.2s;
 }
 
-.criteria-modal-body label:last-child {
-    border-bottom: none;
+.criteria-modal-body label:hover {
+    background: var(--bubble-ai);
 }
 
 .criteria-modal-body input[type="checkbox"] {
-    flex-shrink: 0; /* Verhindert, dass die Checkbox schrumpft */
-    margin-top: 3px;
-    transform: scale(1.2); /* Macht die Box etwas größer */
-    /* Entfernt unnötiges Styling, falls es durch das Form-Grid vererbt wurde */
-    width: auto !important;
-    height: auto !important; 
+    width: 20px !important; /* Fixe Breite für die Box */
+    height: 20px !important;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--brand); /* Nutzt deine Markenfarbe für den Haken */
 }
 
 /* NEU: Verbessert die Sichtbarkeit des NRS Schiebereglers */
