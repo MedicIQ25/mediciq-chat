@@ -325,47 +325,104 @@ function playBeep(spo2) {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 }
 
+let ekgLoopReq = null;
+
 function openEKG() {
     if(!caseState) return;
-    currentLead = 'II';
-
-    const modalBody = document.querySelector('#modalEKG .modal-body');
-    modalBody.innerHTML = `
-      <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-        <label style="font-weight:bold;">Ableitung:</label>
-        <select id="leadSelect" style="padding:5px; border-radius:4px; font-weight:bold;">
-            <option value="I">I</option>
-            <option value="II" selected>II</option>
-            <option value="III">III</option>
-            <option value="aVR">aVR</option>
-            <option value="aVL">aVL</option>
-            <option value="aVF">aVF</option>
-            <option value="V1">V1</option>
-            <option value="V2">V2</option>
-            <option value="V3">V3</option>
-            <option value="V4">V4</option>
-            <option value="V5">V5</option>
-            <option value="V6">V6</option>
-        </select>
-      </div>
-      <div class="ekg-screen" style="width:100%; height:200px;">
-        <svg id="monitorSvg" width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none"></svg>
-      </div>
-      <div id="ekgText" style="margin-top:10px; font-weight:bold; color:#0f766e; text-align:center;"></div>
-    `;
-
     openModal('modalEKG');
-    
+
+    const canvas = document.getElementById('ekgCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false }); // Performance-Boost
+    const status = document.getElementById('ekgStatusText');
     const sel = document.getElementById('leadSelect');
-    sel.onchange = () => { currentLead = sel.value; updateEKGView(); };
+    const leadName = document.getElementById('ekgLeadName');
 
-    const closeBtn = document.getElementById('ekgClose');
-    if(closeBtn) closeBtn.onclick = () => closeModal('modalEKG');
+    let x = 0;
+    const hf = parseInt(String(visibleVitals.Puls || 80).match(/\d+/)?.[0]);
+    const hasSpO2 = !!visibleVitals.SpO2;
+    const type = caseState.hidden?.ekg_pattern || "sinus";
+    const pathol = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase();
+    const isSTEMI = pathol.includes('hinterwand') || pathol.includes('stemi') || pathol.includes('inferior');
 
-    updateEKGView();
-    stepCase('12-Kanal-EKG'); 
+    // Reset Canvas
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    function animate() {
+        // 1. Scanner-Effekt (löscht kurz vor dem Strahl)
+        ctx.fillStyle = '#000';
+        ctx.fillRect(x + 2, 0, 10, canvas.height); 
+
+        // 2. Zeitberechnung
+        const t = (x / 100) * (hf / 60) * 1.5; 
+        const cycle = t % 1.0;
+
+        // 3. EKG Kurve (Mathematik)
+        let yEKG = 0;
+        if (type === 'sinus') {
+            if (cycle < 0.1) yEKG = Math.sin(cycle * Math.PI * 10) * -12; // P
+            else if (cycle > 0.15 && cycle < 0.18) yEKG = 18; // Q
+            else if (cycle >= 0.18 && cycle < 0.22) yEKG = -90; // R
+            else if (cycle >= 0.22 && cycle < 0.26) yEKG = 40; // S
+            else if (cycle > 0.4 && cycle < 0.6) {
+                // ST-Hebung Logik
+                let lift = (isSTEMI && ['II','III','aVF'].includes(sel.value)) ? -30 : 0;
+                yEKG = (Math.sin((cycle-0.4) * Math.PI * 5) * -18) + lift;
+            }
+        } else if (type === 'vt') {
+             yEKG = Math.sin(t * Math.PI * 5) * 60;
+        }
+
+        // 4. Pleth Kurve
+        let yPleth = hasSpO2 ? (Math.sin(t * Math.PI * 2.2) * -30 + Math.sin(t * Math.PI * 4.4) * -5) : 0;
+
+        // 5. Zeichnen
+        const drawY_EKG = 120 + yEKG;
+        const drawY_Pleth = 280 + yPleth;
+
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = 'round';
+        
+        // EKG (Grün)
+        ctx.strokeStyle = '#00ff00';
+        ctx.beginPath();
+        ctx.moveTo(x - 2, canvas.oldY || drawY_EKG);
+        ctx.lineTo(x, drawY_EKG);
+        ctx.stroke();
+        canvas.oldY = drawY_EKG;
+
+        // Pleth (Blau)
+        if(hasSpO2) {
+            ctx.strokeStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.moveTo(x - 2, canvas.oldPlethY || drawY_Pleth);
+            ctx.lineTo(x, drawY_Pleth);
+            ctx.stroke();
+            canvas.oldPlethY = drawY_Pleth;
+        }
+
+        x += 2;
+        if (x >= canvas.width) {
+            x = 0;
+            // Kleiner Fade-Effekt beim Umbruch
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(0,0,canvas.width, canvas.height);
+        }
+
+        ekgLoopReq = requestAnimationFrame(animate);
+    }
+
+    // Status & Diagnose
+    if (isSTEMI) { status.textContent = "⚠️ ST-HEBUNG ERKANNT (STEMI)"; status.style.color = "#facc15"; }
+    else if (type === "vt") { status.textContent = "!!! KAMMERTACHYKARDIE !!!"; status.style.color = "#ef4444"; }
+    else { status.textContent = "SINUSRHYTHMUS"; status.style.color = "#00ff00"; }
+
+    sel.onchange = () => { leadName.textContent = "Ableitung " + sel.value; ctx.fillRect(0,0,canvas.width, canvas.height); x=0; };
+    $id('ekgClose').onclick = () => { cancelAnimationFrame(ekgLoopReq); closeModal('modalEKG'); };
+    
+    animate();
+    stepCase('12-Kanal-EKG');
 }
-
 
 
 // --- TTS ---
