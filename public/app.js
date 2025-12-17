@@ -797,6 +797,10 @@ function openNRS() {
   openModal('modalNRS');
 }
 function openBEFAST() {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  $id('t_time').value = `${hours}:${minutes}`;
   $id('befastFetch').onclick=async()=>{
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'BEFAST Info'})});
     const d = await res.json();
