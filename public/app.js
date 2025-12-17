@@ -852,15 +852,15 @@ function openSampler() {
     if(d.finding) document.getElementById('samplerInfo').innerHTML = d.finding;
 
     // Felder automatisch füllen
-    const S = caseState?.anamnesis?.SAMPLER || {};
-    
-    if($id('s_sympt')) $id('s_sympt').value = S.S || '';
-    if($id('s_allerg')) $id('s_allerg').value = S.A || '';
-    if($id('s_med')) $id('s_med').value = S.M || '';
-    if($id('s_hist')) $id('s_hist').value = S.P || '';
-    if($id('s_last')) $id('s_last').value = S.L || '';
-    if($id('s_events')) $id('s_events').value = S.E || '';
-    if($id('s_risk')) $id('s_risk').value = S.R || '';
+    // In openSampler()
+const S = caseState?.anamnesis?.SAMPLER || {};
+if($id('s_sympt'))  $id('s_sympt').value  = S.S || '';
+if($id('s_allerg')) $id('s_allerg').value = S.A || ''; // Fix für Allergien
+if($id('s_med'))    $id('s_med').value    = S.M || '';
+if($id('s_hist'))   $id('s_hist').value   = S.P || '';
+if($id('s_last'))   $id('s_last').value   = S.L || '';
+if($id('s_events')) $id('s_events').value = S.E || '';
+if($id('s_risk'))   $id('s_risk').value   = S.R || '';
   };
   $id('samplerOk').onclick=()=>{ stepCase('SAMPLER doku'); closeModal('modalSampler'); };
   $id('samplerCancel').onclick=()=>closeModal('modalSampler');
@@ -868,11 +868,14 @@ function openSampler() {
 }
 
 function openFourS() {
-  $id('s4Fetch').onclick=async()=>{
+  const sData = caseState?.scene_4s || {};
+if($id('s1')) $id('s1').checked = !!sData.sicherheit_check; // Falls als Boolean gespeichert
+// Wenn Sie den Text aus dem hidden-Feld anzeigen wollen:
+$id('s4Fetch').onclick = async () => {
     const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
     const d = await res.json();
-    $id('s4Info').innerHTML = d.finding;
-  };
+    $id('s4Info').innerHTML = d.finding; // Hier wird der Text inkl. Sicherheit ausgegeben
+};
   $id('s4Ok').onclick=()=>{ stepCase('4S dokumentiert'); closeModal('modal4S'); };
   $id('s4Cancel').onclick=()=>closeModal('modal4S');
   openModal('modal4S');
