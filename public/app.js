@@ -352,53 +352,56 @@ function openEKG() {
     let lastY_Pleth = null;
 
     function animate() {
-        // 1. Scanner-Effekt: Löscht den Bereich VOR dem Strahl
+        // 1. Scanner-Löschung (breiterer Bereich für saubere Übergänge)
         ctx.fillStyle = '#000000';
-        ctx.fillRect(x + 2, 0, 15, canvas.height); 
+        ctx.fillRect(x, 0, 25, canvas.height); 
 
-        // 2. Mathematische Kurvenberechnung
-        // Wir nutzen eine feste Frequenz-Skalierung, damit die Kurve immer gleich aussieht
-        const t = (x / 60); 
-        const bpm_factor = hf / 60;
-        const cycle = (t * bpm_factor) % 1.0;
+        // 2. Separate Zeitberechnungen
+        // t_ekg steuert den Herzschlagzyklus
+        const t_ekg = x / 65; 
+        const cycle = (t_ekg * (hf / 60)) % 1.0;
+        
+        // t_pleth ist unabhängig für eine flüssige Wellenbewegung
+        const t_pleth = x / 40; 
 
+        // --- EKG LOGIK ---
         let yEKG = 0;
         if (type === 'sinus') {
-            // P-Welle
             if (cycle < 0.1) yEKG = Math.sin(cycle * Math.PI * 10) * -10; 
-            // QRS-Komplex
-            else if (cycle > 0.15 && cycle < 0.17) yEKG = 10; // Q
-            else if (cycle >= 0.17 && cycle < 0.21) yEKG = -80; // R
-            else if (cycle >= 0.21 && cycle < 0.24) yEKG = 30; // S
-            // T-Welle + ST-Strecke
+            else if (cycle > 0.15 && cycle < 0.17) yEKG = 12; 
+            else if (cycle >= 0.17 && cycle < 0.21) yEKG = -85; 
+            else if (cycle >= 0.21 && cycle < 0.24) yEKG = 35; 
             else if (cycle > 0.35 && cycle < 0.55) {
-                let stLift = (isSTEMI && ['II','III','aVF'].includes(sel.value)) ? -40 : 0;
+                let stLift = (isSTEMI && ['II','III','aVF'].includes(sel.value)) ? -45 : 0;
                 yEKG = (Math.sin((cycle - 0.35) * Math.PI * 5) * -15) + stLift;
             }
         } else if (type === 'vt') {
-             yEKG = Math.sin(t * 0.5) * 60;
+             yEKG = Math.sin(x / 10) * 50; // Schnelle, breite Kammerkomplexe
         }
 
-        // Pleth-Kurve (SpO2)
-        let yPleth = hasSpO2 ? (Math.sin(t * 0.2) * -25 + Math.sin(t * 0.4) * -5) : 0;
+        // --- PLETH LOGIK (Völlig eigenständig) ---
+        let yPleth = 0;
+        if (hasSpO2) {
+            yPleth = (Math.sin(t_pleth) * -20) + (Math.sin(t_pleth * 2) * -5);
+        }
 
         const drawY_EKG = 130 + yEKG;
         const drawY_Pleth = 280 + yPleth;
 
-        // 3. Zeichnen der Linien
+        // 3. Zeichnen
         ctx.lineWidth = 2.5;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         
-        if (lastY_EKG !== null) {
-            // EKG (Grün)
+        if (lastY_EKG !== null && x > 0) {
+            // Grün: EKG
             ctx.strokeStyle = '#00ff00';
             ctx.beginPath();
             ctx.moveTo(x - 2, lastY_EKG);
             ctx.lineTo(x, drawY_EKG);
             ctx.stroke();
 
-            // Pleth (Blau)
+            // Blau: Pleth (Nur wenn gemessen wird)
             if(hasSpO2) {
                 ctx.strokeStyle = '#3b82f6';
                 ctx.beginPath();
@@ -414,16 +417,24 @@ function openEKG() {
         x += 2;
         if (x >= canvas.width) {
             x = 0;
-            lastY_EKG = null; 
+            lastY_EKG = null;
+            lastY_Pleth = null;
         }
 
         ekgLoopReq = requestAnimationFrame(animate);
     }
 
-    // UI-Texte setzen
-    if (isSTEMI) { status.textContent = "⚠️ V.A. MYOKARDINFARKT (STEMI)"; status.style.color = "#facc15"; }
-    else if (type === "vt") { status.textContent = "!!! VENTRIKULÄRE TACHYKARDIE !!!"; status.style.color = "#ef4444"; }
-    else { status.textContent = "SINUSRHYTHMUS"; status.style.color = "#00ff00"; }
+    // UI Feedback
+    if (isSTEMI) { 
+        status.textContent = "⚠️ V.A. MYOKARDINFARKT (STEMI)"; 
+        status.style.color = "#facc15"; 
+    } else if (type === "vt") { 
+        status.textContent = "!!! VENTRIKULÄRE TACHYKARDIE !!!"; 
+        status.style.color = "#ef4444"; 
+    } else { 
+        status.textContent = "SINUSRHYTHMUS"; 
+        status.style.color = "#00ff00"; 
+    }
 
     sel.onchange = () => { 
         leadName.textContent = "Ableitung " + sel.value; 
