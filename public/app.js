@@ -418,14 +418,17 @@ function updateEKGView() {
         <text x="385" y="155" fill="#3b82f6" font-size="10" text-anchor="end">%</text>
     `;
 
-    // --- DYNAMISCHE TEXTANZEIGE ---
+   // --- DYNAMISCHE TEXTANZEIGE ---
     const txt = document.getElementById('ekgText');
+    if (!txt) return;
+
+    // Diagnose aus dem Fall-State prüfen
     const isSTEMI = pathology.includes('hinterwand') || pathology.includes('stemi') || pathology.includes('infarkt');
 
     if (type === "vt") {
         txt.textContent = "!!! VENTRIKULÄRE TACHYKARDIE !!!";
         txt.style.color = "#ef4444";
-    } else if (type === "asystolie" || pulsVal === '0') {
+    } else if (type === "asystolie" || (pulsVal === '0' || pulsVal === '--')) {
         txt.textContent = "ASYSTOLIE / KREISLAUFSTILLSTAND";
         txt.style.color = "#ef4444";
     } else if (isSTEMI) {
@@ -454,11 +457,11 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pa
         else if (lead === 'III' || lead === 'aVF') { amp = { p: -4, q: 5, r: -40, s: 10, t: -10 }; }
     }
 
-    const isInferior = pathology.includes('hinterwand') || pathology.includes('inferior') || pathology.includes('stemi');
+    const isSTEMI = pathology.includes('hinterwand') || pathology.includes('stemi') || pathology.includes('infarkt');
     let stShift = 0; 
-    if (type === 'sinus' && isInferior) {
-        if (['II', 'III', 'aVF'].includes(lead)) stShift = -15; // Deutliche Hebung
-        else if (['I', 'aVL'].includes(lead)) stShift = 8;     // Senkung
+    if (type === 'sinus' && isSTEMI) {
+        if (['II', 'III', 'aVF'].includes(lead)) stShift = -18; // Deutliche Hebung für das Training
+        else if (['I', 'aVL'].includes(lead)) stShift = 8;     // Spiegelbildliche Senkung
     }
 
     while(currentX < totalWidth) {
@@ -481,7 +484,7 @@ function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pa
             currentX = totalWidth;
         }
     }
-    // WICHTIG: Das finale L am Ende wurde entfernt, um die diagonale Linie zu vermeiden!
+    // WICHTIG: Kein Pfadschluss am Ende (entferne das finale L am Ende der Funktion)
     return d;
 }
 

@@ -552,18 +552,28 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
     outline: none;
     box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
 }
-/* Stellt sicher, dass das EKG-Raster quadratisch bleibt */
+/* EKG Monitor Proportionen */
 #monitorSvg {
     background-color: #000;
     display: block;
     width: 100%;
     height: 100%;
-    /* Verhindert Verzerrungen der Kurven-Mathematik */
-    aspect-ratio: 2 / 1; 
+    aspect-ratio: 2 / 1; /* Verhindert Verzerrung der Kurven */
+    border-radius: 4px;
 }
 
 .ekg-screen {
     border: 3px solid #444;
     background: radial-gradient(circle, #111 0%, #000 100%);
     box-shadow: inset 0 0 15px rgba(0, 255, 0, 0.1);
+    margin-bottom: 10px;
+}
+
+#ekgText {
+    font-family: 'Courier New', monospace;
+    font-size: 1.2rem;
+    background: #111;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #333;
 }
