@@ -869,13 +869,29 @@ if($id('s_risk'))   $id('s_risk').value   = S.R || '';
 
 function openFourS() {
   const sData = caseState?.scene_4s || {};
-if($id('s1')) $id('s1').checked = !!sData.sicherheit_check; // Falls als Boolean gespeichert
-// Wenn Sie den Text aus dem hidden-Feld anzeigen wollen:
-$id('s4Fetch').onclick = async () => {
-    const res = await fetch(API_CASE_STEP, {method:'POST', body:JSON.stringify({case_state:caseState, user_action:'4S Info'})});
+  
+  // 1. Checkboxen beim Öffnen basierend auf den Fall-Daten setzen
+  // Wir prüfen, ob im Text "Keine Gefahr" oder "Sicher" steht
+  if($id('s1')) $id('s1').checked = sData.sicherheit && !sData.sicherheit.toLowerCase().includes("gefahr");
+  if($id('s2')) $id('s2').checked = !!sData.szene;
+  if($id('s3')) $id('s3').checked = !!sData.sichtung_personen;
+  if($id('s4')) $id('s4').checked = !!sData.support_empfehlung;
+
+  // 2. Info-Button Logik (Daten vom Server holen)
+  $id('s4Fetch').onclick = async () => {
+    const res = await fetch(API_CASE_STEP, {
+      method:'POST', 
+      body:JSON.stringify({case_state:caseState, user_action:'4S Info'})
+    });
     const d = await res.json();
-    $id('s4Info').innerHTML = d.finding; // Hier wird der Text inkl. Sicherheit ausgegeben
-};
+    if(d.finding) $id('s4Info').innerHTML = d.finding;
+    
+    // Nach dem Abrufen die Sicherheit-Box explizit haken, wenn sicher
+    if(d.finding && d.finding.toLowerCase().includes("sicherheit: keine gefahr")) {
+        $id('s1').checked = true;
+    }
+  };
+
   $id('s4Ok').onclick=()=>{ stepCase('4S dokumentiert'); closeModal('modal4S'); };
   $id('s4Cancel').onclick=()=>closeModal('modal4S');
   openModal('modal4S');
