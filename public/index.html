@@ -249,4 +249,18 @@
     <button id="handoverCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
+<div id="modalHandover" class="modal" style="display:none;">
+  <div class="modal-head">Patientenübergabe (SINNHAFT)</div>
+  <div class="modal-body form-grid">
+    <label>I - Identifikation: <input id="s_ident" placeholder="Name, Alter..." /></label>
+    <label>N - Notfallereignis: <textarea id="s_event" rows="2"></textarea></label>
+    <label>N - Notfallanamnese: <textarea id="s_anam" rows="2"></textarea></label>
+    <label>H - Hauptsymptom: <input id="s_prio" /></label>
+    <label>A - Aktueller Zustand: <textarea id="s_action" rows="2"></textarea></label>
+  </div>
+  <div class="modal-actions">
+    <button id="handoverOk" class="btn">Übergeben & Beenden</button>
+    <button id="handoverCancel" class="btn secondary">Abbrechen</button>
+  </div>
+</div>
 </body>
