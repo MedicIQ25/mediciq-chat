@@ -260,10 +260,23 @@
     <button id="handoverCancel" class="btn secondary">Abbrechen</button>
   </div>
 </div>
-<div id="modalEKG" class="modal" style="display:none; max-width: 600px;">
+<div id="modalEKG" class="modal" style="display:none; max-width: 800px; width: 95%;">
   <div class="modal-head">12-Kanal-EKG Monitor</div>
   <div class="modal-body">
+    <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+        <label style="font-weight:bold;">Ableitung:</label>
+        <select id="leadSelect" class="role-select" style="width: auto;">
+            <option value="I">I</option><option value="II" selected>II</option><option value="III">III</option>
+            <option value="aVR">aVR</option><option value="aVL">aVL</option><option value="aVF">aVF</option>
+            <option value="V1">V1</option><option value="V2">V2</option><option value="V3">V3</option>
+            <option value="V4">V4</option><option value="V5">V5</option><option value="V6">V6</option>
+        </select>
     </div>
+    <div class="ekg-container" style="background:#000; border:3px solid #334155; border-radius:8px; position:relative;">
+        <canvas id="ekgCanvas" width="800" height="400" style="width:100%; height:auto; display:block;"></canvas>
+    </div>
+    <div id="ekgText" style="margin-top:10px; font-weight:bold; font-family:monospace; text-align:center; font-size:1.2rem;"></div>
+  </div>
   <div class="modal-actions">
     <button id="ekgClose" class="btn secondary">Schließen</button>
   </div>

@@ -366,127 +366,7 @@ function openEKG() {
     stepCase('12-Kanal-EKG'); 
 }
 
-function updateEKGView() {
-    const type = caseState.hidden?.ekg_pattern || "sinus";
-    const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase(); 
-    const hasSpO2 = !!visibleVitals.SpO2;
-    const hasPuls = !!visibleVitals.Puls; 
 
-    let spo2Val = hasSpO2 ? visibleVitals.SpO2.replace(/\D/g,'') : '--';
-    let pulsVal = hasPuls ? visibleVitals.Puls.replace(/\D/g,'') : '--';
-    let spo2Num = hasSpO2 ? parseInt(spo2Val) : 98;
-
-    const svg = document.getElementById('monitorSvg');
-    if(!svg) return;
-
-    const defs = `
-      <defs>
-        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#222" stroke-width="1"/>
-        </pattern>
-        <pattern id="grid-bold" width="100" height="100" patternUnits="userSpaceOnUse">
-          <rect width="100" height="100" fill="url(#grid)" />
-          <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#444" stroke-width="2"/>
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#grid-bold)" />
-    `;
-
-    let ekgPath = generateLoopPath(type, 75, 400, 100, currentLead, pathology);
-    let plethPath = hasSpO2 ? generateLoopPath('pleth', 160, 400, spo2Num) : `M 0 160 L 400 160`;
-
-    svg.innerHTML = `
-        ${defs}
-        <g class="infinite-scroll">
-             <g>
-                <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
-                <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
-             </g>
-             <g transform="translate(400, 0)">
-                <path d="${ekgPath}" fill="none" stroke="#00ff00" stroke-width="2" class="monitor-glow" />
-                <path d="${plethPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" class="monitor-glow-blue" />
-             </g>
-        </g>
-        <rect x="320" y="0" width="80" height="200" fill="#000" stroke-left="1px solid #333" />
-        <line x1="320" y1="0" x2="320" y2="200" stroke="#444" stroke-width="2" />
-        <text x="5" y="20" fill="#00ff00" font-family="monospace" font-size="14" font-weight="bold">${currentLead}</text>
-        <text x="330" y="25" fill="#00ff00" font-family="sans-serif" font-size="10" font-weight="bold">HF</text>
-        <text x="390" y="55" fill="#00ff00" font-family="monospace" font-size="35" font-weight="bold" text-anchor="end" class="monitor-glow">${pulsVal}</text>
-        <text x="385" y="25" fill="#00ff00" font-size="10">♥</text>
-        <text x="330" y="115" fill="#3b82f6" font-family="sans-serif" font-size="10" font-weight="bold">SpO2</text>
-        <text x="390" y="145" fill="#3b82f6" font-family="monospace" font-size="35" font-weight="bold" text-anchor="end" class="monitor-glow-blue">${spo2Val}</text>
-        <text x="385" y="155" fill="#3b82f6" font-size="10" text-anchor="end">%</text>
-    `;
-
-   // --- DYNAMISCHE TEXTANZEIGE ---
-    const txt = document.getElementById('ekgText');
-    if (!txt) return;
-
-    // Diagnose aus dem Fall-State prüfen
-    const isSTEMI = pathology.includes('hinterwand') || pathology.includes('stemi') || pathology.includes('infarkt');
-
-    if (type === "vt") {
-        txt.textContent = "!!! VENTRIKULÄRE TACHYKARDIE !!!";
-        txt.style.color = "#ef4444";
-    } else if (type === "asystolie" || (pulsVal === '0' || pulsVal === '--')) {
-        txt.textContent = "ASYSTOLIE / KREISLAUFSTILLSTAND";
-        txt.style.color = "#ef4444";
-    } else if (isSTEMI) {
-        txt.textContent = "Sinusrhythmus - V.a. Myokardinfarkt (STEMI)";
-        txt.style.color = "#facc15"; // Warn-Gelb
-    } else if (type === "vhf") {
-        txt.textContent = "Vorhofflimmern (Absolute Arrhythmie)";
-        txt.style.color = "#00ff00";
-    } else {
-        txt.textContent = "Sinusrhythmus";
-        txt.style.color = "#00ff00";
-    }
-}
-
-function generateLoopPath(type, yBase, totalWidth, qualityValue, lead = 'II', pathology = '') {
-    let d = `M 0 ${yBase} `;
-    let currentX = 0;
-    
-    // Amplituden-Definitionen
-    let amp = { p: -5, q: 3, r: -50, s: 15, t: -12 };
-    if(type === 'sinus') {
-        if (lead === 'aVR') { amp = { p: 5, q: -3, r: 10, s: -40, t: 8 }; } 
-        else if (lead === 'V1') { amp = { p: -3, q: 0, r: -15, s: 40, t: 5 }; } 
-        else if (lead === 'V6' || lead === 'I') { amp = { p: -5, q: 3, r: -45, s: 5, t: -12 }; } 
-        else if (lead === 'aVL') { amp = { p: -3, q: 2, r: -30, s: 10, t: -8 }; } 
-        else if (lead === 'III' || lead === 'aVF') { amp = { p: -4, q: 5, r: -40, s: 10, t: -10 }; }
-    }
-
-    const isSTEMI = pathology.includes('hinterwand') || pathology.includes('stemi') || pathology.includes('infarkt');
-    let stShift = 0; 
-    if (type === 'sinus' && isSTEMI) {
-        if (['II', 'III', 'aVF'].includes(lead)) stShift = -18; // Deutliche Hebung für das Training
-        else if (['I', 'aVL'].includes(lead)) stShift = 8;     // Spiegelbildliche Senkung
-    }
-
-    while(currentX < totalWidth) {
-        if (type === 'sinus') {
-            let beatWidth = 70;
-            const p = `c 3 ${amp.p}, 7 ${amp.p}, 10 0`;
-            const qrs = `l 2 ${amp.q} l 3 ${amp.r - amp.q} l 3 ${amp.s - amp.r} l 2 ${stShift - amp.s}`;
-            const t = `c 5 ${amp.t}, 12 ${amp.t}, 18 ${-stShift}`;
-            d += p + `l 5 0` + qrs + `l 5 0` + t + `l 22 0 `;
-            currentX += beatWidth;
-        } else if (type === 'vt') {
-            d += `l 15 -45 l 15 90 l 10 -45 `;
-            currentX += 40;
-        } else if (type === 'pleth') {
-            let scale = qualityValue > 90 ? 1.0 : 0.5;
-            d += `c 5 ${-25*scale}, 10 ${-25*scale}, 12 -5 c 2 8, 5 0, 8 5 c 5 0, 10 0, 25 0 `;
-            currentX += 50;
-        } else {
-            d += `L ${totalWidth} ${yBase}`;
-            currentX = totalWidth;
-        }
-    }
-    // WICHTIG: Kein Pfadschluss am Ende (entferne das finale L am Ende der Funktion)
-    return d;
-}
 
 // --- TTS ---
 let currentAudio = null;
@@ -1102,4 +982,99 @@ function openHandover() {
     }
 
     openModal('modalHandover');
+}
+let ekgAnimationFrame = null;
+
+function openEKG() {
+    if(!caseState) return;
+    openModal('modalEKG');
+    
+    const canvas = document.getElementById('ekgCanvas');
+    const ctx = canvas.getContext('2d');
+    const txt = document.getElementById('ekgText');
+    const sel = document.getElementById('leadSelect');
+
+    let x = 0;
+    const speed = 2.5; // Geschwindigkeit des Strahls
+    
+    // Fall-Daten vorbereiten
+    const type = caseState.hidden?.ekg_pattern || "sinus";
+    const pathology = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase();
+    const isSTEMI = pathology.includes('hinterwand') || pathology.includes('stemi');
+    const hf = parseInt(String(visibleVitals.Puls || 80).match(/\d+/)?.[0]);
+
+    function drawLoop() {
+        // 1. "Scanner"-Effekt: Vor dem Strahl leicht löschen
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+        ctx.fillRect(x, 0, 20, canvas.height);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(x + 20, 0, 5, canvas.height);
+
+        // 2. Hintergrundraster (nur alle x Frames zeichnen für Performance)
+        if (x % 40 === 0) {
+            ctx.strokeStyle = '#111';
+            ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
+        }
+
+        // 3. EKG Kurve berechnen (Mathematisches Modell für P-QRS-T)
+        const yBaseEKG = 120;
+        let yEKG = 0;
+        const t = (x / 100) * (hf / 60); // Zeitfaktor basierend auf HF
+        
+        // Simulierter Herzschlag (Sinus-Modell)
+        const cycle = t % 1.0;
+        if (cycle < 0.1) yEKG = Math.sin(cycle * Math.PI * 10) * -10; // P-Welle
+        else if (cycle > 0.15 && cycle < 0.18) yEKG = 15; // Q
+        else if (cycle >= 0.18 && cycle < 0.22) yEKG = -80; // R
+        else if (cycle >= 0.22 && cycle < 0.26) yEKG = 30; // S
+        else if (cycle > 0.35 && cycle < 0.55) {
+            // T-Welle + ST-Hebung Logik
+            let stLift = (isSTEMI && ['II','III','aVF'].includes(sel.value)) ? -25 : 0;
+            yEKG = (Math.sin((cycle-0.35) * Math.PI * 5) * -15) + stLift;
+        }
+
+        // 4. Pleth Kurve (SpO2)
+        const yBasePleth = 300;
+        const hasSpO2 = !!visibleVitals.SpO2;
+        let yPleth = hasSpO2 ? Math.sin(t * Math.PI * 2) * -20 + Math.sin(t * Math.PI * 4) * -5 : 0;
+
+        // 5. Zeichnen
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        
+        // EKG (Grün)
+        ctx.strokeStyle = '#00ff00';
+        ctx.beginPath();
+        ctx.moveTo(x - speed, canvas.lastY || yBaseEKG);
+        ctx.lineTo(x, yBaseEKG + yEKG);
+        ctx.stroke();
+        canvas.lastY = yBaseEKG + yEKG;
+
+        // Pleth (Blau)
+        if(hasSpO2) {
+            ctx.strokeStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.moveTo(x - speed, canvas.lastPlethY || yBasePleth);
+            ctx.lineTo(x, yBasePleth + yPleth);
+            ctx.stroke();
+            canvas.lastPlethY = yBasePleth + yPleth;
+        }
+
+        // 6. UI Updates
+        x += speed;
+        if (x > canvas.width) x = 0;
+
+        ekgAnimationFrame = requestAnimationFrame(drawLoop);
+    }
+
+    // Diagnose-Text setzen
+    if (isSTEMI) { txt.textContent = "⚠️ V.A. MYOKARDINFARKT (STEMI)"; txt.style.color = "#facc15"; }
+    else if (type === "vt") { txt.textContent = "!!! VENTRIKULÄRE TACHYKARDIE !!!"; txt.style.color = "#ef4444"; }
+    else { txt.textContent = "SINUSRHYTHMUS"; txt.style.color = "#00ff00"; }
+
+    sel.onchange = () => { ctx.clearRect(0,0,canvas.width, canvas.height); x=0; };
+    $id('ekgClose').onclick = () => { cancelAnimationFrame(ekgAnimationFrame); closeModal('modalEKG'); };
+    
+    drawLoop();
+    stepCase('12-Kanal-EKG');
 }
