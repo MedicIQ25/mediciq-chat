@@ -134,8 +134,25 @@
 </div>
 <div id="modalBEFAST" class="modal" style="display:none;">
   <div class="modal-head">BE-FAST Check</div>
-  <div class="modal-body befast-grid"><div id="befastInfo" class="small muted"></div><label><input type="checkbox" id="b_face" /> B – Balance</label><label><input type="checkbox" id="e_eyes" /> E – Eyes</label><label><input type="checkbox" id="f_face" /> F – Face</label><label><input type="checkbox" id="a_arm"  /> A – Arm</label><label><input type="checkbox" id="s_speech" /> S – Speech</label><label>Last known well: <input type="time" id="t_time" /></label></div>
-  <div class="modal-actions"><button id="befastFetch" class="btn secondary">Infos abrufen</button><button id="befastOk" class="btn">Dokumentieren</button><button id="befastCancel" class="btn secondary">Abbrechen</button></div>
+  <div class="modal-body befast-grid">
+    <div id="befastInfo" class="small muted" style="margin-bottom: 10px;"></div>
+    
+    <label><input type="checkbox" id="b_balance" /> <strong>B</strong> – Balance (Gleichgewicht)</label>
+    <label><input type="checkbox" id="e_eyes" /> <strong>E</strong> – Eyes (Blickwendung/Pupillen)</label>
+    <label><input type="checkbox" id="f_face" /> <strong>F</strong> – Face (Mundwinkel hängen)</label>
+    <label><input type="checkbox" id="a_arm" /> <strong>A</strong> – Arm (Absinken/Parese)</label>
+    <label><input type="checkbox" id="s_speech" /> <strong>S</strong> – Speech (Sprachstörung)</label>
+    
+    <div class="time-input-row">
+      <span>Last known well:</span>
+      <input type="time" id="t_time" />
+    </div>
+  </div>
+  <div class="modal-actions">
+    <button id="befastFetch" class="btn secondary">Infos abrufen</button>
+    <button id="befastOk" class="btn">Dokumentieren</button>
+    <button id="befastCancel" class="btn secondary">Abbrechen</button>
+  </div>
 </div>
 <div id="modalSampler" class="modal" style="display:none;">
   <div class="modal-head">SAMPLER</div>

@@ -462,3 +462,69 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
         height: 300px; 
     }
 }
+/* Einheitliches Design für alle Kriterien-Modale (4S, BE-FAST, NEXUS, Polytrauma) */
+.modal-body.befast-grid, 
+.modal-body.criteria-modal-body {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px;
+    padding: 10px 0;
+}
+
+.modal-body.befast-grid label,
+.modal-body.criteria-modal-body label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--muted);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.modal-body.befast-grid label:hover {
+    background: var(--bubble-ai);
+    border-color: var(--brand);
+}
+
+/* Styling für die Zeiteingabe im BE-FAST */
+.time-input-row {
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: var(--card);
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid var(--brand);
+}
+
+.time-input-row input[type="time"] {
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid var(--muted);
+    background: var(--bg);
+    color: var(--text);
+}
+
+/* SAMPLER Form-Styling */
+.form-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    color: var(--brand);
+}
+
+.form-grid input {
+    font-weight: normal;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--muted);
+    background: var(--card);
+    color: var(--text);
+}
