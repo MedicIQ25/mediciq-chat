@@ -1074,27 +1074,39 @@ function openBodyMap() {
 function openHandover() {
     if(!caseState) return;
     
-    // Felder leeren für neue Eingabe
-    if($id('s_ident')) $id('s_ident').value = ""; 
-    if($id('s_event')) $id('s_event').value = ""; 
-    if($id('s_prio'))  $id('s_prio').value = ""; 
-    if($id('s_action')) $id('s_action').value = ""; 
-    if($id('s_anam'))  $id('s_anam').value = "";
+    // 1. Felder beim Öffnen leeren
+    $id('s_ident').value = ""; 
+    $id('s_event').value = ""; 
+    $id('s_anam').value = "";
+    $id('s_prio').value = ""; 
+    $id('s_action').value = ""; 
     
-    // Speichern-Logik
-    $id('handoverOk').onclick = () => {
-        const ident = $id('s_ident').value.trim();
-        if (ident.length < 2) {
-             alert('Bitte füllen Sie mindestens die Identifikation aus.');
-             return;
-        }
+    // 2. Klick-Event für den Speicher-Button
+    const okBtn = $id('handoverOk');
+    if (okBtn) {
+        okBtn.onclick = async () => {
+            const ident = $id('s_ident').value.trim();
+            
+            // Validierung: Identifikation muss ausgefüllt sein
+            if (ident.length < 2) {
+                 alert('Bitte füllen Sie mindestens die Identifikation aus.');
+                 return;
+            }
 
-        const handoverText = `Übergabe: SINNHAFT: I:${ident} | N:${$id('s_event').value} | H:${$id('s_prio').value} | A:${$id('s_action').value} | A:${$id('s_anam').value}`;
-        
-        stepCase(handoverText); // Schickt die Übergabe an den Server
-        closeModal('modalHandover');
-    };
+            // Text für das Protokoll zusammenbauen
+            const handoverText = `Übergabe SINNHAFT: I:${ident} | N:${$id('s_event').value} | N:${$id('s_anam').value} | H:${$id('s_prio').value} | A:${$id('s_action').value}`;
+            
+            // WICHTIG: Erst den Schritt an den Server senden...
+            await stepCase(handoverText); 
+            
+            // ...dann das Modal schließen
+            closeModal('modalHandover');
+            
+            // ...und danach das Debriefing (Auswertung) triggern
+            openDebrief(); 
+        };
+    }
     
     $id('handoverCancel').onclick = () => closeModal('modalHandover');
-    openModal('modalHandover'); // Öffnet das Fenster
+    openModal('modalHandover');
 }

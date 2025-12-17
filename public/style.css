@@ -520,3 +520,35 @@ body.dark-mode .chip.done { background: #064e3b; border-color: #10b981; color: #
     font-family: monospace;
     font-size: 1.1rem;
 }
+/* Schickes Layout für das Übergabe-Formular */
+#modalHandover .form-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px;
+}
+
+#modalHandover label {
+    font-weight: bold;
+    color: var(--brand);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+#modalHandover textarea, 
+#modalHandover input {
+    font-weight: normal;
+    font-family: inherit;
+    border: 1px solid var(--muted);
+    border-radius: 8px;
+    padding: 10px;
+    background: var(--bg);
+    color: var(--text);
+}
+
+#modalHandover textarea:focus, 
+#modalHandover input:focus {
+    border-color: var(--brand);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
+}
