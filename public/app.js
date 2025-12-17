@@ -332,7 +332,7 @@ function openEKG() {
     openModal('modalEKG');
 
     const canvas = document.getElementById('ekgCanvas');
-    if (!canvas) return;
+    if (!canvas) return; // Sicherheitscheck
     const ctx = canvas.getContext('2d', { alpha: false });
     const status = document.getElementById('ekgStatusText');
     const sel = document.getElementById('leadSelect');
@@ -345,18 +345,18 @@ function openEKG() {
     const pathol = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase();
     const isSTEMI = pathol.includes('hinterwand') || pathol.includes('stemi') || pathol.includes('inferior');
 
-    // WICHTIG: Einmalig komplett schwarz füllen beim Start
+    // Initialisierung: Canvas komplett schwarz füllen
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Hilfsvariablen für die Linienverbindung zurücksetzen
-    canvas.oldY = null;
-    canvas.oldPlethY = null;
+    // Speicher für die letzte Position (verhindert Geisterlinien beim Umbruch)
+    let lastY_EKG = null;
+    let lastY_Pleth = null;
 
     function animate() {
-        // 1. Scanner-Effekt: Löscht den Bereich direkt vor dem Strahl
+        // 1. Scanner-Effekt: Löscht einen kleinen Bereich DIREKT vor dem Strahl
         ctx.fillStyle = '#000000';
-        ctx.fillRect(x, 0, 15, canvas.height); 
+        ctx.fillRect(x, 0, 20, canvas.height); 
 
         // 2. Zeit- und Herzschlagberechnung
         const t = (x / 100) * (hf / 60) * 1.5; 
@@ -364,16 +364,16 @@ function openEKG() {
 
         let yEKG = 0;
         if (type === 'sinus') {
-            if (cycle < 0.1) yEKG = Math.sin(cycle * Math.PI * 10) * -12;
-            else if (cycle > 0.15 && cycle < 0.18) yEKG = 18;
-            else if (cycle >= 0.18 && cycle < 0.22) yEKG = -90;
-            else if (cycle >= 0.22 && cycle < 0.26) yEKG = 40;
+            if (cycle < 0.1) yEKG = Math.sin(cycle * Math.PI * 10) * -12; // P
+            else if (cycle > 0.15 && cycle < 0.18) yEKG = 18; // Q
+            else if (cycle >= 0.18 && cycle < 0.22) yEKG = -90; // R
+            else if (cycle >= 0.22 && cycle < 0.26) yEKG = 40; // S
             else if (cycle > 0.4 && cycle < 0.6) {
-                let lift = (isSTEMI && ['II','III','aVF'].includes(sel.value)) ? -30 : 0;
-                yEKG = (Math.sin((cycle-0.4) * Math.PI * 5) * -18) + lift;
+                let lift = (isSTEMI && ['II','III','aVF'].includes(sel.value)) ? -35 : 0;
+                yEKG = (Math.sin((cycle-0.4) * Math.PI * 5) * -18) + lift; // T + ST-Hebung
             }
         } else if (type === 'vt') {
-             yEKG = Math.sin(t * Math.PI * 5) * 60;
+             yEKG = Math.sin(t * Math.PI * 5) * 60; // Ventrikuläre Tachykardie
         }
 
         let yPleth = hasSpO2 ? (Math.sin(t * Math.PI * 2.2) * -30 + Math.sin(t * Math.PI * 4.4) * -5) : 0;
@@ -381,53 +381,62 @@ function openEKG() {
         const drawY_EKG = 120 + yEKG;
         const drawY_Pleth = 280 + yPleth;
 
+        // 3. Zeichnen der Linien
         ctx.lineWidth = 2.5;
         ctx.lineJoin = 'round';
         
-        // 3. EKG Zeichnen (Grün) - Nur wenn wir nicht am Anfang (x=0) sind
-        if (x > 0 && canvas.oldY !== null) {
+        if (lastY_EKG !== null && x > 0) {
+            // EKG (Grün)
             ctx.strokeStyle = '#00ff00';
             ctx.beginPath();
-            ctx.moveTo(x - 2, canvas.oldY);
+            ctx.moveTo(x - 2, lastY_EKG);
             ctx.lineTo(x, drawY_EKG);
             ctx.stroke();
 
-            if(hasSpO2 && canvas.oldPlethY !== null) {
+            // Pleth (Blau)
+            if(hasSpO2) {
                 ctx.strokeStyle = '#3b82f6';
                 ctx.beginPath();
-                ctx.moveTo(x - 2, canvas.oldPlethY);
+                ctx.moveTo(x - 2, lastY_Pleth);
                 ctx.lineTo(x, drawY_Pleth);
                 ctx.stroke();
             }
         }
 
-        canvas.oldY = drawY_EKG;
-        canvas.oldPlethY = drawY_Pleth;
+        // Koordinaten speichern
+        lastY_EKG = drawY_EKG;
+        lastY_Pleth = drawY_Pleth;
 
+        // Strahl bewegen
         x += 2;
         if (x >= canvas.width) {
             x = 0;
-            // Beim Umbruch kurz "nachglühen" lassen statt alles schwarz zu machen
-            ctx.fillStyle = 'rgba(0,0,0,0.4)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            canvas.oldY = null; // Verbindungslinie unterbrechen
-            canvas.oldPlethY = null;
+            lastY_EKG = null; // Verbindungslinie unterbrechen
+            lastY_Pleth = null;
         }
 
         ekgLoopReq = requestAnimationFrame(animate);
     }
 
-    // Status-Text setzen
-    if (isSTEMI) { status.textContent = "⚠️ ST-HEBUNG ERKANNT (STEMI)"; status.style.color = "#facc15"; }
-    else if (type === "vt") { status.textContent = "!!! KAMMERTACHYKARDIE !!!"; status.style.color = "#ef4444"; }
-    else { status.textContent = "SINUSRHYTHMUS"; status.style.color = "#00ff00"; }
+    // UI-Texte und Farben setzen
+    if (isSTEMI) { 
+        status.textContent = "⚠️ ST-HEBUNG ERKANNT (STEMI)"; 
+        status.style.color = "#facc15"; 
+    } else if (type === "vt") { 
+        status.textContent = "!!! KAMMERTACHYKARDIE !!!"; 
+        status.style.color = "#ef4444"; 
+    } else { 
+        status.textContent = "SINUSRHYTHMUS"; 
+        status.style.color = "#00ff00"; 
+    }
 
+    // Steuerungselemente verknüpfen
     sel.onchange = () => { 
         leadName.textContent = "Ableitung " + sel.value; 
         ctx.fillStyle = '#000';
         ctx.fillRect(0,0,canvas.width, canvas.height); 
         x=0; 
-        canvas.oldY = null;
+        lastY_EKG = null;
     };
     
     $id('ekgClose').onclick = () => { 
