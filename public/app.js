@@ -1074,23 +1074,27 @@ function openBodyMap() {
 function openHandover() {
     if(!caseState) return;
     
-    // Die Felder für SINNHAFT leeren (da der User sie füllen soll)
-    $id('s_ident').value = ""; $id('s_event').value = ""; $id('s_prio').value = ""; $id('s_action').value = ""; $id('s_anam').value = "";
+    // Felder leeren für neue Eingabe
+    if($id('s_ident')) $id('s_ident').value = ""; 
+    if($id('s_event')) $id('s_event').value = ""; 
+    if($id('s_prio'))  $id('s_prio').value = ""; 
+    if($id('s_action')) $id('s_action').value = ""; 
+    if($id('s_anam'))  $id('s_anam').value = "";
     
+    // Speichern-Logik
     $id('handoverOk').onclick = () => {
         const ident = $id('s_ident').value.trim();
-        if (ident.length < 5) {
-             alert('Bitte fülle die Identifikation aus, um fortzufahren.');
+        if (ident.length < 2) {
+             alert('Bitte füllen Sie mindestens die Identifikation aus.');
              return;
         }
 
-        const text = `Übergabe: SINNHAFT: I:${ident} | N:${$id('s_event').value} | N:${$id('s_prio').value} | H:${$id('s_action').value} | A:${$id('s_anam').value}`;
+        const handoverText = `Übergabe: SINNHAFT: I:${ident} | N:${$id('s_event').value} | H:${$id('s_prio').value} | A:${$id('s_action').value} | A:${$id('s_anam').value}`;
         
-        stepCase(text);
-        
+        stepCase(handoverText); // Schickt die Übergabe an den Server
         closeModal('modalHandover');
     };
     
     $id('handoverCancel').onclick = () => closeModal('modalHandover');
-    openModal('modalHandover');
+    openModal('modalHandover'); // Öffnet das Fenster
 }
