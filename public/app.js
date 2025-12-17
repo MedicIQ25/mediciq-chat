@@ -332,48 +332,48 @@ function openEKG() {
     openModal('modalEKG');
 
     const canvas = document.getElementById('ekgCanvas');
-    if (!canvas) return; // Sicherheitscheck
+    if (!canvas) return; 
     const ctx = canvas.getContext('2d', { alpha: false });
     const status = document.getElementById('ekgStatusText');
     const sel = document.getElementById('leadSelect');
     const leadName = document.getElementById('ekgLeadName');
 
     let x = 0;
-    const hf = parseInt(String(visibleVitals.Puls || 80).match(/\d+/)?.[0]);
+    const hf = parseInt(String(visibleVitals.Puls || 80).match(/\d+/)?.[0] || 80);
     const hasSpO2 = !!visibleVitals.SpO2;
     const type = caseState.hidden?.ekg_pattern || "sinus";
     const pathol = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase();
     const isSTEMI = pathol.includes('hinterwand') || pathol.includes('stemi') || pathol.includes('inferior');
 
-    // Initialisierung: Canvas komplett schwarz füllen
+    // Initialisierung: Hintergrund sofort schwärzen
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Speicher für die letzte Position (verhindert Geisterlinien beim Umbruch)
+    // Diese Variablen MÜSSEN innerhalb der openEKG Funktion liegen
     let lastY_EKG = null;
     let lastY_Pleth = null;
 
     function animate() {
-        // 1. Scanner-Effekt: Löscht einen kleinen Bereich DIREKT vor dem Strahl
+        // 1. Scanner-Effekt: Löscht den Bereich kurz vor dem Strahl
         ctx.fillStyle = '#000000';
         ctx.fillRect(x, 0, 20, canvas.height); 
 
-        // 2. Zeit- und Herzschlagberechnung
+        // 2. Mathematisches Modell für die Kurve
         const t = (x / 100) * (hf / 60) * 1.5; 
         const cycle = t % 1.0;
 
         let yEKG = 0;
         if (type === 'sinus') {
-            if (cycle < 0.1) yEKG = Math.sin(cycle * Math.PI * 10) * -12; // P
-            else if (cycle > 0.15 && cycle < 0.18) yEKG = 18; // Q
-            else if (cycle >= 0.18 && cycle < 0.22) yEKG = -90; // R
-            else if (cycle >= 0.22 && cycle < 0.26) yEKG = 40; // S
+            if (cycle < 0.1) yEKG = Math.sin(cycle * Math.PI * 10) * -12; 
+            else if (cycle > 0.15 && cycle < 0.18) yEKG = 18; 
+            else if (cycle >= 0.18 && cycle < 0.22) yEKG = -90; 
+            else if (cycle >= 0.22 && cycle < 0.26) yEKG = 40; 
             else if (cycle > 0.4 && cycle < 0.6) {
                 let lift = (isSTEMI && ['II','III','aVF'].includes(sel.value)) ? -35 : 0;
-                yEKG = (Math.sin((cycle-0.4) * Math.PI * 5) * -18) + lift; // T + ST-Hebung
+                yEKG = (Math.sin((cycle-0.4) * Math.PI * 5) * -18) + lift;
             }
         } else if (type === 'vt') {
-             yEKG = Math.sin(t * Math.PI * 5) * 60; // Ventrikuläre Tachykardie
+             yEKG = Math.sin(t * Math.PI * 5) * 60;
         }
 
         let yPleth = hasSpO2 ? (Math.sin(t * Math.PI * 2.2) * -30 + Math.sin(t * Math.PI * 4.4) * -5) : 0;
@@ -381,11 +381,12 @@ function openEKG() {
         const drawY_EKG = 120 + yEKG;
         const drawY_Pleth = 280 + yPleth;
 
-        // 3. Zeichnen der Linien
+        // 3. Zeichnen
         ctx.lineWidth = 2.5;
         ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         
-        if (lastY_EKG !== null && x > 0) {
+        if (lastY_EKG !== null) {
             // EKG (Grün)
             ctx.strokeStyle = '#00ff00';
             ctx.beginPath();
@@ -403,47 +404,38 @@ function openEKG() {
             }
         }
 
-        // Koordinaten speichern
+        // Werte für nächsten Frame speichern
         lastY_EKG = drawY_EKG;
         lastY_Pleth = drawY_Pleth;
 
-        // Strahl bewegen
         x += 2;
         if (x >= canvas.width) {
             x = 0;
-            lastY_EKG = null; // Verbindungslinie unterbrechen
-            lastY_Pleth = null;
+            lastY_EKG = null; // Verhindert diagonale Rücksprunglinie
         }
 
         ekgLoopReq = requestAnimationFrame(animate);
     }
 
-    // UI-Texte und Farben setzen
-    if (isSTEMI) { 
-        status.textContent = "⚠️ ST-HEBUNG ERKANNT (STEMI)"; 
-        status.style.color = "#facc15"; 
-    } else if (type === "vt") { 
-        status.textContent = "!!! KAMMERTACHYKARDIE !!!"; 
-        status.style.color = "#ef4444"; 
-    } else { 
-        status.textContent = "SINUSRHYTHMUS"; 
-        status.style.color = "#00ff00"; 
-    }
+    // UI Texte setzen
+    if (isSTEMI) { status.textContent = "⚠️ ST-HEBUNG ERKANNT (STEMI)"; status.style.color = "#facc15"; }
+    else if (type === "vt") { status.textContent = "!!! KAMMERTACHYKARDIE !!!"; status.style.color = "#ef4444"; }
+    else { status.textContent = "SINUSRHYTHMUS"; status.style.color = "#00ff00"; }
 
-    // Steuerungselemente verknüpfen
+    // Event Handler
     sel.onchange = () => { 
         leadName.textContent = "Ableitung " + sel.value; 
-        ctx.fillStyle = '#000';
         ctx.fillRect(0,0,canvas.width, canvas.height); 
         x=0; 
         lastY_EKG = null;
     };
     
     $id('ekgClose').onclick = () => { 
-        cancelAnimationFrame(ekgLoopReq); 
+        if(ekgLoopReq) cancelAnimationFrame(ekgLoopReq); 
         closeModal('modalEKG'); 
     };
     
+    // Start der Animation
     animate();
     stepCase('12-Kanal-EKG');
 }
