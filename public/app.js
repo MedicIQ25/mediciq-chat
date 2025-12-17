@@ -98,9 +98,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     bindEvent('btnPrint', 'click', () => window.print());
     bindEvent('startCase', 'click', startCase);
-    bindEvent('finishCase', 'click', openHandover);
-    bindEvent('btnSchemaHandover', 'click', openHandover);
-    
+    bindEvent('btnFinishTop', 'click', openHandover); // Öffnet das Fenster beim roten Button oben
+bindEvent('btnSinnhaft', 'click', openHandover);  // Öffnet das Fenster beim SINNHAFT-Button
     bindEvent('btnRunQueue', 'click', async () => {
         if(!caseState) return;
         while(queue.length) {
