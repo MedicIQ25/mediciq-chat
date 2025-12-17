@@ -98,8 +98,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     bindEvent('btnPrint', 'click', () => window.print());
     bindEvent('startCase', 'click', startCase);
-    bindEvent('btnFinishTop', 'click', openHandover); // Öffnet das Fenster beim roten Button oben
-bindEvent('btnSinnhaft', 'click', openHandover);  // Öffnet das Fenster beim SINNHAFT-Button
+    bindEvent('finishCase', 'click', openHandover);  // Der rote Button oben
+bindEvent('btnSinnhaft', 'click', openHandover); // Der neue SINNHAFT-Button unten
     bindEvent('btnRunQueue', 'click', async () => {
         if(!caseState) return;
         while(queue.length) {
@@ -1077,36 +1077,32 @@ function openHandover() {
     // 1. Felder beim Öffnen leeren
     $id('s_ident').value = ""; 
     $id('s_event').value = ""; 
-    $id('s_anam').value = "";
     $id('s_prio').value = ""; 
     $id('s_action').value = ""; 
+    $id('s_anam').value = "";
     
-    // 2. Klick-Event für den Speicher-Button
+    // 2. Button-Logik neu verknüpfen
     const okBtn = $id('handoverOk');
     if (okBtn) {
-        okBtn.onclick = async () => {
+        okBtn.onclick = () => {
             const ident = $id('s_ident').value.trim();
-            
-            // Validierung: Identifikation muss ausgefüllt sein
+            // Kleine Sicherheitssperre: Identifikation muss ausgefüllt sein
             if (ident.length < 2) {
                  alert('Bitte füllen Sie mindestens die Identifikation aus.');
                  return;
             }
 
-            // Text für das Protokoll zusammenbauen
-            const handoverText = `Übergabe SINNHAFT: I:${ident} | N:${$id('s_event').value} | N:${$id('s_anam').value} | H:${$id('s_prio').value} | A:${$id('s_action').value}`;
+            const text = `Übergabe: SINNHAFT: I:${ident} | N:${$id('s_event').value} | H:${$id('s_prio').value} | A:${$id('s_action').value}`;
             
-            // WICHTIG: Erst den Schritt an den Server senden...
-            await stepCase(handoverText); 
-            
-            // ...dann das Modal schließen
+            // Sendet die Daten und schließt den Fall ab
+            stepCase(text);
             closeModal('modalHandover');
-            
-            // ...und danach das Debriefing (Auswertung) triggern
-            openDebrief(); 
         };
     }
     
-    $id('handoverCancel').onclick = () => closeModal('modalHandover');
+    // Abbrechen-Button verknüpfen
+    const cancelBtn = $id('handoverCancel');
+    if (cancelBtn) cancelBtn.onclick = () => closeModal('modalHandover');
+
     openModal('modalHandover');
 }
