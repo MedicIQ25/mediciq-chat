@@ -1074,35 +1074,36 @@ function openBodyMap() {
 function openHandover() {
     if(!caseState) return;
     
-    // 1. Felder beim Öffnen leeren
+    // Felder leeren für neue Eingabe
     $id('s_ident').value = ""; 
     $id('s_event').value = ""; 
     $id('s_prio').value = ""; 
     $id('s_action').value = ""; 
     $id('s_anam').value = "";
     
-    // 2. Button-Logik neu verknüpfen
-    const okBtn = $id('handoverOk');
+    // Verknüpfung für den "Übergeben & Beenden" Button
+    const okBtn = document.getElementById('handoverOk');
     if (okBtn) {
-        okBtn.onclick = () => {
+        okBtn.onclick = async () => {
             const ident = $id('s_ident').value.trim();
-            // Kleine Sicherheitssperre: Identifikation muss ausgefüllt sein
             if (ident.length < 2) {
                  alert('Bitte füllen Sie mindestens die Identifikation aus.');
                  return;
             }
 
-            const text = `Übergabe: SINNHAFT: I:${ident} | N:${$id('s_event').value} | H:${$id('s_prio').value} | A:${$id('s_action').value}`;
+            const text = `Übergabe: SINNHAFT: I:${ident} | N:${$id('s_event').value} | H:${$id('s_prio').value} | A:${$id('s_action').value} | A:${$id('s_anam').value}`;
             
-            // Sendet die Daten und schließt den Fall ab
-            stepCase(text);
+            // WICHTIG: Erst Daten senden, dann Modal schließen
+            await stepCase(text); 
             closeModal('modalHandover');
         };
     }
     
-    // Abbrechen-Button verknüpfen
-    const cancelBtn = $id('handoverCancel');
-    if (cancelBtn) cancelBtn.onclick = () => closeModal('modalHandover');
+    // Verknüpfung für den "Abbrechen" Button
+    const cancelBtn = document.getElementById('handoverCancel');
+    if (cancelBtn) {
+        cancelBtn.onclick = () => closeModal('modalHandover');
+    }
 
     openModal('modalHandover');
 }
