@@ -352,16 +352,40 @@ function openEKG() {
     let lastY_Pleth = null;
 
     function animate() {
-        // 1. Scanner-Löschung (breiterer Bereich für saubere Übergänge)
+        // 1. Scanner-Löschung (Bereich vor dem Strahl)
         ctx.fillStyle = '#000000';
         ctx.fillRect(x, 0, 25, canvas.height); 
 
-        // 2. Separate Zeitberechnungen
-        // t_ekg steuert den Herzschlagzyklus
+        // 2. Hintergrund-Raster zeichnen (Millimeterpapier-Optik)
+        // Wir zeichnen das Raster nur in dem schmalen Streifen, den wir gerade gelöscht haben
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < 25; i++) {
+            let currentGridX = x + i;
+            
+            // Kleine Quadrate (alle 10 Pixel ~ 1mm)
+            if (currentGridX % 10 === 0) {
+                ctx.strokeStyle = '#1a1a1a'; // Sehr dunkles Grau für 1mm
+                // Große Quadrate (alle 50 Pixel ~ 5mm)
+                if (currentGridX % 50 === 0) ctx.strokeStyle = '#333'; // Hellere Linien für 5mm
+                
+                ctx.beginPath();
+                ctx.moveTo(currentGridX, 0);
+                ctx.lineTo(currentGridX, canvas.height);
+                ctx.stroke();
+            }
+        }
+        
+        // Horizontale Linien (einmalig oder bei Bedarf, hier alle 10/50 Pixel)
+        if (x === 0) {
+            for (let y = 0; y < canvas.height; y += 10) {
+                ctx.strokeStyle = (y % 50 === 0) ? '#333' : '#1a1a1a';
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+        }
+
+        // 3. Separate Zeitberechnungen
         const t_ekg = x / 65; 
         const cycle = (t_ekg * (hf / 60)) % 1.0;
-        
-        // t_pleth ist unabhängig für eine flüssige Wellenbewegung
         const t_pleth = x / 40; 
 
         // --- EKG LOGIK ---
@@ -376,10 +400,10 @@ function openEKG() {
                 yEKG = (Math.sin((cycle - 0.35) * Math.PI * 5) * -15) + stLift;
             }
         } else if (type === 'vt') {
-             yEKG = Math.sin(x / 10) * 50; // Schnelle, breite Kammerkomplexe
+             yEKG = Math.sin(x / 10) * 50;
         }
 
-        // --- PLETH LOGIK (Völlig eigenständig) ---
+        // --- PLETH LOGIK ---
         let yPleth = 0;
         if (hasSpO2) {
             yPleth = (Math.sin(t_pleth) * -20) + (Math.sin(t_pleth * 2) * -5);
@@ -388,20 +412,18 @@ function openEKG() {
         const drawY_EKG = 130 + yEKG;
         const drawY_Pleth = 280 + yPleth;
 
-        // 3. Zeichnen
+        // 4. Zeichnen der Wellen
         ctx.lineWidth = 2.5;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         
         if (lastY_EKG !== null && x > 0) {
-            // Grün: EKG
             ctx.strokeStyle = '#00ff00';
             ctx.beginPath();
             ctx.moveTo(x - 2, lastY_EKG);
             ctx.lineTo(x, drawY_EKG);
             ctx.stroke();
 
-            // Blau: Pleth (Nur wenn gemessen wird)
             if(hasSpO2) {
                 ctx.strokeStyle = '#3b82f6';
                 ctx.beginPath();
@@ -419,11 +441,13 @@ function openEKG() {
             x = 0;
             lastY_EKG = null;
             lastY_Pleth = null;
+            // Beim Umbruch das Grundraster neu zeichnen
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0,0,canvas.width, canvas.height);
         }
 
         ekgLoopReq = requestAnimationFrame(animate);
     }
-
     // UI Feedback
     if (isSTEMI) { 
         status.textContent = "⚠️ V.A. MYOKARDINFARKT (STEMI)"; 
