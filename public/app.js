@@ -332,7 +332,8 @@ function openEKG() {
     openModal('modalEKG');
 
     const canvas = document.getElementById('ekgCanvas');
-    const ctx = canvas.getContext('2d', { alpha: false }); // Performance-Boost
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { alpha: false });
     const status = document.getElementById('ekgStatusText');
     const sel = document.getElementById('leadSelect');
     const leadName = document.getElementById('ekgLeadName');
@@ -344,28 +345,30 @@ function openEKG() {
     const pathol = (caseState.hidden?.diagnosis_keys || []).join(' ').toLowerCase();
     const isSTEMI = pathol.includes('hinterwand') || pathol.includes('stemi') || pathol.includes('inferior');
 
-    // Reset Canvas
-    ctx.fillStyle = '#000';
+    // WICHTIG: Einmalig komplett schwarz füllen beim Start
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    function animate() {
-        // 1. Scanner-Effekt (löscht kurz vor dem Strahl)
-        ctx.fillStyle = '#000';
-        ctx.fillRect(x + 2, 0, 10, canvas.height); 
+    // Hilfsvariablen für die Linienverbindung zurücksetzen
+    canvas.oldY = null;
+    canvas.oldPlethY = null;
 
-        // 2. Zeitberechnung
+    function animate() {
+        // 1. Scanner-Effekt: Löscht den Bereich direkt vor dem Strahl
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(x, 0, 15, canvas.height); 
+
+        // 2. Zeit- und Herzschlagberechnung
         const t = (x / 100) * (hf / 60) * 1.5; 
         const cycle = t % 1.0;
 
-        // 3. EKG Kurve (Mathematik)
         let yEKG = 0;
         if (type === 'sinus') {
-            if (cycle < 0.1) yEKG = Math.sin(cycle * Math.PI * 10) * -12; // P
-            else if (cycle > 0.15 && cycle < 0.18) yEKG = 18; // Q
-            else if (cycle >= 0.18 && cycle < 0.22) yEKG = -90; // R
-            else if (cycle >= 0.22 && cycle < 0.26) yEKG = 40; // S
+            if (cycle < 0.1) yEKG = Math.sin(cycle * Math.PI * 10) * -12;
+            else if (cycle > 0.15 && cycle < 0.18) yEKG = 18;
+            else if (cycle >= 0.18 && cycle < 0.22) yEKG = -90;
+            else if (cycle >= 0.22 && cycle < 0.26) yEKG = 40;
             else if (cycle > 0.4 && cycle < 0.6) {
-                // ST-Hebung Logik
                 let lift = (isSTEMI && ['II','III','aVF'].includes(sel.value)) ? -30 : 0;
                 yEKG = (Math.sin((cycle-0.4) * Math.PI * 5) * -18) + lift;
             }
@@ -373,52 +376,64 @@ function openEKG() {
              yEKG = Math.sin(t * Math.PI * 5) * 60;
         }
 
-        // 4. Pleth Kurve
         let yPleth = hasSpO2 ? (Math.sin(t * Math.PI * 2.2) * -30 + Math.sin(t * Math.PI * 4.4) * -5) : 0;
 
-        // 5. Zeichnen
         const drawY_EKG = 120 + yEKG;
         const drawY_Pleth = 280 + yPleth;
 
         ctx.lineWidth = 2.5;
         ctx.lineJoin = 'round';
         
-        // EKG (Grün)
-        ctx.strokeStyle = '#00ff00';
-        ctx.beginPath();
-        ctx.moveTo(x - 2, canvas.oldY || drawY_EKG);
-        ctx.lineTo(x, drawY_EKG);
-        ctx.stroke();
-        canvas.oldY = drawY_EKG;
-
-        // Pleth (Blau)
-        if(hasSpO2) {
-            ctx.strokeStyle = '#3b82f6';
+        // 3. EKG Zeichnen (Grün) - Nur wenn wir nicht am Anfang (x=0) sind
+        if (x > 0 && canvas.oldY !== null) {
+            ctx.strokeStyle = '#00ff00';
             ctx.beginPath();
-            ctx.moveTo(x - 2, canvas.oldPlethY || drawY_Pleth);
-            ctx.lineTo(x, drawY_Pleth);
+            ctx.moveTo(x - 2, canvas.oldY);
+            ctx.lineTo(x, drawY_EKG);
             ctx.stroke();
-            canvas.oldPlethY = drawY_Pleth;
+
+            if(hasSpO2 && canvas.oldPlethY !== null) {
+                ctx.strokeStyle = '#3b82f6';
+                ctx.beginPath();
+                ctx.moveTo(x - 2, canvas.oldPlethY);
+                ctx.lineTo(x, drawY_Pleth);
+                ctx.stroke();
+            }
         }
+
+        canvas.oldY = drawY_EKG;
+        canvas.oldPlethY = drawY_Pleth;
 
         x += 2;
         if (x >= canvas.width) {
             x = 0;
-            // Kleiner Fade-Effekt beim Umbruch
-            ctx.fillStyle = 'rgba(0,0,0,0.8)';
-            ctx.fillRect(0,0,canvas.width, canvas.height);
+            // Beim Umbruch kurz "nachglühen" lassen statt alles schwarz zu machen
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            canvas.oldY = null; // Verbindungslinie unterbrechen
+            canvas.oldPlethY = null;
         }
 
         ekgLoopReq = requestAnimationFrame(animate);
     }
 
-    // Status & Diagnose
+    // Status-Text setzen
     if (isSTEMI) { status.textContent = "⚠️ ST-HEBUNG ERKANNT (STEMI)"; status.style.color = "#facc15"; }
     else if (type === "vt") { status.textContent = "!!! KAMMERTACHYKARDIE !!!"; status.style.color = "#ef4444"; }
     else { status.textContent = "SINUSRHYTHMUS"; status.style.color = "#00ff00"; }
 
-    sel.onchange = () => { leadName.textContent = "Ableitung " + sel.value; ctx.fillRect(0,0,canvas.width, canvas.height); x=0; };
-    $id('ekgClose').onclick = () => { cancelAnimationFrame(ekgLoopReq); closeModal('modalEKG'); };
+    sel.onchange = () => { 
+        leadName.textContent = "Ableitung " + sel.value; 
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0,0,canvas.width, canvas.height); 
+        x=0; 
+        canvas.oldY = null;
+    };
+    
+    $id('ekgClose').onclick = () => { 
+        cancelAnimationFrame(ekgLoopReq); 
+        closeModal('modalEKG'); 
+    };
     
     animate();
     stepCase('12-Kanal-EKG');
