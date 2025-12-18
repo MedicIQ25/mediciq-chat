@@ -219,11 +219,7 @@ async function stepCase(txt) {
           scheduleBeep();
       }
 
-      // Update Monitor Visuals (falls offen)
-      const modal = document.getElementById('modalEKG');
-      if(modal && modal.style.display === 'block') {
-          updateEKGView();
-      }
+     
     }
     
     const isSystemTick = txt.includes('System-Check');
