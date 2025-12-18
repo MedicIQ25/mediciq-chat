@@ -1135,3 +1135,8 @@ function openEKG() {
     drawLoop();
     stepCase('12-Kanal-EKG');
 }
+// Sendet die aktuelle Höhe an Webflow
+setInterval(() => {
+    const height = document.body.scrollHeight;
+    window.parent.postMessage({ type: 'setHeight', height: height }, '*');
+}, 500);
