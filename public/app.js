@@ -1123,15 +1123,34 @@ function openEKG() {
 
         ekgAnimationFrame = requestAnimationFrame(drawLoop);
     }
-// NEU: Diese Funktion speichert den abgeschlossenen Fall in Memberstack
 async function saveCaseToDashboard() {
-  // Zugriff auf Memberstack im übergeordneten Webflow-Fenster
-  const ms = window.parent.$memberstackDom || window.$memberstackDom;
-  
-  if (!ms) {
-    console.log("Dashboard-Anbindung nicht gefunden (Memberstack fehlt).");
-    return;
+  try {
+    // Sicherer Zugriff auf Memberstack
+    const ms = window.parent.$memberstackDom || window.$memberstackDom || window.parent.$memberstack || window.$memberstack;
+    
+    if (!ms) {
+      console.log("Memberstack nicht erreichbar.");
+      return;
+    }
+
+    const memberRes = await ms.getCurrentMember();
+    const member = memberRes?.data || memberRes;
+    
+    if (member && member.id) {
+      const res = await ms.getMemberJSON(member.id);
+      const currentData = res.data || {};
+      const newCount = (currentData.cases_completed || 0) + 1;
+
+      await ms.updateMemberJSON({
+        json: { "cases_completed": newCount }
+      });
+      console.log("Fall im Dashboard registriert.");
+    }
+  } catch (e) {
+    // WICHTIG: Fehler nur loggen, nicht das Skript stoppen!
+    console.warn("Dashboard-Sync fehlgeschlagen, aber Fall wird trotzdem beendet:", e);
   }
+
 
   try {
     const memberRes = await ms.getCurrentMember();
