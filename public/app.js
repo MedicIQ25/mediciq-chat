@@ -98,8 +98,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     bindEvent('btnPrint', 'click', () => window.print());
     bindEvent('startCase', 'click', startCase);
-    bindEvent('finishCase', 'click', openHandover);  // Der rote Button oben
-bindEvent('btnSinnhaft', 'click', openHandover); // Der neue SINNHAFT-Button unten
+bindEvent('finishCase', 'click', openHandover);  // Der rote Button oben
+bindEvent('btnSinnhaft', 'click', openHandover); // Der SINNHAFT-Button unten
     bindEvent('btnRunQueue', 'click', async () => {
         if(!caseState) return;
         while(queue.length) {
@@ -1008,13 +1008,13 @@ function openHandover() {
     if(!caseState) return;
     
     // Felder leeren für neue Eingabe
-    $id('s_ident').value = ""; 
-    $id('s_event').value = ""; 
-    $id('s_prio').value = ""; 
-    $id('s_action').value = ""; 
-    $id('s_anam').value = "";
+    if($id('s_ident')) $id('s_ident').value = ""; 
+    if($id('s_event')) $id('s_event').value = ""; 
+    if($id('s_prio'))  $id('s_prio').value = ""; 
+    if($id('s_action')) $id('s_action').value = ""; 
+    if($id('s_anam'))  $id('s_anam').value = "";
     
-    // Verknüpfung für den "Übergeben & Beenden" Button
+    // Verknüpfung für den "Übergeben & Beenden" Button im Modal
     const okBtn = document.getElementById('handoverOk');
     if (okBtn) {
         okBtn.onclick = async () => {
@@ -1024,15 +1024,15 @@ function openHandover() {
                  return;
             }
 
+            // Sammelt die Daten für das Protokoll
             const text = `Übergabe: SINNHAFT: I:${ident} | N:${$id('s_event').value} | H:${$id('s_prio').value} | A:${$id('s_action').value} | A:${$id('s_anam').value}`;
             
-            // WICHTIG: Erst Daten senden, dann Modal schließen
+            // Erst Daten senden, dann Modal schließen
             await stepCase(text); 
             closeModal('modalHandover');
         };
     }
     
-    // Verknüpfung für den "Abbrechen" Button
     const cancelBtn = document.getElementById('handoverCancel');
     if (cancelBtn) {
         cancelBtn.onclick = () => closeModal('modalHandover');
