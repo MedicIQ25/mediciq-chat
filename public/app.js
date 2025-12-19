@@ -1025,7 +1025,7 @@ function openHandover() {
             }
 
             const text = `Übergabe: SINNHAFT: I:${ident} | N:${$id('s_event').value} | H:${$id('s_prio').value} | A:${$id('s_action').value} | A:${$id('s_anam').value}`;
-            await saveCaseToDashboard();
+            
             // WICHTIG: Erst Daten senden, dann Modal schließen
             await stepCase(text); 
             closeModal('modalHandover');
@@ -1123,58 +1123,7 @@ function openEKG() {
 
         ekgAnimationFrame = requestAnimationFrame(drawLoop);
     }
-async function saveCaseToDashboard() {
-  try {
-    // Sicherer Zugriff auf Memberstack
-    const ms = window.parent.$memberstackDom || window.$memberstackDom || window.parent.$memberstack || window.$memberstack;
-    
-    if (!ms) {
-      console.log("Memberstack nicht erreichbar.");
-      return;
-    }
 
-    const memberRes = await ms.getCurrentMember();
-    const member = memberRes?.data || memberRes;
-    
-    if (member && member.id) {
-      const res = await ms.getMemberJSON(member.id);
-      const currentData = res.data || {};
-      const newCount = (currentData.cases_completed || 0) + 1;
-
-      await ms.updateMemberJSON({
-        json: { "cases_completed": newCount }
-      });
-      console.log("Fall im Dashboard registriert.");
-    }
-  } catch (e) {
-    // WICHTIG: Fehler nur loggen, nicht das Skript stoppen!
-    console.warn("Dashboard-Sync fehlgeschlagen, aber Fall wird trotzdem beendet:", e);
-  }
-
-
-  try {
-    const memberRes = await ms.getCurrentMember();
-    const member = memberRes?.data || memberRes;
-    
-    if (member) {
-      // Wir holen die aktuellen Daten aus Memberstack
-      const res = await ms.getMemberJSON(member.id);
-      const currentData = res.data || {};
-      
-      // Wir erhöhen den Zähler für Fallbeispiele um 1
-      const newCount = (currentData.cases_completed || 0) + 1;
-
-      // Wir schreiben den neuen Wert zurück in den Account
-      await ms.updateMemberJSON({
-        json: { "cases_completed": newCount }
-      });
-      
-      console.log("Fall erfolgreich im Dashboard registriert! Neuer Stand: " + newCount);
-    }
-  } catch (e) {
-    console.error("Fehler beim Speichern im Dashboard:", e);
-  }
-}
     // Diagnose-Text setzen
     if (isSTEMI) { txt.textContent = "⚠️ V.A. MYOKARDINFARKT (STEMI)"; txt.style.color = "#facc15"; }
     else if (type === "vt") { txt.textContent = "!!! VENTRIKULÄRE TACHYKARDIE !!!"; txt.style.color = "#ef4444"; }
