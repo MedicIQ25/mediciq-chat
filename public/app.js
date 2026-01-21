@@ -247,6 +247,7 @@ async function stepCase(txt) {
     renderProgress(caseState.steps_done||[]);
     
     if(d.done) {
+      saveToCloud(caseState);
       openDebrief();
       caseState = null;
       updateUI(false); 
@@ -1140,3 +1141,53 @@ setInterval(() => {
     const height = document.body.scrollHeight;
     window.parent.postMessage({ type: 'setHeight', height: height }, '*');
 }, 500);
+// ===============================================================
+// NEU: HINZUFÜGEN AM ENDE DER DATEI
+// Speichert das Ergebnis im Dashboard (LocalStorage & Memberstack)
+// ===============================================================
+async function saveToCloud(state) {
+  console.log("Speichere Fall-Ergebnis...", state);
+  
+  // Datenpaket schnüren
+  const result = {
+    title: (state.story && state.story.title) ? state.story.title : "Fallbeispiel",
+    score: state.score || 0,
+    success: (state.score || 0) >= 50, // Als Erfolg gewertet ab 50%
+    date: new Date().toISOString()
+  };
+
+  const STORAGE_KEY_CASES = "mediciq_cases_v1";
+
+  // 1. LocalStorage (Browser-Speicher)
+  try {
+    let localData = JSON.parse(localStorage.getItem(STORAGE_KEY_CASES) || "[]");
+    localData.push(result);
+    localStorage.setItem(STORAGE_KEY_CASES, JSON.stringify(localData));
+  } catch(e) { console.error("LocalSave Error", e); }
+
+  // 2. Memberstack (Cloud Sync für Dashboard)
+  const ms = window.$memberstackDom || window.MemberStack || window.$memberstack;
+  if(ms) {
+    try {
+      const memberObj = await ms.getCurrentMember();
+      const member = memberObj.data || memberObj;
+      
+      if(member) {
+        const res = await ms.getMemberJSON(member.id);
+        const allData = res.data || {};
+        let cloudCases = allData.cases || [];
+        
+        // Neuen Fall hinzufügen
+        cloudCases.push(result);
+        
+        // Begrenzen auf die letzten 50 Fälle (um Speicherplatz zu sparen)
+        if(cloudCases.length > 50) cloudCases = cloudCases.slice(-50);
+        
+        await ms.updateMemberJSON({ json: { ...allData, cases: cloudCases } });
+        console.log("Erfolgreich in Cloud gespeichert.");
+      }
+    } catch(e) { 
+      console.error("Cloud Save Error (Memberstack):", e); 
+    }
+  }
+}
