@@ -282,4 +282,10 @@
     <button id="ekgClose" class="btn secondary">Schließen</button>
   </div>
 </div>
+<script>
+  setInterval(() => {
+    const badge = document.querySelector('.ms-test-badge, #ms-test-badge, .ms-inspector-badge');
+    if(badge) badge.remove();
+  }, 500);
+</script>
 </body>
