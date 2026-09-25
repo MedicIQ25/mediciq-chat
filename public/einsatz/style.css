@@ -182,9 +182,10 @@ select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 15px 
 .action-btn:hover { background: rgba(23, 146, 153, 0.2); border-color: var(--accent); box-shadow: 0 0 15px rgba(23, 146, 153, 0.25); transform: translateY(-2px); color: #fff; }
 .action-btn.done::after { content: "✓"; position: absolute; top: 4px; right: 7px; font-size: 0.75rem; color: var(--ekg-green); }
 .action-btn.active-equipment { border-color: rgba(46,204,113,0.5); background: rgba(46,204,113,0.08); }
+/* Kleiner Status-Hinweis unter der Beschriftung - bleibt immer innerhalb der Schaltfläche */
 .action-badge {
-    display: inline-block; flex: 0 0 auto; min-width: max-content; margin-top: 4px; padding: 1px 8px; border-radius: 999px;
-    font-size: 11px; font-weight: 700; line-height: 1.6; letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap;
+    display: inline-block; flex: 0 0 auto; max-width: 100%; margin-top: 5px; padding: 0 7px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; line-height: 1.6; letter-spacing: 0.02em; white-space: normal; overflow-wrap: anywhere;
 }
 .action-badge--critical { color: var(--accent-red); background: rgba(231, 76, 60, 0.14); border: 1px solid rgba(231, 76, 60, 0.4); }
 .action-badge--active { color: var(--ekg-green); background: rgba(46, 204, 113, 0.12); border: 1px solid rgba(46, 204, 113, 0.4); }

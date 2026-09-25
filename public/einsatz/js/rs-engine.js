@@ -186,8 +186,9 @@ function switchTab(name) {
             const isDone = !act.toggleable && done(act.token === 'o2_modal' ? 'o2_applied' : act.token);
             let badge = '';
             if (crit) badge = '<span class="action-badge action-badge--critical">kritisch offen</span>';
-            else if (active) badge = '<span class="action-badge action-badge--active">läuft – Klick beendet</span>';
-            html += `<button class="action-btn${isDone ? ' done' : ''}${active ? ' active-equipment' : ''}" onclick="processAction('${name}', ${idx})">${crit ? '🩸 ' : ''}${act.label}${badge}</button>`;
+            else if (active) badge = '<span class="action-badge action-badge--active">● läuft</span>';
+            const tip = active ? ' title="Läuft – erneut klicken beendet die Maßnahme"' : '';
+            html += `<button class="action-btn${isDone ? ' done' : ''}${active ? ' active-equipment' : ''}"${tip} onclick="processAction('${name}', ${idx})">${crit ? '🩸 ' : ''}${act.label}${badge}</button>`;
         });
         content.innerHTML = html + '</div>';
     }
