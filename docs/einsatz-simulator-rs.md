@@ -1,7 +1,7 @@
 # Einsatz-Simulator Rettungssanitäter
 
 Der neue RS-Simulator liegt unter `public/einsatz/` und ist nach dem Deploy unter
-`https://<deine-RS-Netlify-Seite>/einsatz/` erreichbar. Der bisherige Fallbeispiel-Simulator
+`https://ornate-chimera-b77016.netlify.app/einsatz/` erreichbar. Der bisherige Fallbeispiel-Simulator
 (`public/index.html`) bleibt unverändert unter `/` erreichbar, bis du in Webflow umstellst.
 
 ## Verhältnis zum NotSan-Simulator
@@ -45,25 +45,50 @@ eigene, komprimierte Kopien in `public/einsatz/assets/` (WebP statt PNG: ca. 2 M
 ## Einbau in Webflow
 
 1. Branch mergen und von Netlify deployen lassen.
-2. Auf der Webflow-Seite `/fallbeispiele` (RS) das bisherige Embed durch diesen Code ersetzen
-   (Adresse der RS-Netlify-Seite einsetzen):
+2. Auf der Webflow-Seite `/fallbeispiele` (RS) den Code des bisherigen Code-Embeds durch diesen
+   Code ersetzen und die Seite veröffentlichen:
 
 ```html
-<div style="background-color:#1e2327; width:100%; height:100dvh; display:flex; overflow:hidden;">
-  <iframe src="https://DEINE-RS-SEITE.netlify.app/einsatz/"
-          style="width:100%; height:100%; border:none; background-color:#1e2327;"
-          allow="autoplay" title="Einsatz-Simulator Rettungssanitäter"></iframe>
+<div class="mq-rs-frame" style="background-color:#1e2327; width:100%; height:100dvh; display:flex; overflow:hidden;">
+  <iframe id="mq-rs-iframe" src="https://ornate-chimera-b77016.netlify.app/einsatz/"
+          title="medicIQ Einsatz-Simulator Rettungssanitäter" allow="autoplay"
+          style="width:100%; height:100%; border:none; background-color:#1e2327;"></iframe>
 </div>
 <style>
-  body, html { background-color:#1e2327 !important; margin:0 !important; padding:0 !important; }
-  .w-embed { height:100dvh !important; }
+  /* Nur dieses Embed und sein Container - NICHT global .w-embed: Kopf- und Fußleiste sind ebenfalls
+     Code-Embeds und würden sonst bildschirmhoch über dem Simulator liegen. */
+  .w-embed:has(> .mq-rs-frame) { height: 100dvh !important; }
+  .w-container:has(.mq-rs-frame) { max-width: none !important; width: 100% !important; padding: 0 !important; }
 </style>
-<script src="https://DEINE-RS-SEITE.netlify.app/einsatz/rs-result-handler.js"></script>
+<script src="https://ornate-chimera-b77016.netlify.app/einsatz/rs-result-handler.js"></script>
 ```
 
-3. Optional: In `rs-result-handler.js` die Liste `ALLOWED_ORIGINS` um die tatsächliche Adresse
-   der RS-Seite ergänzen. Ohne Eintrag werden Nachrichten trotzdem akzeptiert, sofern sie aus dem
-   eingebetteten `/einsatz/`-iFrame der Seite kommen.
+3. `rs-result-handler.js` akzeptiert Ergebnisse von `https://ornate-chimera-b77016.netlify.app`
+   und aus jedem eingebetteten `/einsatz/`-iFrame der Seite.
+
+### Zurück zum alten Simulator
+
+Der alte Fallbeispiel-Simulator bleibt unter `https://ornate-chimera-b77016.netlify.app/` erhalten.
+Zum Zurückstellen im Code-Embed der Webflow-Seite `/fallbeispiele` wieder diesen Code eintragen
+und die Seite veröffentlichen:
+
+```html
+<iframe 
+  id="ekgFrame"
+  src="https://ornate-chimera-b77016.netlify.app?v=3" 
+  style="width: 100%; border:none; min-height:800px; transition: height 0.3s;" 
+  scrolling="no">
+</iframe>
+
+<script>
+  window.addEventListener('message', function(e) {
+    if (e.data.type === 'setHeight') {
+      const frame = document.getElementById('ekgFrame');
+      if(frame) frame.style.height = e.data.height + 'px';
+    }
+  }, false);
+</script>
+```
 
 ## Ergebnisse im Dashboard
 
@@ -79,7 +104,7 @@ genügen Elemente mit den IDs `rs-sim-faelle`, `rs-sim-gesamt`, `rs-val-x` … `
 
 Alle Fälle stehen lesbar in `public/einsatz/js/rs-cases.js` (Kopfkommentar erklärt die Felder).
 Direktstart eines bestimmten Falls zum Testen oder für den Unterricht:
-`https://DEINE-RS-SEITE.netlify.app/einsatz/?fall=rs_stroke_01`
+`https://ornate-chimera-b77016.netlify.app/einsatz/?fall=rs_stroke_01`
 
 Kinder-Fälle zeigen eine eigene Kinder-Illustration; die Ebenen (Sauerstoffmaske, Schienen …)
 gibt es bisher nur für den Erwachsenen-Körper. Die Maßnahmen erscheinen bei Kindern daher nur in
