@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>medicIQ – Einsatz-Simulator Rettungssanitäter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app-container">
+
+    <div id="setup-area">
+        <div class="setup-row">
+            <select id="categorySelector" onchange="updateNextCasePreview()" aria-label="Einsatz-Thema">
+                <option value="intern">Internistisch</option>
+                <option value="neuro">Neurologisch</option>
+                <option value="trauma">Trauma</option>
+                <option value="paed">Pädiatrie</option>
+            </select>
+            <button class="start-btn" onclick="startMission()">Einsatz starten</button>
+        </div>
+
+        <div id="next-case-preview"></div>
+
+        <div class="setup-info">
+            <h3>🚑 Willkommen im medicIQ Einsatz-Simulator für Rettungssanitäter</h3>
+            <p class="sim-howto">
+                <strong>So funktioniert's:</strong> Wähle ein Einsatz-Thema. Verschaffe dir mit dem 4S-Schema einen Überblick, arbeite den Patienten systematisch nach dem xABCDE-Schema ab und erhebe die Anamnese (SAMPLER, OPQRST). Behalte den Monitor im Blick, führe die Maßnahmen deiner RS-Kompetenz durch, fordere rechtzeitig den Notarzt nach und übergib den Patienten strukturiert nach SINNHAFT.
+            </p>
+            <div class="desc-grid">
+                <div class="category-desc" onclick="pickCategory('intern')">
+                    <div class="cat-icon">🫀</div>
+                    <strong>Internistisch</strong><br>
+                    Herz-Kreislauf, Atmung & Stoffwechsel – z.B. Herzinfarkt, COPD, Unterzuckerung.
+                </div>
+                <div class="category-desc" onclick="pickCategory('neuro')">
+                    <div class="cat-icon">🧠</div>
+                    <strong>Neurologisch</strong><br>
+                    Bewusstseinsstörungen & Ausfälle – z.B. Schlaganfall, Krampfanfall, Intoxikation.
+                </div>
+                <div class="category-desc" onclick="pickCategory('trauma')">
+                    <div class="cat-icon">🦴</div>
+                    <strong>Trauma</strong><br>
+                    Unfalldynamik & Verletzungen – kritische Blutung zuerst, dann konsequent xABCDE.
+                </div>
+                <div class="category-desc" onclick="pickCategory('paed')">
+                    <div class="cat-icon">🧸</div>
+                    <strong>Pädiatrie</strong><br>
+                    Kindernotfälle – z.B. Pseudokrupp, Fieberkrampf, Verbrühung, Reanimation.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sim-interface" class="hidden">
+
+        <div id="top-display">
+            <div id="patient-view">
+                <img id="layer-trage-rtw" data-src="trage-rtw.webp" class="layer hidden" alt="">
+                <img id="patient-body" alt="Patient">
+
+                <img id="layer-guedel" data-src="patient-guedel.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-wendel" data-src="patient-wendeltubus.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-absaugen" data-src="patient-absaugen.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-o2-brille" data-src="patient-o2.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-o2-maske" data-src="patient-o2-maske.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-o2-reservoir" data-src="patient-o2-maske-reservoir.webp" class="layer hidden" style="z-index: 100;" alt="">
+
+                <img id="layer-rr_measure" data-src="patient-rr.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-rr_beidseits" data-src="patient-rr.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-ekg_monitor" data-src="patient-ekg.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-ekg" data-src="patient-ekg-12Kanal.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-pads" data-src="patient-pads.webp" class="layer hidden" style="z-index: 100;" alt="">
+
+                <img id="layer-hws" data-src="patient-hws.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-man_hws" data-src="patient-hws-manuell.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-beckenschlinge" data-src="patient-beckenschlinge.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-tourniquet-links-arm" data-src="patient-tourniquet-links-arm.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-tourniquet-rechts-arm" data-src="patient-tourniquet-rechts-arm.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-tourniquet-links-bein" data-src="patient-tourniquet-links-bein.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-tourniquet-rechts-bein" data-src="patient-tourniquet-rechts-bein.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-druckverband-rechts-unterarm" data-src="patient-druckverband-rechts-unterarm.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-druckverband-links-unterarm" data-src="patient-druckverband-links-unterarm.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-vakuum" data-src="patient-vakuummatratze.webp" class="layer hidden" alt="">
+                <img id="layer-hdm" data-src="patient-hdm.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-vent" data-src="patient-vent.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="patient-bvm" data-src="patient-bvm.webp" class="layer hidden" style="z-index: 100;" alt="">
+                <img id="layer-pullover" data-src="patient-pullover.webp" class="layer" style="z-index: 50;" alt="">
+                <img id="layer-hose" data-src="patient-hose.webp" class="layer" style="z-index: 51;" alt="">
+
+                <img id="patient-blass" data-src="patient-blass.webp" class="layer hidden" style="z-index: 15;" alt="">
+                <img id="patient-schweiss" data-src="patient-schweiss.webp" class="layer hidden" style="z-index: 16;" alt="">
+                <img id="patient-augen-zu" data-src="patient-augen-zu.webp" class="layer hidden" style="z-index: 17;" alt="">
+                <img id="patient-lips" data-src="patient-lips.webp" class="layer" style="opacity: 0;" alt="">
+                <img id="patient-monokelheamatom" data-src="patient-monokelheamatom.webp" class="layer hidden" alt="">
+                <img id="patient-wunde-kopf" data-src="patient-wunde-kopf.webp" class="layer hidden" alt="">
+                <img id="patient-wunde-bauch" data-src="patient-wunde-bauch.webp" class="layer hidden" alt="">
+                <img id="patient-ambutation-fuss-links" data-src="patient-ambutation-fuss-links.webp" class="layer hidden" alt="">
+                <img id="patient-amputation-fuss-links-versorgt" data-src="patient-amputation-fuss-links-versorgt.webp" class="layer hidden" alt="">
+                <img id="patient-fraktur-unterarm-links" data-src="patient-fraktur-unterarm-links.webp" class="layer hidden" alt="">
+                <img id="patient-fraktur-unterarm-rechts" data-src="patient-fraktur-unterarm-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-fraktur-unteschenkel-links" data-src="patient-fraktur-unteschenkel-links.webp" class="layer hidden" alt="">
+                <img id="patient-fraktur-oberschenkel-rechts" data-src="patient-fraktur-oberschenkel-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-tom-abdomenoben-links" data-src="patient-tom-abdomenoben-links.webp" class="layer hidden" alt="">
+                <img id="patient-tom-abdomenoben-rechts" data-src="patient-tom-abdomenoben-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-tom-abdomenunten-links" data-src="patient-tom-abdomenunten-links.webp" class="layer hidden" alt="">
+                <img id="patient-tom-abdomenunten-rechts" data-src="patient-tom-abdomenunten-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-tom-brust-links" data-src="patient-tom-brust-links.webp" class="layer hidden" alt="">
+                <img id="patient-tom-brust-rechts" data-src="patient-tom-brust-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-blut-arm-rechtsg" data-src="patient-blut-arm-rechtsg.webp" class="layer hidden" alt="">
+                <img id="patient-blut-arm-rechtsk" data-src="patient-blut-arm-rechtsk.webp" class="layer hidden" alt="">
+                <img id="patient-blut-arm-linksk" data-src="patient-blut-arm-linksk.webp" class="layer hidden" alt="">
+                <img id="patient-blut-arm-linksg" data-src="patient-blut-arm-linksg.webp" class="layer hidden" alt="">
+                <img id="patient-blut-bein-links" data-src="patient-blut-bein-links.webp" class="layer hidden" alt="">
+                <img id="patient-blut-bein-rechts" data-src="patient-blut-bein-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-Alu-Polsterschiene-arm-links" data-src="patient-Alu-Polsterschiene-arm-links.webp" class="layer hidden" alt="">
+                <img id="patient-Alu-Polsterschiene-arm-rechts" data-src="patient-Alu-Polsterschiene-arm-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-Alu-Polsterschiene-bein-links" data-src="patient-Alu-Polsterschiene-bein-links.webp" class="layer hidden" alt="">
+                <img id="patient-Alu-Polsterschiene-bein-rechts" data-src="patient-Alu-Polsterschiene-bein-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-schiene-arm-links" data-src="patient-schiene-arm-links.webp" class="layer hidden" alt="">
+                <img id="patient-schiene-arm-rechts" data-src="patient-schiene-arm-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-schiene-bein-links" data-src="patient-schiene-bein-links.webp" class="layer hidden" alt="">
+                <img id="patient-schiene-bein-rechts" data-src="patient-schiene-bein-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-verbrennung-brust" data-src="patient-verbrennung-brust.webp" class="layer hidden" alt="">
+                <img id="patient-verbrennung-arm-rechts" data-src="patient-verbrennung-arm-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-verbrennung-bein-rechts" data-src="patient-verbrennung-bein-rechts.webp" class="layer hidden" alt="">
+                <img id="patient-verbrennung-brust-versorgt" data-src="patient-verbrennung-brust-versorgt.webp" class="layer hidden" alt="">
+                <img id="patient-verbrennung-arm-rechts-versorgt" data-src="patient-verbrennung-arm-rechts-versorgt.webp" class="layer hidden" alt="">
+                <img id="patient-verbrennung-bein-rechts-versorgt" data-src="patient-verbrennung-bein-rechts-versorgt.webp" class="layer hidden" alt="">
+
+                <div id="na-badge" class="hidden"></div>
+            </div>
+
+            <div id="monitor-view">
+                <canvas id="ekgCanvas"></canvas>
+
+                <div id="progress-container" class="hidden">
+                    <div id="progress-fill"></div>
+                    <div id="progress-text">Maßnahme läuft...</div>
+                </div>
+
+                <div id="rhythm-timer-bar">
+                    <span id="cpr-timer"></span>
+                    <span id="rhythm-timer"></span>
+                    <span id="hdm-quality-panel" class="hidden">
+                        <span id="hdm-bar-chart"></span>
+                        <span id="hdm-release-badge">Entlastung: <strong id="hdm-release-value">--</strong></span>
+                    </span>
+                </div>
+
+                <div class="vital-values">
+                    <div class="v-box green">HF <span id="val-hr">--</span></div>
+                    <div class="v-box blue">SpO₂ <span id="val-spo2">--</span></div>
+                    <div class="v-box orange">AF <span id="val-af">--</span></div>
+                    <div class="v-box white">RR <span id="val-rr">--/--</span><small id="rr-next"></small></div>
+                    <div class="v-box purple">BZ <span id="val-bz">--</span></div>
+                    <div class="v-box red">Temp <span id="val-temp">--</span></div>
+                    <div class="v-box yellow">GCS <span id="val-gcs">--</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="action-console">
+            <div id="findings-summary">
+                <div class="summary-header">
+                    📋 Patientenakte
+                    <button id="btn-mute" onclick="toggleMute()" title="Ton an/aus">🔊</button>
+                    <span id="mission-timer">00:00</span>
+                </div>
+                <div id="summary-content">
+                    <p class="empty-hint">Führe Anamnese und Diagnostik durch...</p>
+                </div>
+            </div>
+
+            <div id="control-area">
+                <div id="arrest-hud" class="hidden">
+                    <div class="arrest-content">
+                        <h2 class="blink">⚠️ HERZ-KREISLAUF-STILLSTAND</h2>
+                        <div id="rea-hint" class="rea-hint"></div>
+                        <div class="cpr-grid">
+                            <button id="btn-hdm" onclick="delegateTask('hdm')">Helfer: Herzdruckmassage</button>
+                            <button id="btn-hdm-self" onclick="takeTaskSelf('hdm')">🙋 Ich: Herzdruckmassage</button>
+                            <button id="btn-pads-cpr" onclick="applyPads(false)">AED-Pads kleben</button>
+                            <button id="btn-vent" onclick="delegateTask('vent')">Helfer: Beatmung</button>
+                            <button id="btn-vent-self" onclick="takeTaskSelf('vent')">🙋 Ich: Beatmung</button>
+                            <button id="btn-analyse" onclick="analyzeAED()">🔎 AED: Analyse</button>
+                            <button id="btn-shock" class="hidden" onclick="confirmShock()">⚡ SCHOCK AUSLÖSEN</button>
+                        </div>
+                        <div class="cpr-info"><span id="helper-text">Wartet auf Anweisung...</span></div>
+                        <div class="delegate-grid">
+                            <button id="btn-delegate-pads" class="btn-delegate" onclick="applyPads(true)">🤝 Helfer: AED-Pads kleben</button>
+                            <button class="btn-delegate" onclick="toggleArrestHUD(); switchTab('A')">👄 Atemweg (A-Tab)</button>
+                        </div>
+                        <button class="hud-hide-btn" onclick="toggleArrestHUD()">⏬ Ausblenden (Maßnahmen-Tabs anzeigen)</button>
+                    </div>
+                </div>
+
+                <div id="nav-tabs">
+                    <button onclick="switchTab('ANAMNESE')">📋 Start</button>
+                    <button onclick="switchTab('X')">X</button>
+                    <button onclick="switchTab('A')">A</button>
+                    <button onclick="switchTab('B')">B</button>
+                    <button onclick="switchTab('C')">C</button>
+                    <button onclick="switchTab('D')">D</button>
+                    <button onclick="switchTab('E')">E</button>
+                    <button onclick="switchTab('TRAUMA')" title="Trauma">🦴</button>
+                    <button id="tab-rea" class="hidden" onclick="toggleArrestHUD()">🫀 REA</button>
+                    <button onclick="switchTab('HANDOVER')" class="handover-tab">🤝 Übergabe</button>
+                </div>
+
+                <div id="tab-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODALS ================= -->
+    <div id="eval-modal" class="hidden">
+        <div class="modal-overlay"></div>
+        <div class="eval-content">
+            <h2>Einsatz-Auswertung</h2>
+            <div id="eval-list"></div>
+            <div id="eval-footer"></div>
+        </div>
+    </div>
+
+    <div id="ansage-modal" class="hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-inner">
+            <h2 class="modal-h">📢 Ansage</h2>
+            <p id="ansage-text" class="modal-hint"></p>
+            <button class="confirm-btn" onclick="confirmAnsage()">✅ Bestätigen &amp; Ausführen</button>
+            <button class="cancel-btn" onclick="closeAnsageModal()">Abbrechen</button>
+        </div>
+    </div>
+
+    <div id="case-end-modal" class="hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-inner">
+            <h2 class="modal-h" style="color: #e74c3c;">🏥 Reanimation: Übernahme durch den Notarzt</h2>
+            <div id="case-end-text" class="case-end-text"></div>
+            <button class="confirm-btn" onclick="acknowledgeCaseEnd()">Verstanden</button>
+        </div>
+    </div>
+
+    <div id="sinnhaft-modal" class="hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-inner" style="max-width: 560px;">
+            <h2 class="modal-h sinnhaft-head">
+                <span>🤝 SINNHAFT-Übergabe</span>
+                <span class="sinnhaft-head-right">
+                    <span id="sinnhaft-progress"></span>
+                    <button id="sinnhaft-cancel-btn" onclick="cancelSinnhaftHandover()" title="Übergabe abbrechen">✕ Abbrechen</button>
+                </span>
+            </h2>
+            <div id="sinnhaft-body"></div>
+        </div>
+    </div>
+
+    <div id="material-modal" class="hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-inner">
+            <h2 id="modal-title">Material richten</h2>
+            <div id="material-list"></div>
+            <div id="material-hint" class="modal-error-hint hidden">⚠️ Bitte alle Materialien auswählen, um fortzufahren.</div>
+            <div id="target-container" class="hidden modal-section">
+                <label class="modal-label">Anlageort wählen:</label>
+                <select id="action-target" class="modal-select"></select>
+            </div>
+            <div id="rr-interval-container" class="hidden modal-section">
+                <label class="modal-label">Automatische Kontrollmessung:</label>
+                <select id="rr-interval-select" class="modal-select">
+                    <option value="0">Aus</option>
+                    <option value="120000">Alle 2 Minuten</option>
+                    <option value="300000">Alle 5 Minuten</option>
+                </select>
+            </div>
+            <button class="confirm-btn" onclick="confirmProc()">Maßnahme starten</button>
+            <button class="cancel-btn" onclick="closeModal()">Abbrechen</button>
+        </div>
+    </div>
+
+    <div id="o2-modal" class="hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-inner">
+            <h2 class="modal-h">💨 Sauerstoffgabe</h2>
+            <p class="modal-hint">Wähle Applikationsform und Flussrate:</p>
+            <label class="modal-label">Applikationsform:</label>
+            <select id="o2-device" class="modal-select">
+                <option value="brille">Sauerstoffbrille (1–6 l/min)</option>
+                <option value="maske">Einfache O₂-Maske (6–10 l/min)</option>
+                <option value="reservoir">Maske mit Reservoir (10–15 l/min)</option>
+            </select>
+            <label class="modal-label" style="margin-top:15px;">Flussrate (Liter/Min):</label>
+            <input type="number" id="o2-flow" min="1" max="15" value="2" class="modal-select">
+            <button class="confirm-btn" onclick="applyO2()">O₂ anschließen</button>
+            <button class="cancel-btn" onclick="closeO2Modal()">Abbrechen</button>
+        </div>
+    </div>
+
+    <div id="ekg-modal" class="hidden overlay-modal">
+        <div class="ekg-sheet">
+            <h2>📄 12-Kanal-EKG – Übermittlung an Notarzt / Telenotarzt</h2>
+            <div id="ekg-image-wrap"><img id="ekg-image-display" src="" alt="EKG-Ausdruck"></div>
+            <div id="ekg-feedback"></div>
+            <button class="ekg-close" onclick="closeEKGModal()">Ausdruck weglegen</button>
+        </div>
+    </div>
+
+    <div id="pupil-modal" class="hidden overlay-modal">
+        <div class="tool-card" style="border-color:#f39c12; max-width:600px;">
+            <h2 style="color:#f39c12;">🔦 Pupillenkontrolle</h2>
+            <p class="tool-hint">Bewege die Maus oder wische mit dem Finger über die Augen, um die Lichtreaktion zu prüfen.</p>
+            <div id="eyes-container">
+                <div class="eye-socket" id="eye-patient-right"><div class="iris"><div class="pupil" id="pupil-patient-right"></div></div></div>
+                <div class="eye-socket" id="eye-patient-left"><div class="iris"><div class="pupil" id="pupil-patient-left"></div></div></div>
+                <div id="flashlight"></div>
+            </div>
+            <p class="tool-hint" style="margin-top:12px;">Links im Bild: rechtes Auge des Patienten.</p>
+            <button class="tool-close" onclick="closePupilModal()">Lampe ausschalten</button>
+        </div>
+    </div>
+
+    <div id="recap-modal" class="hidden overlay-modal">
+        <div class="tool-card" style="border-color:#e74c3c; max-width:400px;">
+            <h2 style="color:#e74c3c;">🩸 Rekapillarisierungszeit (CRT)</h2>
+            <p class="tool-hint">Drücke und halte das Nagelbett kurz gedrückt, lass dann los.</p>
+            <div id="finger-container"><div id="nail-bed"><div class="nail-shine"></div></div></div>
+            <div id="recap-timer">Bereit...</div>
+            <button class="tool-close" onclick="closeReCapModal()">Schließen</button>
+        </div>
+    </div>
+
+    <div id="af-modal" class="hidden overlay-modal">
+        <div class="tool-card" style="border-color:#e67e22; max-width:400px;">
+            <h2 style="color:#e67e22;">🫁 Atemfrequenz auszählen</h2>
+            <p class="tool-hint">Beobachte den Brustkorb. Starte den 15-Sekunden-Timer und zähle die Atemzüge mit.</p>
+            <div id="af-visualizer">🫁</div>
+            <button id="btn-af-timer" onclick="startAFTimer()">⏱️ 15 Sek. Timer starten</button>
+            <input type="number" id="af-input" class="tool-input" placeholder="Gezählte Atemzüge (in 15 s)" disabled>
+            <div class="tool-row">
+                <button class="tool-cancel" onclick="closeAFModal()">Abbrechen</button>
+                <button id="btn-af-submit" class="tool-submit" style="background:#e67e22;" onclick="submitAFCount()" disabled>Überprüfen</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gcs-modal" class="hidden overlay-modal">
+        <div class="tool-card" style="border-color:#9b59b6; max-width:450px;">
+            <h2 style="color:#9b59b6;">🧠 GCS erheben</h2>
+            <p class="tool-hint">Teste die Reaktion des Patienten, um die Glasgow Coma Scale (3–15) zu ermitteln.</p>
+            <div class="tool-row" style="margin-bottom:15px;">
+                <button class="tool-option" onclick="testGCS('speak')">🗣️ Ansprechen</button>
+                <button class="tool-option" onclick="testGCS('pain')">⚡ Schmerzreiz</button>
+            </div>
+            <div id="gcs-feedback" class="tool-feedback"></div>
+            <input type="number" id="gcs-input" min="3" max="15" class="tool-input" placeholder="Ermittelter GCS (3–15)">
+            <div class="tool-row">
+                <button class="tool-cancel" onclick="closeGCSModal()">Abbrechen</button>
+                <button class="tool-submit" style="background:#9b59b6; color:#fff;" onclick="submitGCS()">Eintragen</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="qsofa-modal" class="hidden overlay-modal">
+        <div class="tool-card" style="border-color:#f1c40f; max-width:460px;">
+            <h2 style="color:#f1c40f;">📊 qSOFA (Sepsis-Screening)</h2>
+            <p class="tool-hint">Je 1 Punkt: Atemfrequenz ≥ 22/min · Bewusstseinsveränderung (GCS &lt; 15) · systolischer RR ≤ 100 mmHg. Ab 2 Punkten besteht Sepsis-Verdacht.</p>
+            <input type="number" id="qsofa-input" min="0" max="3" class="tool-input" placeholder="Punkte (0–3)">
+            <div class="tool-row">
+                <button class="tool-cancel" onclick="closeQsofaModal()">Abbrechen</button>
+                <button class="tool-submit" style="background:#f1c40f;" onclick="submitQsofa()">Überprüfen</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="fours-modal" class="hidden overlay-modal">
+        <div class="tool-card" style="border-color:#f39c12; max-width:600px; text-align:left;">
+            <h2 style="color:#f39c12; text-align:center;">🛡️ 4S-Erkundung</h2>
+            <div class="fours-grid">
+                <div class="fours-item" style="border-left-color:#e74c3c;"><strong style="color:#e74c3c;">⚠️ Sicherheit</strong><span id="fours-safety">…</span></div>
+                <div class="fours-item" style="border-left-color:#3498db;"><strong style="color:#3498db;">📍 Szene</strong><span id="fours-scene">…</span></div>
+                <div class="fours-item" style="border-left-color:#9b59b6;"><strong style="color:#9b59b6;">👥 Sichtung</strong><span id="fours-situation">…</span></div>
+                <div class="fours-item" style="border-left-color:#2ecc71;"><strong style="color:#2ecc71;">🚑 Support</strong><span id="fours-support">…</span></div>
+            </div>
+            <button class="tool-close" onclick="closeFourSModal()">Erkundung beendet</button>
+        </div>
+    </div>
+
+    <div id="befast-modal" class="hidden overlay-modal">
+        <div class="tool-card" style="border-color:#9b59b6; max-width:500px;">
+            <h2 style="color:#9b59b6;">🧠 BE-FAST-Test</h2>
+            <div class="befast-grid">
+                <button class="tool-option" onclick="testBefast('B')">B (Balance)</button>
+                <button class="tool-option" onclick="testBefast('E')">E (Eyes)</button>
+                <button class="tool-option" onclick="testBefast('F')">F (Face)</button>
+                <button class="tool-option" onclick="testBefast('A')">A (Arms)</button>
+                <button class="tool-option" onclick="testBefast('S')">S (Speech)</button>
+                <button class="tool-option" onclick="testBefast('T')">T (Time)</button>
+            </div>
+            <div id="befast-feedback" class="tool-feedback">Wähle einen Test aus...</div>
+            <button class="tool-close" onclick="closeBefastModal()">Untersuchung abschließen</button>
+        </div>
+    </div>
+
+    <div id="bleeding-modal" class="hidden overlay-modal">
+        <div class="tool-card" style="border-color:#e74c3c; max-width:500px;">
+            <h2 style="color:#e74c3c;">🩸 Blutungsräume abtasten</h2>
+            <div class="tool-grid-2">
+                <button class="tool-option" onclick="testBleeding('thorax')">Thorax</button>
+                <button class="tool-option" onclick="testBleeding('abdomen')">Abdomen</button>
+                <button class="tool-option" onclick="testBleeding('becken')">Becken</button>
+                <button class="tool-option" onclick="testBleeding('oberschenkel')">Oberschenkel</button>
+            </div>
+            <div id="bleeding-feedback" class="tool-feedback">Welchen Bereich möchtest du abtasten?</div>
+            <button class="tool-close" onclick="closeBleedingModal()">Abtasten beenden</button>
+        </div>
+    </div>
+
+    <div id="mouth-modal" class="hidden overlay-modal">
+        <div class="tool-card" style="border-color:#3498db; max-width:550px;">
+            <h2 style="color:#3498db;">👄 Mundraum-Inspektion</h2>
+            <p class="tool-hint">Bewege das Licht, um den Mundraum zu inspizieren. Verlegungen müssen sofort behoben werden!</p>
+            <div id="mouth-container"><div id="mouth-content">👅</div><div id="mouth-darkness"></div></div>
+            <div id="mouth-feedback" class="tool-feedback">Leuchte in den Mundraum...</div>
+            <div class="tool-grid-2">
+                <button class="tool-option strong" onclick="actionMouth('suction')">💨 Absaugen (Sekret/Blut)</button>
+                <button class="tool-option strong" onclick="actionMouth('remove')">✋ Fremdkörper unter Sicht entfernen</button>
+            </div>
+            <button class="tool-close" onclick="closeMouthModal()">Inspektion beenden</button>
+        </div>
+    </div>
+
+    <div id="sampler-modal" class="hidden overlay-modal">
+        <div class="tool-card sampler-card">
+            <h2 style="color:#27ae60;">💬 SAMPLER-Gespräch</h2>
+            <div id="sampler-chat"><div class="chat-msg msg-sys">Wähle eine Frage, um das Gespräch zu beginnen.</div></div>
+            <div class="sampler-grid">
+                <button onclick="askSampler('S')" class="sampler-btn">S – Symptome / Schmerzen?</button>
+                <button onclick="askSampler('A')" class="sampler-btn">A – Allergien?</button>
+                <button onclick="askSampler('M')" class="sampler-btn">M – Medikamente?</button>
+                <button onclick="askSampler('P')" class="sampler-btn">P – Patientengeschichte?</button>
+                <button onclick="askSampler('L')" class="sampler-btn">L – Letzte Mahlzeit?</button>
+                <button onclick="askSampler('E')" class="sampler-btn">E – Ereignis davor?</button>
+                <button onclick="askSampler('R')" class="sampler-btn span-2">R – Risikofaktoren (Rauchen, Schwangerschaft)?</button>
+            </div>
+            <button class="tool-close" onclick="closeSamplerModal()">Gespräch beenden</button>
+        </div>
+    </div>
+  </div>
+
+  <script src="js/rs-actions.js"></script>
+  <script src="js/rs-cases.js"></script>
+  <script src="js/rs-engine.js"></script>
+  <script src="js/rs-ui.js"></script>
+</body>
+</html>
