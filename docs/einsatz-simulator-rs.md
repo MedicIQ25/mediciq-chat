@@ -96,9 +96,17 @@ Nach jedem Einsatz sendet der Simulator `postMessage({ typ: 'RS_SIMULATOR_ERGEBN
 an die Webflow-Seite. `rs-result-handler.js` speichert das im Member-JSON unter **`simulatorRS`**
 (eigener Schlüssel, die NotSan-Daten unter `simulator` bleiben unberührt):
 `faelle`, Prozentwerte `x`–`e` und `gesamt` (letzte 100), `verlauf` (letzte 50 Einsätze mit Fall,
-Diagnose, Ergebnis, Dauer) und `fehlerLog` (letzte 5). Soll das RS-Dashboard diese Werte anzeigen,
-genügen Elemente mit den IDs `rs-sim-faelle`, `rs-sim-gesamt`, `rs-val-x` … `rs-val-e`
-(und optional `rs-bar-x` … `rs-bar-e` als Balken) – sie werden automatisch befüllt.
+Diagnose, Ergebnis, Dauer) und `fehlerLog` (letzte 5).
+
+Das RS-Dashboard (`/dashboard`) zeigt die Werte so an:
+
+- `public/einsatz/rs-dashboard.js` setzt oben in die Hauptspalte das Panel **„Einsatz-Simulator“**:
+  Anzahl Einsätze, Ø Ergebnis, bestanden (ab 50 %), xABCDE-Balken mit größter Baustelle, die letzten
+  5 Einsätze und die zuletzt häufigsten Fehler. Eingebunden im Dashboard-Code-Embed (der mit
+  `#mq-dashboard`) ganz unten per
+  `<script src="https://ornate-chimera-b77016.netlify.app/einsatz/rs-dashboard.js" defer></script>`.
+- Im selben Embed zählen „Fälle gelöst (Praxis)“, der KI-Aktionsplan (Praxis), die Prüfungsreife und
+  das Abzeichen „Retter“ jetzt die Einsätze aus `simulatorRS` zusammen mit den alten Fällen (`cases`).
 
 ## Fälle bearbeiten
 
